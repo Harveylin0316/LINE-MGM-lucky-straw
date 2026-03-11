@@ -1,5 +1,6 @@
 const path = require('path');
 const os = require('os');
+const fs = require('fs');
 const express = require('express');
 const session = require('express-session');
 const bcrypt = require('bcryptjs');
@@ -136,9 +137,28 @@ db.serialize(() => {
 });
 
 // View engine & static
+function resolveAssetDir(dirName) {
+  const candidates = [
+    path.join(__dirname, dirName),
+    path.join(process.cwd(), dirName),
+    path.join(process.cwd(), 'src', 'netlify', 'functions', dirName),
+    path.join('/var/task', dirName)
+  ];
+
+  for (const candidate of candidates) {
+    if (fs.existsSync(candidate)) {
+      return candidate;
+    }
+  }
+  return path.join(__dirname, dirName);
+}
+
+const viewsDir = resolveAssetDir('views');
+const publicDir = resolveAssetDir('public');
+
 app.set('view engine', 'ejs');
-app.set('views', path.join(__dirname, 'views'));
-app.use(express.static(path.join(__dirname, 'public')));
+app.set('views', viewsDir);
+app.use(express.static(publicDir));
 
 // Body parser
 app.use(express.urlencoded({ extended: false }));
