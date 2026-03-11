@@ -9,7 +9,7 @@
   node_bundler = "esbuild"
 
 [functions."server"]
-  external_node_modules = ["sqlite3"]
+  external_node_modules = ["sqlite3", "ejs"]
   included_files = ["views/**", "public/**", "server.js"]
 
 [[redirects]]
