@@ -9,11 +9,14 @@ const app = express();
 const PORT = process.env.PORT || 3000;
 const ADMIN_USERNAME = 'admin';
 const ADMIN_PASSWORD = 'admin1234';
-const isNetlify = process.env.NETLIFY === 'true';
-const baseDir = isNetlify ? os.tmpdir() : __dirname;
+const isServerlessRuntime =
+  process.env.NETLIFY === 'true' ||
+  Boolean(process.env.AWS_LAMBDA_FUNCTION_NAME) ||
+  Boolean(process.env.LAMBDA_TASK_ROOT);
+const baseDir = isServerlessRuntime ? os.tmpdir() : __dirname;
 let SQLiteStore = null;
 
-if (!isNetlify) {
+if (!isServerlessRuntime) {
   SQLiteStore = require('connect-sqlite3')(session);
 }
 
@@ -148,7 +151,7 @@ const sessionConfig = {
   cookie: { maxAge: 1000 * 60 * 60 } // 1 hour
 };
 
-if (!isNetlify) {
+if (!isServerlessRuntime) {
   sessionConfig.store = new SQLiteStore({ db: 'sessions.db', dir: __dirname });
 }
 
