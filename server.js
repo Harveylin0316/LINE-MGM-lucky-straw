@@ -201,14 +201,19 @@ async function initDb() {
   }
 }
 
+let initError = null;
 const initPromise = initDb().catch(err => {
+  initError = err;
   console.error('Database initialization failed:', err.message);
-  throw err;
+  return null;
 });
 
 app.use(async (_req, _res, next) => {
   try {
     await initPromise;
+    if (initError) {
+      throw initError;
+    }
     next();
   } catch (err) {
     next(err);
