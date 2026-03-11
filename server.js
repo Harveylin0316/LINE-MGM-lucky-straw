@@ -137,24 +137,31 @@ db.serialize(() => {
 });
 
 // View engine & static
-function resolveAssetDir(dirName) {
+function resolveAssetDir(dirName, expectedFile) {
   const candidates = [
     path.join(__dirname, dirName),
+    path.join(__dirname, '..', dirName),
+    path.join(__dirname, '..', '..', dirName),
+    path.join(__dirname, '..', '..', '..', dirName),
     path.join(process.cwd(), dirName),
+    path.join(process.cwd(), 'src', dirName),
     path.join(process.cwd(), 'src', 'netlify', 'functions', dirName),
+    path.join('/var/task', dirName),
+    path.join('/var/task', 'src', dirName),
     path.join('/var/task', dirName)
   ];
 
   for (const candidate of candidates) {
-    if (fs.existsSync(candidate)) {
+    const target = expectedFile ? path.join(candidate, expectedFile) : candidate;
+    if (fs.existsSync(target)) {
       return candidate;
     }
   }
   return path.join(__dirname, dirName);
 }
 
-const viewsDir = resolveAssetDir('views');
-const publicDir = resolveAssetDir('public');
+const viewsDir = resolveAssetDir('views', 'index.ejs');
+const publicDir = resolveAssetDir('public', 'style.css');
 
 app.set('view engine', 'ejs');
 app.set('views', viewsDir);

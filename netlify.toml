@@ -10,7 +10,7 @@
 
 [functions."server"]
   external_node_modules = ["sqlite3", "ejs"]
-  included_files = ["views/**", "public/**", "server.js"]
+  included_files = ["views/**", "public/**", "src/views/**", "src/public/**", "server.js"]
 
 [[redirects]]
   from = "/*"
