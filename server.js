@@ -1,161 +1,41 @@
 const path = require('path');
-const os = require('os');
 const fs = require('fs');
 const express = require('express');
-const session = require('express-session');
 const bcrypt = require('bcryptjs');
-const sqlite3 = require('sqlite3').verbose();
+const cookieParser = require('cookie-parser');
+const jwt = require('jsonwebtoken');
+const helmet = require('helmet');
+const rateLimit = require('express-rate-limit');
+const { Pool } = require('pg');
 
 const app = express();
 const PORT = process.env.PORT || 3000;
-const ADMIN_USERNAME = 'admin';
-const ADMIN_PASSWORD = 'admin1234';
-const isServerlessRuntime =
-  process.env.NETLIFY === 'true' ||
-  Boolean(process.env.AWS_LAMBDA_FUNCTION_NAME) ||
-  Boolean(process.env.LAMBDA_TASK_ROOT);
-const baseDir = isServerlessRuntime ? os.tmpdir() : __dirname;
-let SQLiteStore = null;
+const ADMIN_USERNAME = process.env.ADMIN_USERNAME || 'admin';
+const ADMIN_PASSWORD = process.env.ADMIN_PASSWORD || 'admin1234';
+const JWT_SECRET = process.env.JWT_SECRET || process.env.SESSION_SECRET || 'change-this-jwt-secret';
+const DATABASE_URL = process.env.DATABASE_URL;
+const isProduction = process.env.NODE_ENV === 'production';
 
-if (!isServerlessRuntime) {
-  SQLiteStore = require('connect-sqlite3')(session);
+if (!DATABASE_URL) {
+  throw new Error('Missing DATABASE_URL. Please configure Postgres connection string.');
 }
 
-// DB setup
-const db = new sqlite3.Database(path.join(baseDir, 'data.db'));
-db.on('error', err => {
-  console.error('SQLite error:', err.message);
+const pool = new Pool({
+  connectionString: DATABASE_URL,
+  ssl: isProduction ? { rejectUnauthorized: false } : false
 });
 
-db.serialize(() => {
-  db.run(
-    `CREATE TABLE IF NOT EXISTS users (
-      id INTEGER PRIMARY KEY AUTOINCREMENT,
-      username TEXT UNIQUE NOT NULL,
-      password_hash TEXT NOT NULL,
-      draws_left INTEGER NOT NULL DEFAULT 1,
-      referrer_id INTEGER,
-      extra_draws INTEGER NOT NULL DEFAULT 0,
-      is_admin INTEGER NOT NULL DEFAULT 0
-    )`
-  );
-
-  db.run(
-    `CREATE TABLE IF NOT EXISTS prizes (
-      id INTEGER PRIMARY KEY AUTOINCREMENT,
-      name TEXT NOT NULL,
-      quantity INTEGER NOT NULL DEFAULT 0,
-      weight INTEGER NOT NULL DEFAULT 1,
-      created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
-    )`
-  );
-
-  db.run(
-    `CREATE TABLE IF NOT EXISTS draw_logs (
-      id INTEGER PRIMARY KEY AUTOINCREMENT,
-      user_id INTEGER NOT NULL,
-      is_win INTEGER NOT NULL DEFAULT 0,
-      prize_name TEXT,
-      message TEXT NOT NULL,
-      created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
-    )`
-  );
-
-  db.run(
-    `CREATE TABLE IF NOT EXISTS prize_change_logs (
-      id INTEGER PRIMARY KEY AUTOINCREMENT,
-      action TEXT NOT NULL,
-      prize_id INTEGER,
-      before_name TEXT,
-      before_quantity INTEGER,
-      after_name TEXT,
-      after_quantity INTEGER,
-      admin_username TEXT NOT NULL,
-      created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
-    )`
-  );
-
-  // 若舊資料表沒有相關欄位，嘗試補上（已存在時忽略錯誤）
-  db.run(
-    'ALTER TABLE users ADD COLUMN draws_left INTEGER NOT NULL DEFAULT 1',
-    err => {
-      if (err && !String(err.message).includes('duplicate column name')) {
-        console.error('Failed to add draws_left column:', err.message);
-      }
-    }
-  );
-
-  db.run(
-    'ALTER TABLE users ADD COLUMN referrer_id INTEGER',
-    err => {
-      if (err && !String(err.message).includes('duplicate column name')) {
-        console.error('Failed to add referrer_id column:', err.message);
-      }
-    }
-  );
-
-  db.run(
-    'ALTER TABLE users ADD COLUMN extra_draws INTEGER NOT NULL DEFAULT 0',
-    err => {
-      if (err && !String(err.message).includes('duplicate column name')) {
-        console.error('Failed to add extra_draws column:', err.message);
-      }
-    }
-  );
-
-  db.run(
-    'ALTER TABLE users ADD COLUMN is_admin INTEGER NOT NULL DEFAULT 0',
-    err => {
-      if (err && !String(err.message).includes('duplicate column name')) {
-        console.error('Failed to add is_admin column:', err.message);
-      }
-    }
-  );
-
-  db.run(
-    'ALTER TABLE prizes ADD COLUMN weight INTEGER NOT NULL DEFAULT 1',
-    err => {
-      if (err && !String(err.message).includes('duplicate column name')) {
-        console.error('Failed to add weight column:', err.message);
-      }
-    }
-  );
-
-  // 啟動時自動建立預設管理員帳號（若不存在）
-  db.get(
-    'SELECT id FROM users WHERE username = ?',
-    [ADMIN_USERNAME],
-    (err, row) => {
-      if (err || row) return;
-      const adminHash = bcrypt.hashSync(ADMIN_PASSWORD, 10);
-      db.run(
-        'INSERT INTO users (username, password_hash, draws_left, is_admin) VALUES (?, ?, 1, 1)',
-        [ADMIN_USERNAME, adminHash]
-      );
-    }
-  );
-});
-
-// View engine & static
 function resolveAssetDir(dirName, expectedFile) {
   const candidates = [
     path.join(__dirname, dirName),
     path.join(__dirname, '..', dirName),
-    path.join(__dirname, '..', '..', dirName),
-    path.join(__dirname, '..', '..', '..', dirName),
     path.join(process.cwd(), dirName),
-    path.join(process.cwd(), 'src', dirName),
-    path.join(process.cwd(), 'src', 'netlify', 'functions', dirName),
     path.join('/var/task', dirName),
-    path.join('/var/task', 'src', dirName),
-    path.join('/var/task', dirName)
+    path.join('/var/task', 'src', dirName)
   ];
-
   for (const candidate of candidates) {
     const target = expectedFile ? path.join(candidate, expectedFile) : candidate;
-    if (fs.existsSync(target)) {
-      return candidate;
-    }
+    if (fs.existsSync(target)) return candidate;
   }
   return path.join(__dirname, dirName);
 }
@@ -163,157 +43,182 @@ function resolveAssetDir(dirName, expectedFile) {
 const viewsDir = resolveAssetDir('views', 'index.ejs');
 const publicDir = resolveAssetDir('public', 'style.css');
 
+app.set('trust proxy', 1);
 app.set('view engine', 'ejs');
 app.set('views', viewsDir);
 app.use(express.static(publicDir));
-
-// Body parser
 app.use(express.urlencoded({ extended: false }));
+app.use(cookieParser());
+app.use(
+  helmet({
+    contentSecurityPolicy: false
+  })
+);
 
-// Session
-const sessionConfig = {
-  secret: process.env.SESSION_SECRET || 'change-this-secret',
-  resave: false,
-  saveUninitialized: false,
-  cookie: { maxAge: 1000 * 60 * 60 } // 1 hour
-};
+const authLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000,
+  max: 30,
+  standardHeaders: true,
+  legacyHeaders: false
+});
 
-if (!isServerlessRuntime) {
-  sessionConfig.store = new SQLiteStore({ db: 'sessions.db', dir: __dirname });
+app.use('/login', authLimiter);
+app.use('/register', authLimiter);
+
+async function query(text, params = []) {
+  return pool.query(text, params);
 }
 
-app.use(session(sessionConfig));
+function signAuthToken(user) {
+  return jwt.sign(
+    { uid: user.id, un: user.username, adm: user.is_admin === true || user.is_admin === 1 },
+    JWT_SECRET,
+    { expiresIn: '7d' }
+  );
+}
 
-// Helpers
-function requireLogin(req, res, next) {
-  if (!req.session.userId) {
-    return res.redirect('/login');
+function setAuthCookie(res, token) {
+  res.cookie('auth_token', token, {
+    httpOnly: true,
+    sameSite: 'lax',
+    secure: isProduction,
+    maxAge: 7 * 24 * 60 * 60 * 1000
+  });
+}
+
+function clearAuthCookie(res) {
+  res.clearCookie('auth_token');
+}
+
+function authMiddleware(req, _res, next) {
+  const token = req.cookies.auth_token;
+  if (!token) {
+    req.authUser = null;
+    return next();
   }
+  try {
+    req.authUser = jwt.verify(token, JWT_SECRET);
+  } catch (_err) {
+    req.authUser = null;
+  }
+  next();
+}
+
+app.use(authMiddleware);
+
+function requireLogin(req, res, next) {
+  if (!req.authUser || !req.authUser.uid) return res.redirect('/login');
   next();
 }
 
 function requireAdmin(req, res, next) {
-  if (!req.session.userId || !req.session.isAdmin) {
-    return res.status(403).send('僅管理員可存取此頁面');
-  }
+  if (!req.authUser || !req.authUser.adm) return res.status(403).send('僅管理員可存取此頁面');
   next();
 }
 
 function pickPrizeByQuantity(prizes) {
-  const valid = (prizes || []).filter(p => p.quantity > 0);
-  if (valid.length === 0) return null;
-
-  const totalQty = valid.reduce((sum, p) => sum + p.quantity, 0);
+  const valid = prizes.filter(p => Number(p.quantity) > 0);
+  const totalQty = valid.reduce((sum, p) => sum + Number(p.quantity), 0);
   let rand = Math.floor(Math.random() * totalQty);
-
   for (const prize of valid) {
-    rand -= prize.quantity;
-    if (rand < 0) {
-      return prize;
-    }
+    rand -= Number(prize.quantity);
+    if (rand < 0) return prize;
   }
   return valid[valid.length - 1];
 }
 
 function enrichPrizesWithHitRate(prizes) {
-  const rows = prizes || [];
-  const totalQty = rows.reduce((sum, p) => sum + Number(p.quantity || 0), 0);
-  return rows.map(p => {
-    const qty = Number(p.quantity || 0);
-    const rate = totalQty > 0 ? qty / totalQty : 0;
-    return {
-      ...p,
-      hitRate: `${(rate * 100).toFixed(2)}%`
-    };
-  });
+  const totalQty = prizes.reduce((sum, p) => sum + Number(p.quantity || 0), 0);
+  return prizes.map(p => ({
+    ...p,
+    hitRate: `${(totalQty > 0 ? (Number(p.quantity || 0) / totalQty) * 100 : 0).toFixed(2)}%`
+  }));
 }
 
-function logPrizeChange({
-  action,
-  prizeId,
-  beforeName,
-  beforeQuantity,
-  afterName,
-  afterQuantity,
-  adminUsername
-}) {
-  db.run(
+async function logPrizeChange(client, payload) {
+  await client.query(
     `INSERT INTO prize_change_logs
       (action, prize_id, before_name, before_quantity, after_name, after_quantity, admin_username)
-     VALUES (?, ?, ?, ?, ?, ?, ?)`,
+     VALUES ($1, $2, $3, $4, $5, $6, $7)`,
     [
-      action,
-      prizeId || null,
-      beforeName || null,
-      typeof beforeQuantity === 'number' ? beforeQuantity : null,
-      afterName || null,
-      typeof afterQuantity === 'number' ? afterQuantity : null,
-      adminUsername
+      payload.action,
+      payload.prizeId || null,
+      payload.beforeName || null,
+      typeof payload.beforeQuantity === 'number' ? payload.beforeQuantity : null,
+      payload.afterName || null,
+      typeof payload.afterQuantity === 'number' ? payload.afterQuantity : null,
+      payload.adminUsername
     ]
   );
 }
 
-function resequencePrizeIds(done) {
-  db.all('SELECT name, quantity, weight, created_at FROM prizes ORDER BY id ASC', (readErr, rows) => {
-    if (readErr) return done(readErr);
+async function initDb() {
+  await query(`CREATE TABLE IF NOT EXISTS users (
+    id SERIAL PRIMARY KEY,
+    username TEXT UNIQUE NOT NULL,
+    password_hash TEXT NOT NULL,
+    draws_left INTEGER NOT NULL DEFAULT 1,
+    referrer_id INTEGER,
+    extra_draws INTEGER NOT NULL DEFAULT 0,
+    is_admin BOOLEAN NOT NULL DEFAULT false
+  )`);
 
-    db.serialize(() => {
-      const fail = err => db.run('ROLLBACK', () => done(err));
+  await query(`CREATE TABLE IF NOT EXISTS prizes (
+    id SERIAL PRIMARY KEY,
+    name TEXT NOT NULL,
+    quantity INTEGER NOT NULL DEFAULT 0,
+    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+  )`);
 
-      db.run('BEGIN TRANSACTION', beginErr => {
-        if (beginErr) return done(beginErr);
+  await query(`CREATE TABLE IF NOT EXISTS draw_logs (
+    id SERIAL PRIMARY KEY,
+    user_id INTEGER NOT NULL,
+    is_win BOOLEAN NOT NULL DEFAULT false,
+    prize_name TEXT,
+    message TEXT NOT NULL,
+    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+  )`);
 
-        db.run('DELETE FROM prizes', deleteErr => {
-          if (deleteErr) return fail(deleteErr);
+  await query(`CREATE TABLE IF NOT EXISTS prize_change_logs (
+    id SERIAL PRIMARY KEY,
+    action TEXT NOT NULL,
+    prize_id INTEGER,
+    before_name TEXT,
+    before_quantity INTEGER,
+    after_name TEXT,
+    after_quantity INTEGER,
+    admin_username TEXT NOT NULL,
+    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+  )`);
 
-          const stmt = db.prepare(
-            'INSERT INTO prizes (id, name, quantity, weight, created_at) VALUES (?, ?, ?, ?, ?)'
-          );
-
-          for (let i = 0; i < rows.length; i += 1) {
-            const row = rows[i];
-            stmt.run(i + 1, row.name, row.quantity, row.weight || 1, row.created_at);
-          }
-
-          stmt.finalize(finalizeErr => {
-            if (finalizeErr) return fail(finalizeErr);
-
-            const maxId = rows.length;
-            db.run("DELETE FROM sqlite_sequence WHERE name = 'prizes'", seqDeleteErr => {
-              if (seqDeleteErr) return fail(seqDeleteErr);
-
-              const commitWithSeq = () =>
-                db.run('COMMIT', commitErr => {
-                  if (commitErr) return done(commitErr);
-                  done(null);
-                });
-
-              if (maxId > 0) {
-                db.run(
-                  "INSERT INTO sqlite_sequence (name, seq) VALUES ('prizes', ?)",
-                  [maxId],
-                  seqInsertErr => {
-                    if (seqInsertErr) return fail(seqInsertErr);
-                    commitWithSeq();
-                  }
-                );
-                return;
-              }
-
-              commitWithSeq();
-            });
-          });
-        });
-      });
-    });
-  });
+  const adminCheck = await query('SELECT id FROM users WHERE username = $1', [ADMIN_USERNAME]);
+  if (adminCheck.rowCount === 0) {
+    const adminHash = await bcrypt.hash(ADMIN_PASSWORD, 10);
+    await query(
+      'INSERT INTO users (username, password_hash, draws_left, is_admin) VALUES ($1, $2, 1, true)',
+      [ADMIN_USERNAME, adminHash]
+    );
+  }
 }
 
-// Routes
+const initPromise = initDb().catch(err => {
+  console.error('Database initialization failed:', err.message);
+  throw err;
+});
+
+app.use(async (_req, _res, next) => {
+  try {
+    await initPromise;
+    next();
+  } catch (err) {
+    next(err);
+  }
+});
+
 app.get('/', (req, res) => {
   res.render('index', {
-    user: req.session.username,
-    isAdmin: !!req.session.isAdmin
+    user: req.authUser ? req.authUser.un : null,
+    isAdmin: !!(req.authUser && req.authUser.adm)
   });
 });
 
@@ -322,394 +227,358 @@ app.get('/register', (req, res) => {
   res.render('register', { error: null, referrerId, isAdmin: false });
 });
 
-app.post('/register', (req, res) => {
+app.post('/register', async (req, res) => {
   const { username, password, referrerId } = req.body;
   if (!username || !password) {
-    return res.render('register', {
-      error: '請輸入帳號與密碼',
-      referrerId,
-      isAdmin: false
-    });
+    return res.render('register', { error: '請輸入帳號與密碼', referrerId, isAdmin: false });
   }
 
-  const hash = bcrypt.hashSync(password, 10);
+  try {
+    const hash = await bcrypt.hash(password, 10);
+    const inserted = await query(
+      'INSERT INTO users (username, password_hash, referrer_id) VALUES ($1, $2, $3) RETURNING id',
+      [username, hash, referrerId || null]
+    );
+    const newUserId = inserted.rows[0].id;
 
-  db.run(
-    'INSERT INTO users (username, password_hash, referrer_id) VALUES (?, ?, ?)',
-    [username, hash, referrerId || null],
-    function (err) {
-      if (err) {
-        let msg = '註冊失敗';
-        if (err && err.message && err.message.includes('UNIQUE')) {
-          msg = '此帳號已被使用';
-        }
-        return res.render('register', { error: msg, referrerId, isAdmin: false });
-      }
-
-      // 若有推薦人，替推薦人加一次抽獎（最多額外 2 次）
-      if (referrerId) {
-        db.get(
-          'SELECT draws_left, extra_draws FROM users WHERE id = ?',
-          [referrerId],
-          (getErr, refUser) => {
-            if (!getErr && refUser && refUser.extra_draws < 2) {
-              const newExtra = refUser.extra_draws + 1;
-              db.run(
-                'UPDATE users SET extra_draws = ?, draws_left = draws_left + 1 WHERE id = ?',
-                [newExtra, referrerId],
-                () => {
-                  // 即使失敗也不影響新會員註冊流程
-                }
-              );
-            }
-          }
-        );
-      }
-
-      res.redirect('/login');
+    if (referrerId && Number(referrerId) !== Number(newUserId)) {
+      await query(
+        `UPDATE users
+         SET extra_draws = CASE WHEN extra_draws < 2 THEN extra_draws + 1 ELSE extra_draws END,
+             draws_left = CASE WHEN extra_draws < 2 THEN draws_left + 1 ELSE draws_left END
+         WHERE id = $1`,
+        [referrerId]
+      );
     }
-  );
+    return res.redirect('/login');
+  } catch (err) {
+    const msg = String(err.message || '').includes('duplicate key') ? '此帳號已被使用' : '註冊失敗';
+    return res.render('register', { error: msg, referrerId, isAdmin: false });
+  }
 });
 
-app.get('/login', (req, res) => {
+app.get('/login', (_req, res) => {
   res.render('login', { error: null, isAdmin: false });
 });
 
-app.post('/login', (req, res) => {
+app.post('/login', async (req, res) => {
   const { username, password } = req.body;
   if (!username || !password) {
     return res.render('login', { error: '請輸入帳號與密碼', isAdmin: false });
   }
+  const found = await query('SELECT id, username, password_hash, is_admin FROM users WHERE username = $1', [username]);
+  if (found.rowCount === 0) {
+    return res.render('login', { error: '帳號或密碼錯誤', isAdmin: false });
+  }
+  const user = found.rows[0];
+  const ok = await bcrypt.compare(password, user.password_hash);
+  if (!ok) {
+    return res.render('login', { error: '帳號或密碼錯誤', isAdmin: false });
+  }
+  const token = signAuthToken(user);
+  setAuthCookie(res, token);
+  return res.redirect('/lottery');
+});
 
-  db.get(
-    'SELECT * FROM users WHERE username = ?',
-    [username],
-    (err, user) => {
-      if (err || !user) {
-        return res.render('login', { error: '帳號或密碼錯誤', isAdmin: false });
-      }
+app.post('/logout', (_req, res) => {
+  clearAuthCookie(res);
+  res.redirect('/');
+});
 
-      const ok = bcrypt.compareSync(password, user.password_hash);
-      if (!ok) {
-        return res.render('login', { error: '帳號或密碼錯誤', isAdmin: false });
-      }
+app.get('/lottery', requireLogin, async (req, res, next) => {
+  try {
+    const userRs = await query('SELECT draws_left, extra_draws FROM users WHERE id = $1', [req.authUser.uid]);
+    const row = userRs.rows[0] || { draws_left: 0, extra_draws: 0 };
+    const prizeRs = await query('SELECT name FROM prizes WHERE quantity > 0 ORDER BY id ASC');
+    const refLink = `https://${req.headers.host}/register?ref=${req.authUser.uid}`;
+    res.render('lottery', {
+      user: req.authUser.un,
+      isAdmin: !!req.authUser.adm,
+      result: null,
+      drawsLeft: row.draws_left || 0,
+      extraDraws: row.extra_draws || 0,
+      refLink,
+      availablePrizes: prizeRs.rows || []
+    });
+  } catch (err) {
+    next(err);
+  }
+});
 
-      req.session.userId = user.id;
-      req.session.username = user.username;
-      req.session.isAdmin = user.is_admin === 1;
-      res.redirect('/lottery');
+app.post('/lottery/draw', requireLogin, async (req, res, next) => {
+  const client = await pool.connect();
+  try {
+    await client.query('BEGIN');
+    const userRs = await client.query(
+      'SELECT draws_left, extra_draws FROM users WHERE id = $1 FOR UPDATE',
+      [req.authUser.uid]
+    );
+    if (userRs.rowCount === 0) {
+      await client.query('ROLLBACK');
+      return res.redirect('/lottery');
     }
-  );
-});
 
-app.post('/logout', (req, res) => {
-  req.session.destroy(() => {
-    res.redirect('/');
-  });
-});
-
-// Lottery page (must login)
-app.get('/lottery', requireLogin, (req, res) => {
-  db.get(
-    'SELECT draws_left, extra_draws FROM users WHERE id = ?',
-    [req.session.userId],
-    (err, row) => {
-      const drawsLeft = !err && row ? row.draws_left : 0;
-      const extraDraws = !err && row ? row.extra_draws : 0;
-      const host = req.headers.host;
-      const refLink = `http://${host}/register?ref=${req.session.userId}`;
-      db.all('SELECT name, quantity FROM prizes WHERE quantity > 0 ORDER BY id ASC', (prizeErr, prizeRows) => {
-        res.render('lottery', {
-          user: req.session.username,
-          isAdmin: !!req.session.isAdmin,
-          result: null,
-          drawsLeft,
-          extraDraws,
-          refLink,
-          availablePrizes: prizeErr ? [] : prizeRows || []
-        });
-      });
-    }
-  );
-});
-
-// Lottery action
-app.post('/lottery/draw', requireLogin, (req, res) => {
-  db.get(
-    'SELECT draws_left, extra_draws FROM users WHERE id = ?',
-    [req.session.userId],
-    (err, row) => {
-      const drawsLeftFromDb = !err && row ? row.draws_left : 0;
-      const extraDraws = !err && row ? row.extra_draws : 0;
-      const host = req.headers.host;
-      const refLink = `http://${host}/register?ref=${req.session.userId}`;
-      const renderLottery = (resultMessage, drawsLeftValue) => {
-        db.all('SELECT name, quantity FROM prizes WHERE quantity > 0 ORDER BY id ASC', (prizeErr, prizeRows) => {
-          res.render('lottery', {
-            user: req.session.username,
-            isAdmin: !!req.session.isAdmin,
-            result: resultMessage,
-            drawsLeft: drawsLeftValue,
-            extraDraws,
-            refLink,
-            availablePrizes: prizeErr ? [] : prizeRows || []
-          });
-        });
-      };
-
-      if (err || !row) {
-        return renderLottery('系統錯誤，請稍後再試', 0);
-      }
-
-      const currentLeft = drawsLeftFromDb || 0;
-
-      if (currentLeft <= 0) {
-        return renderLottery('您的抽獎次數已用完', 0);
-      }
-
-      const newLeft = currentLeft - 1;
-      // 改為必中：從剩餘庫存中依比例抽出獎品
-      db.all(
-        'SELECT id, name, quantity FROM prizes WHERE quantity > 0',
-        (prizeErr, prizeRows) => {
-          if (prizeErr || !prizeRows || prizeRows.length === 0) {
-            return renderLottery('目前沒有可抽獎品，請聯絡管理員補庫存', currentLeft);
-          }
-
-          const picked = pickPrizeByQuantity(prizeRows);
-          if (!picked) {
-            return renderLottery('目前沒有可抽獎品，請聯絡管理員補庫存', currentLeft);
-          }
-
-          db.run(
-            'UPDATE prizes SET quantity = quantity - 1 WHERE id = ? AND quantity > 0',
-            [picked.id],
-            function (decreaseErr) {
-              if (decreaseErr || this.changes === 0) {
-                return renderLottery('獎品已被抽完，請再試一次', currentLeft);
-              }
-
-              db.run(
-                'UPDATE users SET draws_left = ? WHERE id = ?',
-                [newLeft, req.session.userId],
-                userUpdateErr => {
-                  if (userUpdateErr) {
-                    return renderLottery('系統錯誤，請稍後再試', currentLeft);
-                  }
-
-                  const message = `恭喜中獎！獲得：${picked.name}`;
-                  db.run(
-                    'INSERT INTO draw_logs (user_id, is_win, prize_name, message) VALUES (?, 1, ?, ?)',
-                    [req.session.userId, picked.name, message]
-                  );
-                  renderLottery(message, newLeft);
-                }
-              );
-            }
-          );
-        }
-      );
-    }
-  );
-});
-
-// Member - my draw history
-app.get('/my-draws', requireLogin, (req, res) => {
-  db.all(
-    'SELECT is_win, prize_name, message, created_at FROM draw_logs WHERE user_id = ? ORDER BY id DESC',
-    [req.session.userId],
-    (err, rows) => {
-      res.render('my_draws', {
-        user: req.session.username,
-        isAdmin: !!req.session.isAdmin,
-        records: err ? [] : rows || []
-      });
-    }
-  );
-});
-
-// Admin - Prize settings page
-app.get('/admin/prizes', requireAdmin, (req, res) => {
-  db.all('SELECT id, name, quantity, created_at FROM prizes ORDER BY id ASC', (err, rows) => {
-    if (err) {
-      return res.render('admin_prizes', {
-        user: req.session.username,
-        isAdmin: true,
-        error: '讀取獎品資料失敗',
-        prizes: []
+    const currentLeft = Number(userRs.rows[0].draws_left || 0);
+    const extraDraws = Number(userRs.rows[0].extra_draws || 0);
+    if (currentLeft <= 0) {
+      await client.query('ROLLBACK');
+      const prizeRs = await query('SELECT name FROM prizes WHERE quantity > 0 ORDER BY id ASC');
+      return res.render('lottery', {
+        user: req.authUser.un,
+        isAdmin: !!req.authUser.adm,
+        result: '您的抽獎次數已用完',
+        drawsLeft: 0,
+        extraDraws,
+        refLink: `https://${req.headers.host}/register?ref=${req.authUser.uid}`,
+        availablePrizes: prizeRs.rows || []
       });
     }
 
+    const prizeRs = await client.query('SELECT id, name, quantity FROM prizes WHERE quantity > 0 ORDER BY id ASC FOR UPDATE');
+    if (prizeRs.rowCount === 0) {
+      await client.query('ROLLBACK');
+      return res.render('lottery', {
+        user: req.authUser.un,
+        isAdmin: !!req.authUser.adm,
+        result: '目前沒有可抽獎品，請聯絡管理員補庫存',
+        drawsLeft: currentLeft,
+        extraDraws,
+        refLink: `https://${req.headers.host}/register?ref=${req.authUser.uid}`,
+        availablePrizes: []
+      });
+    }
+
+    const picked = pickPrizeByQuantity(prizeRs.rows);
+    await client.query('UPDATE prizes SET quantity = quantity - 1 WHERE id = $1 AND quantity > 0', [picked.id]);
+    await client.query('UPDATE users SET draws_left = draws_left - 1 WHERE id = $1', [req.authUser.uid]);
+    const message = `恭喜中獎！獲得：${picked.name}`;
+    await client.query(
+      'INSERT INTO draw_logs (user_id, is_win, prize_name, message) VALUES ($1, true, $2, $3)',
+      [req.authUser.uid, picked.name, message]
+    );
+    await client.query('COMMIT');
+
+    const latestPrizeRs = await query('SELECT name FROM prizes WHERE quantity > 0 ORDER BY id ASC');
+    return res.render('lottery', {
+      user: req.authUser.un,
+      isAdmin: !!req.authUser.adm,
+      result: message,
+      drawsLeft: currentLeft - 1,
+      extraDraws,
+      refLink: `https://${req.headers.host}/register?ref=${req.authUser.uid}`,
+      availablePrizes: latestPrizeRs.rows || []
+    });
+  } catch (err) {
+    await client.query('ROLLBACK');
+    next(err);
+  } finally {
+    client.release();
+  }
+});
+
+app.get('/my-draws', requireLogin, async (req, res, next) => {
+  try {
+    const rows = await query(
+      'SELECT is_win, prize_name, message, created_at FROM draw_logs WHERE user_id = $1 ORDER BY id DESC',
+      [req.authUser.uid]
+    );
+    res.render('my_draws', {
+      user: req.authUser.un,
+      isAdmin: !!req.authUser.adm,
+      records: rows.rows || []
+    });
+  } catch (err) {
+    next(err);
+  }
+});
+
+app.get('/admin/prizes', requireAdmin, async (req, res, next) => {
+  try {
+    const rows = await query('SELECT id, name, quantity, created_at FROM prizes ORDER BY id ASC');
     res.render('admin_prizes', {
-      user: req.session.username,
+      user: req.authUser.un,
       isAdmin: true,
       error: null,
-      prizes: enrichPrizesWithHitRate(rows)
+      prizes: enrichPrizesWithHitRate(rows.rows || [])
     });
-  });
+  } catch (err) {
+    next(err);
+  }
 });
 
-app.get('/admin/prizes/logs', requireAdmin, (req, res) => {
-  db.all(
-    `SELECT id, action, prize_id, before_name, before_quantity, after_name, after_quantity, admin_username, created_at
-     FROM prize_change_logs
-     ORDER BY id DESC`,
-    (err, rows) => {
-      res.render('admin_prize_logs', {
-        user: req.session.username,
-        isAdmin: true,
-        records: err ? [] : rows || []
-      });
-    }
-  );
+app.get('/admin/prizes/logs', requireAdmin, async (req, res, next) => {
+  try {
+    const rows = await query(
+      `SELECT id, action, prize_id, before_name, before_quantity, after_name, after_quantity, admin_username, created_at
+       FROM prize_change_logs
+       ORDER BY id DESC`
+    );
+    res.render('admin_prize_logs', {
+      user: req.authUser.un,
+      isAdmin: true,
+      records: rows.rows || []
+    });
+  } catch (err) {
+    next(err);
+  }
 });
 
-app.get('/admin/prizes/:id/edit', requireAdmin, (req, res) => {
-  const { id } = req.params;
-  db.get('SELECT id, name, quantity, created_at FROM prizes WHERE id = ?', [id], (err, row) => {
-    if (err || !row) {
-      return res.redirect('/admin/prizes');
-    }
-
+app.get('/admin/prizes/:id/edit', requireAdmin, async (req, res, next) => {
+  try {
+    const row = await query('SELECT id, name, quantity, created_at FROM prizes WHERE id = $1', [req.params.id]);
+    if (row.rowCount === 0) return res.redirect('/admin/prizes');
     res.render('admin_prize_edit', {
-      user: req.session.username,
+      user: req.authUser.un,
       isAdmin: true,
       error: null,
-      prize: row
+      prize: row.rows[0]
     });
-  });
+  } catch (err) {
+    next(err);
+  }
 });
 
-app.post('/admin/prizes', requireAdmin, (req, res) => {
+app.post('/admin/prizes', requireAdmin, async (req, res) => {
   const { name, quantity } = req.body;
   const qty = Number(quantity);
-
   if (!name || Number.isNaN(qty) || qty < 0) {
-    return db.all('SELECT id, name, quantity, created_at FROM prizes ORDER BY id ASC', (err, rows) => {
-      res.render('admin_prizes', {
-        user: req.session.username,
-        isAdmin: true,
-        error: '請輸入正確的獎品名稱與數量',
-        prizes: err ? [] : enrichPrizesWithHitRate(rows)
-      });
+    const rows = await query('SELECT id, name, quantity, created_at FROM prizes ORDER BY id ASC');
+    return res.render('admin_prizes', {
+      user: req.authUser.un,
+      isAdmin: true,
+      error: '請輸入正確的獎品名稱與數量',
+      prizes: enrichPrizesWithHitRate(rows.rows || [])
     });
   }
 
-  db.run('INSERT INTO prizes (name, quantity) VALUES (?, ?)', [name, qty], function (insertErr) {
-    if (insertErr) {
-      return db.all('SELECT id, name, quantity, created_at FROM prizes ORDER BY id ASC', (err, rows) => {
-        res.render('admin_prizes', {
-          user: req.session.username,
-          isAdmin: true,
-          error: '新增獎品失敗',
-          prizes: err ? [] : enrichPrizesWithHitRate(rows)
-        });
-      });
-    }
-    logPrizeChange({
+  const client = await pool.connect();
+  try {
+    await client.query('BEGIN');
+    const inserted = await client.query(
+      'INSERT INTO prizes (name, quantity) VALUES ($1, $2) RETURNING id',
+      [name, qty]
+    );
+    await logPrizeChange(client, {
       action: 'create',
-      prizeId: this.lastID,
+      prizeId: inserted.rows[0].id,
       afterName: name,
       afterQuantity: qty,
-      adminUsername: req.session.username
+      adminUsername: req.authUser.un
     });
-    res.redirect('/admin/prizes');
-  });
+    await client.query('COMMIT');
+    return res.redirect('/admin/prizes');
+  } catch (_err) {
+    await client.query('ROLLBACK');
+    const rows = await query('SELECT id, name, quantity, created_at FROM prizes ORDER BY id ASC');
+    return res.render('admin_prizes', {
+      user: req.authUser.un,
+      isAdmin: true,
+      error: '新增獎品失敗',
+      prizes: enrichPrizesWithHitRate(rows.rows || [])
+    });
+  } finally {
+    client.release();
+  }
 });
 
-app.post('/admin/prizes/:id/update', requireAdmin, (req, res) => {
+app.post('/admin/prizes/:id/update', requireAdmin, async (req, res) => {
   const { id } = req.params;
   const { name, quantity } = req.body;
   const qty = Number(quantity);
-
   if (!name || Number.isNaN(qty) || qty < 0) {
-    return db.get('SELECT id, name, quantity, created_at FROM prizes WHERE id = ?', [id], (err, row) => {
-      if (err || !row) return res.redirect('/admin/prizes');
-      res.render('admin_prize_edit', {
-        user: req.session.username,
-        isAdmin: true,
-        error: '修改失敗，請輸入正確的獎品名稱與數量',
-        prize: {
-          id: row.id,
-          name,
-          quantity: Number.isNaN(qty) ? row.quantity : qty,
-          created_at: row.created_at
-        }
-      });
+    const row = await query('SELECT id, name, quantity, created_at FROM prizes WHERE id = $1', [id]);
+    if (row.rowCount === 0) return res.redirect('/admin/prizes');
+    return res.render('admin_prize_edit', {
+      user: req.authUser.un,
+      isAdmin: true,
+      error: '修改失敗，請輸入正確的獎品名稱與數量',
+      prize: { ...row.rows[0], name, quantity: Number.isNaN(qty) ? row.rows[0].quantity : qty }
     });
   }
 
-  db.get('SELECT id, name, quantity, created_at FROM prizes WHERE id = ?', [id], (getErr, existing) => {
-    if (getErr || !existing) {
+  const client = await pool.connect();
+  try {
+    await client.query('BEGIN');
+    const existing = await client.query('SELECT id, name, quantity FROM prizes WHERE id = $1 FOR UPDATE', [id]);
+    if (existing.rowCount === 0) {
+      await client.query('ROLLBACK');
       return res.redirect('/admin/prizes');
     }
-
-    db.run('UPDATE prizes SET name = ?, quantity = ? WHERE id = ?', [name, qty, id], function (updateErr) {
-      if (updateErr || this.changes === 0) {
-        return res.render('admin_prize_edit', {
-          user: req.session.username,
-          isAdmin: true,
-          error: '修改獎品失敗',
-          prize: existing
-        });
-      }
-
-      logPrizeChange({
-        action: 'update',
-        prizeId: Number(id),
-        beforeName: existing.name,
-        beforeQuantity: existing.quantity,
-        afterName: name,
-        afterQuantity: qty,
-        adminUsername: req.session.username
-      });
-      res.redirect('/admin/prizes');
+    await client.query('UPDATE prizes SET name = $1, quantity = $2 WHERE id = $3', [name, qty, id]);
+    await logPrizeChange(client, {
+      action: 'update',
+      prizeId: Number(id),
+      beforeName: existing.rows[0].name,
+      beforeQuantity: Number(existing.rows[0].quantity),
+      afterName: name,
+      afterQuantity: qty,
+      adminUsername: req.authUser.un
     });
-  });
+    await client.query('COMMIT');
+    return res.redirect('/admin/prizes');
+  } catch (_err) {
+    await client.query('ROLLBACK');
+    const row = await query('SELECT id, name, quantity, created_at FROM prizes WHERE id = $1', [id]);
+    if (row.rowCount === 0) return res.redirect('/admin/prizes');
+    return res.render('admin_prize_edit', {
+      user: req.authUser.un,
+      isAdmin: true,
+      error: '修改獎品失敗',
+      prize: row.rows[0]
+    });
+  } finally {
+    client.release();
+  }
 });
 
-app.post('/admin/prizes/:id/delete', requireAdmin, (req, res) => {
+app.post('/admin/prizes/:id/delete', requireAdmin, async (req, res) => {
   const { id } = req.params;
-  db.get('SELECT id, name, quantity FROM prizes WHERE id = ?', [id], (getErr, existing) => {
-    if (getErr || !existing) {
+  const client = await pool.connect();
+  try {
+    await client.query('BEGIN');
+    const existing = await client.query('SELECT id, name, quantity FROM prizes WHERE id = $1 FOR UPDATE', [id]);
+    if (existing.rowCount === 0) {
+      await client.query('ROLLBACK');
       return res.redirect('/admin/prizes');
     }
-
-    db.run('DELETE FROM prizes WHERE id = ?', [id], function (deleteErr) {
-      if (deleteErr || this.changes === 0) {
-        return db.all('SELECT id, name, quantity, created_at FROM prizes ORDER BY id ASC', (err, rows) => {
-          res.render('admin_prizes', {
-            user: req.session.username,
-            isAdmin: true,
-            error: '刪除獎品失敗',
-            prizes: err ? [] : enrichPrizesWithHitRate(rows)
-          });
-        });
-      }
-
-      logPrizeChange({
-        action: 'delete',
-        prizeId: existing.id,
-        beforeName: existing.name,
-        beforeQuantity: existing.quantity,
-        adminUsername: req.session.username
-      });
-
-      resequencePrizeIds(resequenceErr => {
-        if (resequenceErr) {
-          return db.all('SELECT id, name, quantity, created_at FROM prizes ORDER BY id ASC', (err, rows) => {
-            res.render('admin_prizes', {
-              user: req.session.username,
-              isAdmin: true,
-              error: '刪除成功，但重排 ID 失敗，請稍後重試',
-              prizes: err ? [] : enrichPrizesWithHitRate(rows)
-            });
-          });
-        }
-        res.redirect('/admin/prizes');
-      });
+    await client.query('DELETE FROM prizes WHERE id = $1', [id]);
+    await logPrizeChange(client, {
+      action: 'delete',
+      prizeId: existing.rows[0].id,
+      beforeName: existing.rows[0].name,
+      beforeQuantity: Number(existing.rows[0].quantity),
+      adminUsername: req.authUser.un
     });
-  });
+    await client.query(`
+      WITH ordered AS (
+        SELECT id, ROW_NUMBER() OVER (ORDER BY id) AS new_id
+        FROM prizes
+      )
+      UPDATE prizes p
+      SET id = ordered.new_id
+      FROM ordered
+      WHERE p.id = ordered.id
+    `);
+    await client.query(`SELECT setval('prizes_id_seq', COALESCE((SELECT MAX(id) FROM prizes), 1), true)`);
+    await client.query('COMMIT');
+    return res.redirect('/admin/prizes');
+  } catch (_err) {
+    await client.query('ROLLBACK');
+    const rows = await query('SELECT id, name, quantity, created_at FROM prizes ORDER BY id ASC');
+    return res.render('admin_prizes', {
+      user: req.authUser.un,
+      isAdmin: true,
+      error: '刪除獎品失敗',
+      prizes: enrichPrizesWithHitRate(rows.rows || [])
+    });
+  } finally {
+    client.release();
+  }
+});
+
+app.use((err, _req, res, _next) => {
+  console.error('Unhandled error:', err.message);
+  res.status(500).send('Server error');
 });
 
 if (require.main === module) {
