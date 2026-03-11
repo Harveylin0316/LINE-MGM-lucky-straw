@@ -1,4 +1,5 @@
 const path = require('path');
+const os = require('os');
 const express = require('express');
 const session = require('express-session');
 const SQLiteStore = require('connect-sqlite3')(session);
@@ -10,10 +11,13 @@ const PORT = process.env.PORT || 3000;
 const ADMIN_USERNAME = 'admin';
 const ADMIN_PASSWORD = 'admin1234';
 const isNetlify = process.env.NETLIFY === 'true';
-const baseDir = isNetlify ? '/tmp' : __dirname;
+const baseDir = isNetlify ? os.tmpdir() : __dirname;
 
 // DB setup
 const db = new sqlite3.Database(path.join(baseDir, 'data.db'));
+db.on('error', err => {
+  console.error('SQLite error:', err.message);
+});
 
 db.serialize(() => {
   db.run(
