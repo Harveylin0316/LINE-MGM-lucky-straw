@@ -2,7 +2,6 @@ const path = require('path');
 const os = require('os');
 const express = require('express');
 const session = require('express-session');
-const SQLiteStore = require('connect-sqlite3')(session);
 const bcrypt = require('bcryptjs');
 const sqlite3 = require('sqlite3').verbose();
 
@@ -12,6 +11,11 @@ const ADMIN_USERNAME = 'admin';
 const ADMIN_PASSWORD = 'admin1234';
 const isNetlify = process.env.NETLIFY === 'true';
 const baseDir = isNetlify ? os.tmpdir() : __dirname;
+let SQLiteStore = null;
+
+if (!isNetlify) {
+  SQLiteStore = require('connect-sqlite3')(session);
+}
 
 // DB setup
 const db = new sqlite3.Database(path.join(baseDir, 'data.db'));

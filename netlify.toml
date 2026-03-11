@@ -1,11 +1,15 @@
 [build]
   functions = "netlify/functions"
+  command = "npm ci"
+
+[build.environment]
+  NODE_VERSION = "18"
 
 [functions]
   node_bundler = "esbuild"
 
 [functions."server"]
-  external_node_modules = ["sqlite3", "connect-sqlite3"]
+  external_node_modules = ["sqlite3"]
   included_files = ["views/**", "public/**", "server.js"]
 
 [[redirects]]
