@@ -1,0 +1,21 @@
+{
+  "name": "line-mgm-lucky-straw",
+  "version": "1.0.0",
+  "description": "Simple web app with member login and lottery game",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js",
+    "dev": "nodemon server.js"
+  },
+  "dependencies": {
+    "bcryptjs": "^2.4.3",
+    "connect-sqlite3": "^0.9.15",
+    "ejs": "^3.1.10",
+    "express": "^4.21.2",
+    "express-session": "^1.18.1",
+    "sqlite3": "^5.1.7"
+  },
+  "devDependencies": {
+    "nodemon": "^3.1.9"
+  }
+}

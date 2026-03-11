@@ -1,0 +1,63 @@
+<%-
+  include('layout', {
+    user: user,
+    isAdmin: isAdmin,
+    body: `
+    <section class="card">
+      <h1>管理員 - 獎品設定</h1>
+      <p class="muted">在這裡可以新增獎品與設定可發放數量。</p>
+      <p><a class="btn" href="/admin/prizes/logs">查看獎品修改紀錄</a></p>
+      ${error ? `<p class="error">${error}</p>` : ''}
+
+      <form method="post" action="/admin/prizes" class="form" onsubmit="return confirm('確認要新增這個獎品嗎？')">
+        <label>
+          獎品名稱
+          <input type="text" name="name" required />
+        </label>
+        <label>
+          數量
+          <input type="number" name="quantity" min="0" required />
+        </label>
+        <button type="submit" class="btn primary">新增獎品</button>
+      </form>
+
+      <h2 style="margin-top: 20px;">目前獎品清單</h2>
+      ${
+        Array.isArray(prizes) && prizes.length > 0
+          ? `<table class="prize-table">
+              <thead>
+                <tr>
+                  <th>ID</th>
+                  <th>獎品名稱</th>
+                  <th>剩餘數量</th>
+                  <th>目前中獎機率</th>
+                  <th>建立時間</th>
+                  <th>操作</th>
+                </tr>
+              </thead>
+              <tbody>
+                ${prizes
+                  .map(
+                    p => `<tr>
+                      <td>${p.id}</td>
+                      <td>${p.name}</td>
+                      <td>${p.quantity}</td>
+                      <td>${p.hitRate}</td>
+                      <td>${p.created_at}</td>
+                      <td>
+                        <a class="btn" href="/admin/prizes/${p.id}/edit">修改</a>
+                        <form method="post" action="/admin/prizes/${p.id}/delete" class="inline-form" onsubmit="return confirm('確認要刪除這個獎品嗎？')">
+                          <button type="submit" class="btn btn-danger">刪除</button>
+                        </form>
+                      </td>
+                    </tr>`
+                  )
+                  .join('')}
+              </tbody>
+            </table>`
+          : '<p class="muted">目前尚無獎品。</p>'
+      }
+    </section>
+  `
+  })
+%>

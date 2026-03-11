@@ -1,0 +1,16 @@
+<%-
+  include('layout', {
+    user: user,
+    body: `
+    <section class="card">
+      <h1>歡迎來到 Lucky Straw 抽獎</h1>
+      <p>請先登入或註冊帳號，就可以開始玩抽獎遊戲。</p>
+      <div class="actions">
+        <a class="btn primary" href="/login">登入</a>
+        <a class="btn" href="/register">註冊新帳號</a>
+      </div>
+    </section>
+  `
+  })
+%>
+

@@ -1,0 +1,46 @@
+<%-
+  include('layout', {
+    user: user,
+    isAdmin: isAdmin,
+    body: `
+    <section class="card">
+      <h1>獎品修改紀錄</h1>
+      <p class="muted">顯示管理員對獎品進行的新增、修改、刪除操作。</p>
+      <p><a class="btn" href="/admin/prizes">返回獎品設定</a></p>
+
+      ${
+        Array.isArray(records) && records.length > 0
+          ? `<table class="prize-table">
+              <thead>
+                <tr>
+                  <th>ID</th>
+                  <th>操作</th>
+                  <th>獎品ID</th>
+                  <th>修改前</th>
+                  <th>修改後</th>
+                  <th>管理員</th>
+                  <th>時間</th>
+                </tr>
+              </thead>
+              <tbody>
+                ${records
+                  .map(
+                    r => `<tr>
+                      <td>${r.id}</td>
+                      <td>${r.action}</td>
+                      <td>${r.prize_id || '-'}</td>
+                      <td>${r.before_name || '-'} / ${typeof r.before_quantity === 'number' ? r.before_quantity : '-'}</td>
+                      <td>${r.after_name || '-'} / ${typeof r.after_quantity === 'number' ? r.after_quantity : '-'}</td>
+                      <td>${r.admin_username}</td>
+                      <td>${r.created_at}</td>
+                    </tr>`
+                  )
+                  .join('')}
+              </tbody>
+            </table>`
+          : '<p class="muted">目前尚無修改紀錄。</p>'
+      }
+    </section>
+  `
+  })
+%>

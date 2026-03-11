@@ -1,0 +1,28 @@
+<%-
+  include('layout', {
+    user: user,
+    isAdmin: isAdmin,
+    body: `
+    <section class="card">
+      <h1>修改獎品</h1>
+      <p class="muted">編輯後按儲存，即可更新該獎品設定。</p>
+      ${error ? `<p class="error">${error}</p>` : ''}
+
+      <form method="post" action="/admin/prizes/${prize.id}/update" class="form">
+        <label>
+          獎品名稱
+          <input type="text" name="name" value="${String(prize.name).replace(/"/g, '&quot;')}" required />
+        </label>
+        <label>
+          數量
+          <input type="number" name="quantity" min="0" value="${prize.quantity}" required />
+        </label>
+        <div class="actions">
+          <button type="submit" class="btn primary">儲存修改</button>
+          <a class="btn" href="/admin/prizes">取消</a>
+        </div>
+      </form>
+    </section>
+  `
+  })
+%>

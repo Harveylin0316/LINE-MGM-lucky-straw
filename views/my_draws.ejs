@@ -1,0 +1,38 @@
+<%-
+  include('layout', {
+    user: user,
+    isAdmin: isAdmin,
+    body: `
+    <section class="card">
+      <h1>我的抽獎紀錄</h1>
+      <p class="muted">可查看你每次抽獎是否中獎與獎品結果。</p>
+      ${
+        Array.isArray(records) && records.length > 0
+          ? `<table class="prize-table">
+              <thead>
+                <tr>
+                  <th>結果</th>
+                  <th>獎品</th>
+                  <th>訊息</th>
+                  <th>時間</th>
+                </tr>
+              </thead>
+              <tbody>
+                ${records
+                  .map(
+                    r => `<tr>
+                      <td>${r.is_win ? '<span class="badge-win">中獎</span>' : '<span class="badge-lose">未中獎</span>'}</td>
+                      <td>${r.prize_name || '-'}</td>
+                      <td>${r.message}</td>
+                      <td>${r.created_at}</td>
+                    </tr>`
+                  )
+                  .join('')}
+              </tbody>
+            </table>`
+          : '<p class="muted">目前尚無抽獎紀錄。</p>'
+      }
+    </section>
+  `
+  })
+%>

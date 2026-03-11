@@ -1,0 +1,125 @@
+<%-
+  include('layout', {
+    user: user,
+    isAdmin: isAdmin,
+    body: `
+    <section class="openrice-lottery">
+      <header class="or-hero">
+        <div class="or-balloon left">
+          <span></span><span></span><span></span>
+        </div>
+        <div class="or-balloon right">
+          <span></span><span></span><span></span>
+        </div>
+
+        <h1 class="or-title">
+          <span class="rose">春日饗里</span>
+          <span class="blue">揪友野餐趣</span>
+        </h1>
+        <div class="or-date">3/10 ~ 3/31</div>
+
+        <div class="or-center-graphic">
+          <div class="wood-sign left-one">搜集籃中美味</div>
+          <div class="wood-sign left-two">準時赴約野餐日</div>
+          <div class="wood-sign right-one">LINE 好友
+            <br/>一起抽獎中</div>
+          <div class="or-basket"></div>
+        </div>
+      </header>
+
+      <section class="or-wood-area">
+        <div class="or-cta-plaque">
+          分享好友領刮刮樂，最高 20,000「亞洲萬里通」里數等你拿
+        </div>
+
+        <div class="or-status">
+          <p>剩餘抽獎次數：<strong>${typeof drawsLeft !== 'undefined' ? drawsLeft : 0}</strong></p>
+          <p>邀請加碼次數：<strong>${typeof extraDraws !== 'undefined' ? extraDraws : 0}</strong></p>
+          ${
+            result
+              ? `<p class="or-result">${result}</p>`
+              : '<p class="muted">按下下方按鈕開始刮刮樂。</p>'
+          }
+        </div>
+
+        <section class="or-prize-grid">
+          <article class="or-prize-card">
+            <span class="or-badge">頭獎</span>
+            <div class="or-prize-side am">
+              <span class="icon">✈</span>
+            </div>
+            <div class="or-prize-content">
+              <h3>20,000 里</h3>
+              <p>「亞洲萬里通」里數（共 2 份）</p>
+            </div>
+          </article>
+          <article class="or-prize-card">
+            <span class="or-badge">貳獎</span>
+            <div class="or-prize-side rd">
+              <span class="icon">$</span>
+            </div>
+            <div class="or-prize-content">
+              <h3>Rice Dollars $100</h3>
+              <p>（共 280 份）</p>
+            </div>
+          </article>
+          <article class="or-prize-card">
+            <span class="or-badge">參獎</span>
+            <div class="or-prize-side rd">
+              <span class="icon">$</span>
+            </div>
+            <div class="or-prize-content">
+              <h3>Rice Dollars $30</h3>
+              <p>（共 715 份）</p>
+            </div>
+          </article>
+          <article class="or-prize-card">
+            <span class="or-badge">早鳥獎</span>
+            <div class="or-prize-side am">
+              <span class="icon">✈</span>
+            </div>
+            <div class="or-prize-content">
+              <h3>10,000 里</h3>
+              <p>「亞洲萬里通」里數（共 10 份）</p>
+            </div>
+          </article>
+        </section>
+
+        <div class="or-available">
+          <h2>目前可抽獎品</h2>
+          ${
+            Array.isArray(availablePrizes) && availablePrizes.length > 0
+              ? `<div class="available-prizes">
+                  ${availablePrizes
+                    .map(p => `<span class="prize-pill">${p.name}</span>`)
+                    .join('')}
+                </div>`
+              : '<p class="muted">目前尚無可抽獎品，請稍後再試。</p>'
+          }
+        </div>
+
+        <div class="or-invite">
+          <h2>分享好友再加碼</h2>
+          <p>每成功邀請 1 位好友註冊，你可多 1 次抽獎機會。</p>
+          ${
+            typeof refLink !== 'undefined'
+              ? `<code class="invite-link">${refLink}</code>`
+              : ''
+          }
+        </div>
+
+        ${
+          (typeof drawsLeft !== 'undefined' ? drawsLeft : 0) > 0
+            ? `
+        <form method="post" action="/lottery/draw" class="draw-form">
+          <button type="submit" class="draw-button">立即抽獎</button>
+        </form>
+        `
+            : `<p class="muted center-text">您目前抽獎次數已用完，邀請好友可再獲得次數。</p>`
+        }
+      </section>
+    </section>
+  `
+  })
+%>
+

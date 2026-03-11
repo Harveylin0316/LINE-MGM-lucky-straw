@@ -1,0 +1,35 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+  <head>
+    <meta charset="UTF-8" />
+    <title>Lucky Straw</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <link rel="stylesheet" href="/style.css" />
+  </head>
+  <body>
+    <header class="topbar">
+      <div class="container">
+        <div class="brand">Lucky Straw 抽獎</div>
+        <nav>
+          <% if (user) { %>
+          <span class="welcome">嗨，<%= user %></span>
+          <% if (isAdmin) { %>
+          <a href="/admin/prizes">獎品設定</a>
+          <% } %>
+          <a href="/my-draws">我的抽獎紀錄</a>
+          <form action="/logout" method="post" class="inline-form">
+            <button type="submit">登出</button>
+          </form>
+          <% } else { %>
+          <a href="/login">登入</a>
+          <a href="/register">註冊</a>
+          <% } %>
+        </nav>
+      </div>
+    </header>
+    <main class="container">
+      <%- body %>
+    </main>
+  </body>
+</html>
+
