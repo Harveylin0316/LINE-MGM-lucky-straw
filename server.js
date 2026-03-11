@@ -10,14 +10,25 @@ const { Pool } = require('pg');
 
 const app = express();
 const PORT = process.env.PORT || 3000;
-const ADMIN_USERNAME = process.env.ADMIN_USERNAME || 'admin';
-const ADMIN_PASSWORD = process.env.ADMIN_PASSWORD || 'admin1234';
-const JWT_SECRET = process.env.JWT_SECRET || process.env.SESSION_SECRET || 'change-this-jwt-secret';
-const DATABASE_URL = process.env.DATABASE_URL;
 const isProduction = process.env.NODE_ENV === 'production';
+const ADMIN_USERNAME = process.env.ADMIN_USERNAME || 'admin';
+const ADMIN_PASSWORD = process.env.ADMIN_PASSWORD || (isProduction ? '' : 'LocalAdmin1234');
+const JWT_SECRET =
+  process.env.JWT_SECRET ||
+  process.env.SESSION_SECRET ||
+  (isProduction ? '' : 'local-dev-only-jwt-secret-change-before-production-123');
+const DATABASE_URL = process.env.DATABASE_URL;
 
 if (!DATABASE_URL) {
   throw new Error('Missing DATABASE_URL. Please configure Postgres connection string.');
+}
+
+if (!JWT_SECRET || JWT_SECRET.length < 32) {
+  throw new Error('Missing or weak JWT_SECRET. Use at least 32 characters.');
+}
+
+if (!ADMIN_PASSWORD || ADMIN_PASSWORD.length < 8) {
+  throw new Error('Missing or weak ADMIN_PASSWORD. Use at least 8 characters.');
 }
 
 const pool = new Pool({
