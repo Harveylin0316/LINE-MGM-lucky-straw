@@ -430,7 +430,7 @@ app.get('/admin/prizes/logs', requireAdmin, async (req, res, next) => {
     const rows = await query(
       `SELECT id, action, prize_id, before_name, before_quantity, after_name, after_quantity, admin_username, created_at
        FROM prize_change_logs
-       ORDER BY id DESC`
+       ORDER BY id ASC`
     );
     res.render('admin_prize_logs', {
       user: req.authUser.un,

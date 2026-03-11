@@ -37,7 +37,10 @@
           <p>邀請加碼次數：<strong>${typeof extraDraws !== 'undefined' ? extraDraws : 0}</strong></p>
           ${
             result
-              ? `<p class="or-result">${result}</p>`
+              ? `<div class="draw-result ${result.includes('恭喜中獎') ? 'win' : 'normal'}">
+                  ${result.includes('恭喜中獎') ? '<div class="draw-result-title">🎉 恭喜中獎！</div>' : ''}
+                  <div class="draw-result-text">${result}</div>
+                </div>`
               : '<p class="muted">按下下方按鈕開始刮刮樂。</p>'
           }
         </div>
@@ -86,7 +89,7 @@
         </section>
 
         <div class="or-available">
-          <h2>目前可抽獎品</h2>
+          <h2>獎勵大賞</h2>
           ${
             Array.isArray(availablePrizes) && availablePrizes.length > 0
               ? `<div class="available-prizes">

@@ -605,6 +605,38 @@ h1 {
 .or-status p { margin: 6px 0; color: var(--text-main); }
 .or-result { color: #7b2638; font-weight: 700; }
 
+.draw-result {
+  margin-top: 10px;
+  border-radius: 14px;
+  padding: 14px 16px;
+  border: 2px solid #e5e7eb;
+}
+
+.draw-result.win {
+  background: linear-gradient(180deg, #fff7cc, #ffe58f);
+  border-color: #f59e0b;
+  box-shadow: 0 0 0 4px rgba(245, 158, 11, 0.18), 0 6px 16px rgba(0, 0, 0, 0.12);
+}
+
+.draw-result.normal {
+  background: #f8fafc;
+  border-color: #cbd5e1;
+}
+
+.draw-result-title {
+  font-size: 26px;
+  font-weight: 900;
+  color: #b45309;
+  letter-spacing: 1px;
+}
+
+.draw-result-text {
+  margin-top: 4px;
+  font-size: 24px;
+  font-weight: 800;
+  color: #7c2d12;
+}
+
 .or-prize-grid {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
