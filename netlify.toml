@@ -1,0 +1,14 @@
+[build]
+  functions = "netlify/functions"
+
+[functions]
+  node_bundler = "esbuild"
+
+[functions."server"]
+  external_node_modules = ["sqlite3", "connect-sqlite3"]
+  included_files = ["views/**", "public/**", "server.js"]
+
+[[redirects]]
+  from = "/*"
+  to = "/.netlify/functions/server"
+  status = 200

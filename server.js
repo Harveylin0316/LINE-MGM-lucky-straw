@@ -9,9 +9,11 @@ const app = express();
 const PORT = process.env.PORT || 3000;
 const ADMIN_USERNAME = 'admin';
 const ADMIN_PASSWORD = 'admin1234';
+const isNetlify = process.env.NETLIFY === 'true';
+const baseDir = isNetlify ? '/tmp' : __dirname;
 
 // DB setup
-const db = new sqlite3.Database(path.join(__dirname, 'data.db'));
+const db = new sqlite3.Database(path.join(baseDir, 'data.db'));
 
 db.serialize(() => {
   db.run(
@@ -131,15 +133,18 @@ app.use(express.static(path.join(__dirname, 'public')));
 app.use(express.urlencoded({ extended: false }));
 
 // Session
-app.use(
-  session({
-    store: new SQLiteStore({ db: 'sessions.db', dir: __dirname }),
-    secret: 'change-this-secret',
-    resave: false,
-    saveUninitialized: false,
-    cookie: { maxAge: 1000 * 60 * 60 } // 1 hour
-  })
-);
+const sessionConfig = {
+  secret: process.env.SESSION_SECRET || 'change-this-secret',
+  resave: false,
+  saveUninitialized: false,
+  cookie: { maxAge: 1000 * 60 * 60 } // 1 hour
+};
+
+if (!isNetlify) {
+  sessionConfig.store = new SQLiteStore({ db: 'sessions.db', dir: __dirname });
+}
+
+app.use(session(sessionConfig));
 
 // Helpers
 function requireLogin(req, res, next) {
@@ -669,7 +674,11 @@ app.post('/admin/prizes/:id/delete', requireAdmin, (req, res) => {
   });
 });
 
-app.listen(PORT, () => {
-  console.log(`Server running on http://localhost:${PORT}`);
-});
+if (require.main === module) {
+  app.listen(PORT, () => {
+    console.log(`Server running on http://localhost:${PORT}`);
+  });
+}
+
+module.exports = app;
 
