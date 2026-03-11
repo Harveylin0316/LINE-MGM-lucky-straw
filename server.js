@@ -27,10 +27,6 @@ if (!JWT_SECRET || JWT_SECRET.length < 32) {
   throw new Error('Missing or weak JWT_SECRET. Use at least 32 characters.');
 }
 
-if (!ADMIN_PASSWORD || ADMIN_PASSWORD.length < 8) {
-  throw new Error('Missing or weak ADMIN_PASSWORD. Use at least 8 characters.');
-}
-
 const pool = new Pool({
   connectionString: DATABASE_URL,
   ssl: isProduction ? { rejectUnauthorized: false } : false
@@ -204,6 +200,9 @@ async function initDb() {
 
   const adminCheck = await query('SELECT id FROM users WHERE username = $1', [ADMIN_USERNAME]);
   if (adminCheck.rowCount === 0) {
+    if (!ADMIN_PASSWORD || ADMIN_PASSWORD.length < 8) {
+      throw new Error('Missing or weak ADMIN_PASSWORD. Use at least 8 characters.');
+    }
     const adminHash = await bcrypt.hash(ADMIN_PASSWORD, 10);
     await query(
       'INSERT INTO users (username, password_hash, draws_left, is_admin) VALUES ($1, $2, 1, true)',
