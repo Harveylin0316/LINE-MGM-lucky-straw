@@ -381,6 +381,10 @@ app.post('/lottery/draw', requireLogin, async (req, res, next) => {
   }
 });
 
+app.get('/lottery/draw', requireLogin, (_req, res) => {
+  res.redirect('/lottery');
+});
+
 app.get('/my-draws', requireLogin, async (req, res, next) => {
   try {
     const rows = await query(
