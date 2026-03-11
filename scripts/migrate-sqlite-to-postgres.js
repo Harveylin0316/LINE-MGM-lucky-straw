@@ -31,6 +31,44 @@ async function run() {
     console.log('Starting migration from sqlite to postgres...');
     await client.query('BEGIN');
 
+    await client.query(`CREATE TABLE IF NOT EXISTS users (
+      id SERIAL PRIMARY KEY,
+      username TEXT UNIQUE NOT NULL,
+      password_hash TEXT NOT NULL,
+      draws_left INTEGER NOT NULL DEFAULT 1,
+      referrer_id INTEGER,
+      extra_draws INTEGER NOT NULL DEFAULT 0,
+      is_admin BOOLEAN NOT NULL DEFAULT false
+    )`);
+
+    await client.query(`CREATE TABLE IF NOT EXISTS prizes (
+      id SERIAL PRIMARY KEY,
+      name TEXT NOT NULL,
+      quantity INTEGER NOT NULL DEFAULT 0,
+      created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+    )`);
+
+    await client.query(`CREATE TABLE IF NOT EXISTS draw_logs (
+      id SERIAL PRIMARY KEY,
+      user_id INTEGER NOT NULL,
+      is_win BOOLEAN NOT NULL DEFAULT false,
+      prize_name TEXT,
+      message TEXT NOT NULL,
+      created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+    )`);
+
+    await client.query(`CREATE TABLE IF NOT EXISTS prize_change_logs (
+      id SERIAL PRIMARY KEY,
+      action TEXT NOT NULL,
+      prize_id INTEGER,
+      before_name TEXT,
+      before_quantity INTEGER,
+      after_name TEXT,
+      after_quantity INTEGER,
+      admin_username TEXT NOT NULL,
+      created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+    )`);
+
     const users = await sqliteAll(
       'SELECT id, username, password_hash, draws_left, referrer_id, extra_draws, is_admin FROM users ORDER BY id ASC'
     );
