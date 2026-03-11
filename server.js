@@ -123,6 +123,11 @@ function requireAdmin(req, res, next) {
   next();
 }
 
+function wantsJson(req) {
+  const accept = req.get('accept') || '';
+  return req.xhr || accept.includes('application/json') || req.get('x-requested-with') === 'XMLHttpRequest';
+}
+
 function pickPrizeByQuantity(prizes) {
   const valid = prizes.filter(p => Number(p.quantity) > 0);
   const totalQty = valid.reduce((sum, p) => sum + Number(p.quantity), 0);
@@ -302,9 +307,11 @@ app.post('/logout', (_req, res) => {
 
 app.get('/lottery', requireLogin, async (req, res, next) => {
   try {
-    const userRs = await query('SELECT draws_left, extra_draws FROM users WHERE id = $1', [req.authUser.uid]);
+    const [userRs, prizeRs] = await Promise.all([
+      query('SELECT draws_left, extra_draws FROM users WHERE id = $1', [req.authUser.uid]),
+      query('SELECT name FROM prizes WHERE quantity > 0 ORDER BY id ASC')
+    ]);
     const row = userRs.rows[0] || { draws_left: 0, extra_draws: 0 };
-    const prizeRs = await query('SELECT name FROM prizes WHERE quantity > 0 ORDER BY id ASC');
     const refLink = `https://${req.headers.host}/register?ref=${req.authUser.uid}`;
     res.render('lottery', {
       user: req.authUser.un,
@@ -323,6 +330,28 @@ app.get('/lottery', requireLogin, async (req, res, next) => {
 app.post('/lottery/draw', requireLogin, async (req, res, next) => {
   const client = await pool.connect();
   try {
+    const sendResponse = async (message, drawsLeft, extraDraws) => {
+      const prizeRs = await query('SELECT name FROM prizes WHERE quantity > 0 ORDER BY id ASC');
+      if (wantsJson(req)) {
+        return res.json({
+          ok: true,
+          result: message,
+          drawsLeft,
+          extraDraws,
+          availablePrizes: (prizeRs.rows || []).map(p => p.name)
+        });
+      }
+      return res.render('lottery', {
+        user: req.authUser.un,
+        isAdmin: !!req.authUser.adm,
+        result: message,
+        drawsLeft,
+        extraDraws,
+        refLink: `https://${req.headers.host}/register?ref=${req.authUser.uid}`,
+        availablePrizes: prizeRs.rows || []
+      });
+    };
+
     await client.query('BEGIN');
     const userRs = await client.query(
       'SELECT draws_left, extra_draws FROM users WHERE id = $1 FOR UPDATE',
@@ -337,30 +366,13 @@ app.post('/lottery/draw', requireLogin, async (req, res, next) => {
     const extraDraws = Number(userRs.rows[0].extra_draws || 0);
     if (currentLeft <= 0) {
       await client.query('ROLLBACK');
-      const prizeRs = await query('SELECT name FROM prizes WHERE quantity > 0 ORDER BY id ASC');
-      return res.render('lottery', {
-        user: req.authUser.un,
-        isAdmin: !!req.authUser.adm,
-        result: '您的抽獎次數已用完',
-        drawsLeft: 0,
-        extraDraws,
-        refLink: `https://${req.headers.host}/register?ref=${req.authUser.uid}`,
-        availablePrizes: prizeRs.rows || []
-      });
+      return sendResponse('您的抽獎次數已用完', 0, extraDraws);
     }
 
     const prizeRs = await client.query('SELECT id, name, quantity FROM prizes WHERE quantity > 0 ORDER BY id ASC FOR UPDATE');
     if (prizeRs.rowCount === 0) {
       await client.query('ROLLBACK');
-      return res.render('lottery', {
-        user: req.authUser.un,
-        isAdmin: !!req.authUser.adm,
-        result: '目前沒有可抽獎品，請聯絡管理員補庫存',
-        drawsLeft: currentLeft,
-        extraDraws,
-        refLink: `https://${req.headers.host}/register?ref=${req.authUser.uid}`,
-        availablePrizes: []
-      });
+      return sendResponse('目前沒有可抽獎品，請聯絡管理員補庫存', currentLeft, extraDraws);
     }
 
     const picked = pickPrizeByQuantity(prizeRs.rows);
@@ -372,17 +384,7 @@ app.post('/lottery/draw', requireLogin, async (req, res, next) => {
       [req.authUser.uid, picked.name, message]
     );
     await client.query('COMMIT');
-
-    const latestPrizeRs = await query('SELECT name FROM prizes WHERE quantity > 0 ORDER BY id ASC');
-    return res.render('lottery', {
-      user: req.authUser.un,
-      isAdmin: !!req.authUser.adm,
-      result: message,
-      drawsLeft: currentLeft - 1,
-      extraDraws,
-      refLink: `https://${req.headers.host}/register?ref=${req.authUser.uid}`,
-      availablePrizes: latestPrizeRs.rows || []
-    });
+    return sendResponse(message, currentLeft - 1, extraDraws);
   } catch (err) {
     await client.query('ROLLBACK');
     next(err);

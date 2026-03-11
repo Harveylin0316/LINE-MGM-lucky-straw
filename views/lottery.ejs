@@ -33,15 +33,15 @@
         </div>
 
         <div class="or-status">
-          <p>剩餘抽獎次數：<strong>${typeof drawsLeft !== 'undefined' ? drawsLeft : 0}</strong></p>
+          <p>剩餘抽獎次數：<strong id="draws-left">${typeof drawsLeft !== 'undefined' ? drawsLeft : 0}</strong></p>
           <p>邀請加碼次數：<strong>${typeof extraDraws !== 'undefined' ? extraDraws : 0}</strong></p>
           ${
             result
-              ? `<div class="draw-result ${result.includes('恭喜中獎') ? 'win' : 'normal'}">
+              ? `<div id="draw-result" class="draw-result ${result.includes('恭喜中獎') ? 'win' : 'normal'}">
                   ${result.includes('恭喜中獎') ? '<div class="draw-result-title">🎉 恭喜中獎！</div>' : ''}
                   <div class="draw-result-text">${result}</div>
                 </div>`
-              : '<p class="muted">按下下方按鈕開始刮刮樂。</p>'
+              : '<p id="draw-result-placeholder" class="muted">按下下方按鈕開始刮刮樂。</p>'
           }
         </div>
 
@@ -114,14 +114,82 @@
         ${
           (typeof drawsLeft !== 'undefined' ? drawsLeft : 0) > 0
             ? `
-        <form method="post" action="/lottery/draw" class="draw-form">
-          <button type="submit" class="draw-button">立即抽獎</button>
+        <form method="post" action="/lottery/draw" class="draw-form" id="draw-form">
+          <button type="submit" class="draw-button" id="draw-button">立即抽獎</button>
         </form>
         `
-            : `<p class="muted center-text">您目前抽獎次數已用完，邀請好友可再獲得次數。</p>`
+            : `<p class="muted center-text" id="no-draw-msg">您目前抽獎次數已用完，邀請好友可再獲得次數。</p>`
         }
       </section>
     </section>
+    <script>
+      (function () {
+        const form = document.getElementById('draw-form');
+        const button = document.getElementById('draw-button');
+        const drawsLeftEl = document.getElementById('draws-left');
+        const placeholder = document.getElementById('draw-result-placeholder');
+        if (!form || !button || !drawsLeftEl) return;
+
+        form.addEventListener('submit', async function (e) {
+          e.preventDefault();
+          const originalText = button.textContent;
+          button.disabled = true;
+          button.textContent = '抽獎中...';
+          button.classList.add('loading');
+
+          try {
+            const res = await fetch('/lottery/draw', {
+              method: 'POST',
+              headers: {
+                'Accept': 'application/json',
+                'X-Requested-With': 'XMLHttpRequest'
+              }
+            });
+            if (!res.ok) throw new Error('request_failed');
+            const data = await res.json();
+
+            drawsLeftEl.textContent = String(data.drawsLeft || 0);
+            if (placeholder) placeholder.remove();
+
+            let resultBox = document.getElementById('draw-result');
+            if (!resultBox) {
+              resultBox = document.createElement('div');
+              resultBox.id = 'draw-result';
+              const statusWrap = document.querySelector('.or-status');
+              statusWrap && statusWrap.appendChild(resultBox);
+            }
+
+            const isWin = String(data.result || '').includes('恭喜中獎');
+            resultBox.className = 'draw-result ' + (isWin ? 'win' : 'normal');
+            resultBox.innerHTML =
+              (isWin ? '<div class="draw-result-title">🎉 恭喜中獎！</div>' : '') +
+              '<div class="draw-result-text">' + (data.result || '') + '</div>';
+
+            if ((data.drawsLeft || 0) <= 0) {
+              form.remove();
+              const msg = document.createElement('p');
+              msg.className = 'muted center-text';
+              msg.id = 'no-draw-msg';
+              msg.textContent = '您目前抽獎次數已用完，邀請好友可再獲得次數。';
+              const wood = document.querySelector('.or-wood-area');
+              wood && wood.appendChild(msg);
+            }
+          } catch (_err) {
+            button.textContent = '系統忙碌，請重試';
+          } finally {
+            button.classList.remove('loading');
+            button.disabled = false;
+            if (button.textContent === '系統忙碌，請重試') {
+              setTimeout(() => {
+                if (button) button.textContent = originalText;
+              }, 1200);
+            } else {
+              button.textContent = originalText;
+            }
+          }
+        });
+      })();
+    </script>
   `
   })
 %>

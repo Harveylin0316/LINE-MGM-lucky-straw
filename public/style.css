@@ -425,6 +425,12 @@ h1 {
   box-shadow: 0 8px 18px rgba(236, 72, 153, 0.35);
 }
 
+.draw-button.loading {
+  opacity: 0.8;
+  cursor: wait;
+  filter: saturate(0.9);
+}
+
 .draw-button:hover {
   filter: brightness(0.98);
 }
