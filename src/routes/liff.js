@@ -9,9 +9,19 @@ function normalizeLiffNextPath(rawNextPath, fallbackPath = '/liff/lottery') {
 }
 
 function registerLiffRoutes(app, deps) {
-  const { query, pool, authCore, lotteryCore, viewStateCore, liffId, lineOfficialAddFriendUrl } = deps;
+  const {
+    query,
+    pool,
+    authCore,
+    lotteryCore,
+    viewStateCore,
+    liffId,
+    lineOfficialAddFriendUrl,
+    lineUserPasswordHashRounds
+  } = deps;
   const { pickPrizeByQuantity } = lotteryCore;
   const { signAuthToken, setAuthCookie, clearAuthCookie } = authCore;
+  const hashRounds = Math.min(12, Math.max(4, Number(lineUserPasswordHashRounds || 6)));
   const {
     setDrawResultCookie,
     consumeDrawResultCookie,
@@ -63,7 +73,9 @@ function registerLiffRoutes(app, deps) {
 
     const username = await findUniqueLineUsername(client, profile.userId);
     const randomPassword = crypto.randomBytes(24).toString('hex');
-    const passwordHash = await bcrypt.hash(randomPassword, 10);
+    // LINE users do not authenticate with a typed password in this flow;
+    // use a lower cost factor to reduce first-login latency.
+    const passwordHash = await bcrypt.hash(randomPassword, hashRounds);
     const inserted = await client.query(
       `INSERT INTO users (username, password_hash, draws_left, extra_draws, is_admin, line_user_id, line_display_name, line_picture_url)
        VALUES ($1, $2, 1, 0, false, $3, $4, $5)

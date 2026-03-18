@@ -26,6 +26,7 @@ const LIFF_ID = process.env.LIFF_ID || '';
 const LINE_CHANNEL_SECRET = process.env.LINE_CHANNEL_SECRET || '';
 const LINE_OFFICIAL_ADD_FRIEND_URL = process.env.LINE_OFFICIAL_ADD_FRIEND_URL || '';
 const LIFF_INVITE_BONUS_MAX = Number.parseInt(process.env.LIFF_INVITE_BONUS_MAX || '20', 10);
+const LIFF_LINE_USER_BCRYPT_ROUNDS = Number.parseInt(process.env.LIFF_LINE_USER_BCRYPT_ROUNDS || '6', 10);
 
 if (!DATABASE_URL) {
   throw new Error('Missing DATABASE_URL. Please configure Postgres connection string.');
@@ -156,7 +157,8 @@ registerLiffRoutes(app, {
   lotteryCore,
   viewStateCore,
   liffId: LIFF_ID,
-  lineOfficialAddFriendUrl: LINE_OFFICIAL_ADD_FRIEND_URL
+  lineOfficialAddFriendUrl: LINE_OFFICIAL_ADD_FRIEND_URL,
+  lineUserPasswordHashRounds: Number.isFinite(LIFF_LINE_USER_BCRYPT_ROUNDS) ? LIFF_LINE_USER_BCRYPT_ROUNDS : 6
 });
 
 app.use((err, _req, res, _next) => {
