@@ -82,8 +82,35 @@ async function query(text, params = []) {
   return pool.query(text, params);
 }
 
-async function getAvailablePrizes(runQuery = query) {
-  const result = await runQuery('SELECT name FROM prizes WHERE quantity > 0 ORDER BY id ASC');
+const AVAILABLE_PRIZES_CACHE_TTL_MS = isProduction ? 5000 : 0;
+let availablePrizesCache = {
+  value: null,
+  expiresAt: 0
+};
+
+function invalidateAvailablePrizesCache() {
+  availablePrizesCache = { value: null, expiresAt: 0 };
+}
+
+async function getAvailablePrizes(runQuery = query, options = {}) {
+  const { forceRefresh = false } = options;
+  const canReadWriteCache = runQuery === query && AVAILABLE_PRIZES_CACHE_TTL_MS > 0;
+  const now = Date.now();
+  if (
+    canReadWriteCache &&
+    !forceRefresh &&
+    Array.isArray(availablePrizesCache.value) &&
+    availablePrizesCache.expiresAt > now
+  ) {
+    return availablePrizesCache.value;
+  }
+  const result = await runQuery('SELECT name FROM prizes WHERE quantity > 0 ORDER BY id ASC LIMIT 200');
+  if (canReadWriteCache) {
+    availablePrizesCache = {
+      value: result.rows || [],
+      expiresAt: now + AVAILABLE_PRIZES_CACHE_TTL_MS
+    };
+  }
   return result.rows || [];
 }
 
@@ -91,6 +118,11 @@ function buildRefLink(req, userId) {
   const host = req.get('host');
   if (!host) return `/register?ref=${userId}`;
   return `${req.protocol}://${host}/register?ref=${userId}`;
+}
+
+function parsePage(value) {
+  const page = Number.parseInt(value, 10);
+  return Number.isFinite(page) && page > 0 ? page : 1;
 }
 
 function signAuthToken(user) {
@@ -392,7 +424,8 @@ app.post('/lottery/draw', requireLogin, async (req, res, next) => {
     );
     await client.query('COMMIT');
 
-    const availablePrizes = await getAvailablePrizes();
+    invalidateAvailablePrizesCache();
+    const availablePrizes = await getAvailablePrizes(query, { forceRefresh: true });
     return res.render('lottery', {
       user: req.authUser.un,
       isAdmin: !!req.authUser.adm,
@@ -416,14 +449,24 @@ app.get('/lottery/draw', requireLogin, (_req, res) => {
 
 app.get('/my-draws', requireLogin, async (req, res, next) => {
   try {
-    const rows = await query(
-      'SELECT is_win, prize_name, message, created_at FROM draw_logs WHERE user_id = $1 ORDER BY id DESC',
-      [req.authUser.uid]
-    );
+    const pageSize = 30;
+    const page = parsePage(req.query.page);
+    const offset = (page - 1) * pageSize;
+    const [rows, total] = await Promise.all([
+      query(
+        'SELECT is_win, prize_name, message, created_at FROM draw_logs WHERE user_id = $1 ORDER BY id DESC LIMIT $2 OFFSET $3',
+        [req.authUser.uid, pageSize, offset]
+      ),
+      query('SELECT COUNT(*)::int AS total FROM draw_logs WHERE user_id = $1', [req.authUser.uid])
+    ]);
+    const totalCount = total.rows[0]?.total || 0;
     res.render('my_draws', {
       user: req.authUser.un,
       isAdmin: !!req.authUser.adm,
-      records: rows.rows || []
+      records: rows.rows || [],
+      page,
+      hasPrevPage: page > 1,
+      hasNextPage: offset + (rows.rows || []).length < totalCount
     });
   } catch (err) {
     next(err);
@@ -446,15 +489,27 @@ app.get('/admin/prizes', requireAdmin, async (req, res, next) => {
 
 app.get('/admin/prizes/logs', requireAdmin, async (req, res, next) => {
   try {
-    const rows = await query(
-      `SELECT id, action, prize_id, before_name, before_quantity, after_name, after_quantity, admin_username, created_at
-       FROM prize_change_logs
-       ORDER BY id ASC`
-    );
+    const pageSize = 50;
+    const page = parsePage(req.query.page);
+    const offset = (page - 1) * pageSize;
+    const [rows, total] = await Promise.all([
+      query(
+        `SELECT id, action, prize_id, before_name, before_quantity, after_name, after_quantity, admin_username, created_at
+         FROM prize_change_logs
+         ORDER BY id DESC
+         LIMIT $1 OFFSET $2`,
+        [pageSize, offset]
+      ),
+      query('SELECT COUNT(*)::int AS total FROM prize_change_logs')
+    ]);
+    const totalCount = total.rows[0]?.total || 0;
     res.render('admin_prize_logs', {
       user: req.authUser.un,
       isAdmin: true,
-      records: rows.rows || []
+      records: rows.rows || [],
+      page,
+      hasPrevPage: page > 1,
+      hasNextPage: offset + (rows.rows || []).length < totalCount
     });
   } catch (err) {
     next(err);
@@ -504,6 +559,7 @@ app.post('/admin/prizes', requireAdmin, async (req, res) => {
       adminUsername: req.authUser.un
     });
     await client.query('COMMIT');
+    invalidateAvailablePrizesCache();
     return res.redirect('/admin/prizes');
   } catch (_err) {
     await client.query('ROLLBACK');
@@ -553,6 +609,7 @@ app.post('/admin/prizes/:id/update', requireAdmin, async (req, res) => {
       adminUsername: req.authUser.un
     });
     await client.query('COMMIT');
+    invalidateAvailablePrizesCache();
     return res.redirect('/admin/prizes');
   } catch (_err) {
     await client.query('ROLLBACK');
@@ -599,6 +656,7 @@ app.post('/admin/prizes/:id/delete', requireAdmin, async (req, res) => {
     `);
     await client.query(`SELECT setval('prizes_id_seq', COALESCE((SELECT MAX(id) FROM prizes), 1), true)`);
     await client.query('COMMIT');
+    invalidateAvailablePrizesCache();
     return res.redirect('/admin/prizes');
   } catch (_err) {
     await client.query('ROLLBACK');

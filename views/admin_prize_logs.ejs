@@ -37,7 +37,11 @@
                   )
                   .join('')}
               </tbody>
-            </table>`
+            </table>
+            <div class="actions">
+              ${hasPrevPage ? `<a class="btn" href="/admin/prizes/logs?page=${page - 1}">上一頁</a>` : ''}
+              ${hasNextPage ? `<a class="btn" href="/admin/prizes/logs?page=${page + 1}">下一頁</a>` : ''}
+            </div>`
           : '<p class="muted">目前尚無修改紀錄。</p>'
       }
     </section>
