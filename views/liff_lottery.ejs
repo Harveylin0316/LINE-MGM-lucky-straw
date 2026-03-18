@@ -47,6 +47,14 @@
             return '活動獎項';
           }
 
+          function tierImagePath(tier) {
+            if (tier === '頭獎') return '/images/prize-card-head.png';
+            if (tier === '貳獎') return '/images/prize-card-second.png';
+            if (tier === '參獎') return '/images/prize-card-third.png';
+            if (tier === '早鳥獎') return '/images/prize-card-earlybird.png';
+            return '';
+          }
+
           function detectType(name) {
             if (/里數|亞洲萬里通|里程/.test(name)) return 'miles';
             return 'cash';
@@ -80,7 +88,11 @@
                   src="/images/grand-prize-banner.png"
                   alt="分享好友領刮刮樂，最高20,000「亞洲萬里通」里數等你拿"
                 />
-                <p class="liff-grand-prize-text">${grandPrize.name || ''}</p>
+                <img
+                  class="liff-grand-prize-card-image"
+                  src="/images/prize-card-head.png"
+                  alt="${grandPrize.name || '頭獎'}"
+                />
               </div>`
             : '';
 
@@ -88,18 +100,25 @@
             ${displayPrizes
               .map((p) => {
                 const tier = detectTier(p.name || '');
+                const imagePath = tierImagePath(tier);
+                if (imagePath) {
+                  return `<article class="liff-prize-image-card">
+                    <img class="liff-prize-full-image" src="${imagePath}" alt="${p.name || tier}" />
+                  </article>`;
+                }
+
                 const type = detectType(p.name || '');
                 const formatted = formatPrize(p.name || '');
                 const accentClass = type === 'miles' ? 'miles' : 'cash';
                 const icon = type === 'miles' ? 'A' : 'RD$';
                 return `<article class="liff-prize-card ${accentClass}">
-                  <span class="liff-prize-badge">${tier}</span>
-                  <div class="liff-prize-side">${icon}</div>
-                  <div class="liff-prize-content">
-                    <p class="liff-prize-main">${formatted.main}</p>
-                    ${formatted.sub ? `<p class="liff-prize-sub">${formatted.sub}</p>` : ''}
-                  </div>
-                </article>`;
+                    <span class="liff-prize-badge">${tier}</span>
+                    <div class="liff-prize-side">${icon}</div>
+                    <div class="liff-prize-content">
+                      <p class="liff-prize-main">${formatted.main}</p>
+                      ${formatted.sub ? `<p class="liff-prize-sub">${formatted.sub}</p>` : ''}
+                    </div>
+                  </article>`;
               })
               .join('')}
           </div>`;
