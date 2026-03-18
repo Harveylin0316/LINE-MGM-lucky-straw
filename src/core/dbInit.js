@@ -68,6 +68,15 @@ async function initDb({ query, adminUsername, adminPassword }) {
     created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
   )`);
 
+  // Supabase exposes public schema via PostgREST by default.
+  // Enable RLS on app tables to prevent direct external reads/writes.
+  await query('ALTER TABLE users ENABLE ROW LEVEL SECURITY');
+  await query('ALTER TABLE prizes ENABLE ROW LEVEL SECURITY');
+  await query('ALTER TABLE draw_logs ENABLE ROW LEVEL SECURITY');
+  await query('ALTER TABLE prize_change_logs ENABLE ROW LEVEL SECURITY');
+  await query('ALTER TABLE line_invites ENABLE ROW LEVEL SECURITY');
+  await query('ALTER TABLE line_webhook_events ENABLE ROW LEVEL SECURITY');
+
   await query('CREATE INDEX IF NOT EXISTS draw_logs_user_id_id_desc_idx ON draw_logs(user_id, id DESC)');
   await query('CREATE INDEX IF NOT EXISTS prizes_quantity_id_idx ON prizes(quantity, id)');
   await query('CREATE UNIQUE INDEX IF NOT EXISTS users_line_user_id_unique_idx ON users(line_user_id)');
