@@ -1,0 +1,112 @@
+<%-
+  include('layout_liff', {
+    body: `
+    <section class="liff-card">
+      <h1>Lucky Straw LIFF</h1>
+      <p class="muted">這是 LIFF 版本骨架頁。抽獎核心與 Web 共用同一套邏輯。</p>
+      <p class="muted">目前使用者：<strong>${user || '-'}</strong></p>
+
+      <div class="liff-stats">
+        <p>剩餘抽獎次數：<strong>${typeof drawsLeft !== 'undefined' ? drawsLeft : 0}</strong></p>
+        <p>邀請加碼次數：<strong>${typeof extraDraws !== 'undefined' ? extraDraws : 0}</strong></p>
+      </div>
+
+      ${
+        result
+          ? `<div class="draw-result ${result.includes('恭喜中獎') ? 'win' : 'normal'}">
+              ${result.includes('恭喜中獎') ? '<div class="draw-result-title">🎉 恭喜中獎！</div>' : ''}
+              <div class="draw-result-text">${result}</div>
+            </div>`
+          : ''
+      }
+
+      <h2 class="liff-title">可抽獎品</h2>
+      ${
+        Array.isArray(availablePrizes) && availablePrizes.length > 0
+          ? `<div class="available-prizes">
+              ${availablePrizes.map(p => `<span class="prize-pill">${p.name}</span>`).join('')}
+            </div>`
+          : '<p class="muted">目前尚無可抽獎品。</p>'
+      }
+
+      ${
+        (typeof drawsLeft !== 'undefined' ? drawsLeft : 0) > 0
+          ? `
+      <form method="post" action="/liff/lottery/draw" class="draw-form">
+        <button type="submit" class="draw-button">立即抽獎</button>
+      </form>
+      `
+          : '<p class="muted center-text">您目前抽獎次數已用完，邀請好友可再獲得次數。</p>'
+      }
+
+      <h2 class="liff-title">邀請加碼任務</h2>
+      <div class="liff-stats">
+        <p>已成功加碼：<strong>${typeof rewardedInviteCount !== 'undefined' ? rewardedInviteCount : 0}</strong></p>
+        <p>待完成邀請：<strong>${typeof pendingInviteCount !== 'undefined' ? pendingInviteCount : 0}</strong></p>
+      </div>
+      <p class="muted">分享以下連結給朋友，朋友打開後加入官方 LINE@，你就會獲得加碼次數。</p>
+      <code class="invite-link" id="liff-invite-link">${inviteLink || ''}</code>
+      <div class="actions">
+        <button type="button" class="btn primary" id="share-invite-btn">分享邀請給好友</button>
+        ${
+          lineOfficialAddFriendUrl
+            ? `<a class="btn primary" href="${lineOfficialAddFriendUrl}" target="_blank" rel="noopener noreferrer">加入官方 LINE@</a>`
+            : ''
+        }
+      </div>
+
+      <p class="muted center-text">需要完整後台功能可切換到 <a href="/lottery">Web 版本</a></p>
+      <form method="post" action="/liff/logout" class="draw-form">
+        <button type="submit" class="btn">登出 LIFF</button>
+      </form>
+    </section>
+    <script src="https://static.line-scdn.net/liff/edge/2/sdk.js"></script>
+    <script>
+      (function () {
+        var btn = document.getElementById('share-invite-btn');
+        var linkEl = document.getElementById('liff-invite-link');
+        var liffId = ${JSON.stringify(liffId || '')};
+        if (!btn || !linkEl) return;
+
+        async function shareViaLiff(inviteLink) {
+          if (!liffId || typeof liff === 'undefined') return false;
+          await liff.init({ liffId: liffId });
+          if (!liff.isLoggedIn()) return false;
+          if (!liff.isApiAvailable('shareTargetPicker')) return false;
+          const result = await liff.shareTargetPicker([
+            {
+              type: 'text',
+              text: '我在 Lucky Straw 抽獎活動，送你一個邀請連結，加入官方 LINE@ 就能幫我加碼，一起玩！\\n' + inviteLink
+            }
+          ]);
+          return result !== null;
+        }
+
+        function openLineShareFallback(inviteLink) {
+          var text = '我在 Lucky Straw 抽獎活動，送你一個邀請連結，加入官方 LINE@ 就能幫我加碼，一起玩！\\n' + inviteLink;
+          window.location.href = 'https://line.me/R/msg/text/?' + encodeURIComponent(text);
+        }
+
+        btn.addEventListener('click', async function () {
+          try {
+            var inviteLink = (linkEl.textContent || '').trim();
+            if (!inviteLink) return;
+            var shared = await shareViaLiff(inviteLink);
+            if (!shared) {
+              openLineShareFallback(inviteLink);
+              return;
+            }
+            btn.textContent = '已開啟分享';
+            setTimeout(function () {
+              btn.textContent = '分享邀請給好友';
+            }, 1200);
+          } catch (_err) {
+            var inviteLink = (linkEl.textContent || '').trim();
+            if (inviteLink) openLineShareFallback(inviteLink);
+          }
+        });
+      })();
+    </script>
+  `
+  })
+%>

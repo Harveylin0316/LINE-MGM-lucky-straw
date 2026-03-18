@@ -1,0 +1,25 @@
+<%-
+  include('layout', {
+    user: null,
+    body: `
+    <section class="card">
+      <h1>會員登入</h1>
+      ${error ? `<p class="error">${error}</p>` : ''}
+      <form method="post" action="/login" class="form">
+        <input type="hidden" name="nextPath" value="${nextPath || '/lottery'}" />
+        <label>
+          帳號
+          <input type="text" name="username" required />
+        </label>
+        <label>
+          密碼
+          <input type="password" name="password" required />
+        </label>
+        <button type="submit" class="btn primary">登入</button>
+      </form>
+      <p class="muted">還沒有帳號？<a href="/register">先去註冊</a></p>
+    </section>
+  `
+  })
+%>
+

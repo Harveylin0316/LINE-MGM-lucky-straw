@@ -1,0 +1,34 @@
+<%-
+  include('layout', {
+    user: null,
+    body: `
+    <section class="card">
+      <h1>註冊新會員</h1>
+      ${
+        typeof referrerId !== 'undefined' && referrerId
+          ? '<p class="muted">您是透過好友邀請註冊，完成後好友可額外獲得 1 次抽獎機會（最多加 2 次）。</p>'
+          : ''
+      }
+      ${error ? `<p class="error">${error}</p>` : ''}
+      <form method="post" action="/register" class="form">
+        <label>
+          帳號
+          <input type="text" name="username" required />
+        </label>
+        <label>
+          密碼
+          <input type="password" name="password" required />
+        </label>
+        ${
+          typeof referrerId !== 'undefined' && referrerId
+            ? `<input type="hidden" name="referrerId" value="${referrerId}"/>`
+            : ''
+        }
+        <button type="submit" class="btn primary">註冊</button>
+      </form>
+      <p class="muted">已經有帳號了？<a href="/login">點這裡登入</a></p>
+    </section>
+  `
+  })
+%>
+
