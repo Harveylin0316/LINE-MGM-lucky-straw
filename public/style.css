@@ -455,12 +455,14 @@ h1 {
 .or-hero {
   position: relative;
   padding: 0;
-  min-height: clamp(220px, 53vw, 560px);
-  aspect-ratio: 1024 / 537;
+  width: 100%;
+  max-width: 1024px;
+  margin: 0 auto;
+  aspect-ratio: 1024 / 522;
   background-color: #f3d3dc;
   background-image: url('/images/lottery-hero-bg.jpg');
-  background-size: cover;
-  background-position: center;
+  background-size: contain;
+  background-position: top center;
   background-repeat: no-repeat;
   text-align: center;
 }
@@ -701,7 +703,6 @@ h1 {
 
 @media (max-width: 640px) {
   .or-hero {
-    min-height: 220px;
     background-size: contain;
     background-position: center top;
   }
