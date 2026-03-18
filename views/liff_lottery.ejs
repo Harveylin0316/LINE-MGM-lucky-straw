@@ -74,8 +74,55 @@
           if (!liff.isApiAvailable('shareTargetPicker')) return false;
           const result = await liff.shareTargetPicker([
             {
-              type: 'text',
-              text: '我在 Lucky Straw 抽獎活動，送你一個邀請連結，加入官方 LINE@ 就能幫我加碼，一起玩！\\n' + inviteLink
+              type: 'flex',
+              altText: 'Lucky Straw 邀請你一起參加 LINE 抽獎活動',
+              contents: {
+                type: 'bubble',
+                hero: {
+                  type: 'image',
+                  url: 'https://line-mgm-luckystraw.netlify.app/images/lottery-hero-bg.jpg',
+                  size: 'full',
+                  aspectRatio: '20:13',
+                  aspectMode: 'cover'
+                },
+                body: {
+                  type: 'box',
+                  layout: 'vertical',
+                  spacing: 'sm',
+                  contents: [
+                    {
+                      type: 'text',
+                      text: 'Lucky Straw LINE 活動',
+                      weight: 'bold',
+                      size: 'lg',
+                      wrap: true
+                    },
+                    {
+                      type: 'text',
+                      text: '點擊下方按鈕加入活動，完成任務一起抽獎！',
+                      size: 'sm',
+                      color: '#666666',
+                      wrap: true
+                    }
+                  ]
+                },
+                footer: {
+                  type: 'box',
+                  layout: 'vertical',
+                  spacing: 'sm',
+                  contents: [
+                    {
+                      type: 'button',
+                      style: 'primary',
+                      action: {
+                        type: 'uri',
+                        label: '立即參加',
+                        uri: inviteLink
+                      }
+                    }
+                  ]
+                }
+              }
             }
           ]);
           return result !== null;
