@@ -53,14 +53,14 @@
 
       <div class="liff-invite-box">
       <h2 class="liff-title">邀請好友加碼</h2>
-      <p class="muted">每位好友完成加入 OpenRice LINE@ 可加碼 1 次，最多 2 次，剩餘可加碼 <strong>${Math.max(0, 2 - (typeof rewardedInviteCount !== 'undefined' ? rewardedInviteCount : 0))}</strong> 次。</p>
+      <p class="muted">每位好友完成 OpenRice LINE@ 任務可加碼 1 次，最多 2 次，剩餘可加碼 <strong>${Math.max(0, 2 - (typeof rewardedInviteCount !== 'undefined' ? rewardedInviteCount : 0))}</strong> 次。</p>
       <code class="invite-link invite-link-compact" id="liff-invite-link" title="${inviteLink || ''}">${inviteLink || ''}</code>
       <div class="actions">
         <button type="button" class="btn primary" id="share-invite-btn">分享邀請給好友</button>
         <button type="button" class="btn" id="copy-invite-btn">複製邀請連結</button>
         ${
           lineOfficialAddFriendUrl
-            ? `<a class="btn" href="${lineOfficialAddFriendUrl}" target="_blank" rel="noopener noreferrer">加入 OpenRice LINE@</a>`
+            ? `<a class="btn" href="${lineOfficialAddFriendUrl}" target="_blank" rel="noopener noreferrer">OpenRice LINE@</a>`
             : ''
         }
       </div>
