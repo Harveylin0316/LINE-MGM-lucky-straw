@@ -1,0 +1,57 @@
+<%-
+  include('layout', {
+    user: user,
+    isAdmin: isAdmin,
+    body: `
+    <section class="card">
+      <h1>LINE Webhook 診斷紀錄</h1>
+      <p class="muted">用於檢查 follow 事件是否進站，以及為何未成功發放邀請加碼。</p>
+      <p>
+        <a class="btn" href="/admin/prizes">返回獎品設定</a>
+        <a class="btn" href="/admin/prizes/logs">查看獎品修改紀錄</a>
+      </p>
+
+      ${
+        Array.isArray(records) && records.length > 0
+          ? `<table class="prize-table">
+              <thead>
+                <tr>
+                  <th>ID</th>
+                  <th>事件</th>
+                  <th>LINE User ID</th>
+                  <th>邀請ID</th>
+                  <th>邀請者ID</th>
+                  <th>結果</th>
+                  <th>說明</th>
+                  <th>事件時間</th>
+                  <th>記錄時間</th>
+                </tr>
+              </thead>
+              <tbody>
+                ${records
+                  .map(
+                    r => `<tr>
+                      <td>${r.id}</td>
+                      <td>${r.event_type}</td>
+                      <td>${r.line_user_id || '-'}</td>
+                      <td>${r.invite_id || '-'}</td>
+                      <td>${r.inviter_user_id || '-'}</td>
+                      <td>${r.result}</td>
+                      <td>${r.detail || '-'}</td>
+                      <td>${r.event_timestamp || '-'}</td>
+                      <td>${r.created_at}</td>
+                    </tr>`
+                  )
+                  .join('')}
+              </tbody>
+            </table>
+            <div class="actions">
+              ${hasPrevPage ? `<a class="btn" href="/admin/line/webhooks?page=${page - 1}">上一頁</a>` : ''}
+              ${hasNextPage ? `<a class="btn" href="/admin/line/webhooks?page=${page + 1}">下一頁</a>` : ''}
+            </div>`
+          : '<p class="muted">目前尚無 webhook 紀錄。</p>'
+      }
+    </section>
+  `
+  })
+%>

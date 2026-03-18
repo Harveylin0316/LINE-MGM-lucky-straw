@@ -257,6 +257,35 @@ function registerWebRoutes(app, deps) {
     }
   });
 
+  app.get('/admin/line/webhooks', requireAdmin, async (req, res, next) => {
+    try {
+      const pageSize = 50;
+      const page = parsePage(req.query.page);
+      const offset = (page - 1) * pageSize;
+      const [rows, total] = await Promise.all([
+        query(
+          `SELECT id, event_type, line_user_id, invite_id, inviter_user_id, result, detail, event_timestamp, created_at
+           FROM line_webhook_events
+           ORDER BY id DESC
+           LIMIT $1 OFFSET $2`,
+          [pageSize, offset]
+        ),
+        query('SELECT COUNT(*)::int AS total FROM line_webhook_events')
+      ]);
+      const totalCount = total.rows[0]?.total || 0;
+      res.render('admin_line_webhooks', {
+        user: req.authUser.un,
+        isAdmin: true,
+        records: rows.rows || [],
+        page,
+        hasPrevPage: page > 1,
+        hasNextPage: offset + (rows.rows || []).length < totalCount
+      });
+    } catch (err) {
+      next(err);
+    }
+  });
+
   app.get('/admin/prizes/:id/edit', requireAdmin, async (req, res, next) => {
     try {
       const row = await query('SELECT id, name, quantity, created_at FROM prizes WHERE id = $1', [req.params.id]);

@@ -6,7 +6,10 @@
     <section class="card">
       <h1>管理員 - 獎品設定</h1>
       <p class="muted">在這裡可以新增獎品與設定可發放數量。</p>
-      <p><a class="btn" href="/admin/prizes/logs">查看獎品修改紀錄</a></p>
+      <p>
+        <a class="btn" href="/admin/prizes/logs">查看獎品修改紀錄</a>
+        <a class="btn" href="/admin/line/webhooks">LINE Webhook 診斷</a>
+      </p>
       ${error ? `<p class="error">${error}</p>` : ''}
 
       <form method="post" action="/admin/prizes" class="form" onsubmit="return confirm('確認要新增這個獎品嗎？')">
