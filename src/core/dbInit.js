@@ -14,6 +14,7 @@ async function initDb({ query, adminUsername, adminPassword }) {
   await query('ALTER TABLE users ADD COLUMN IF NOT EXISTS line_user_id TEXT');
   await query('ALTER TABLE users ADD COLUMN IF NOT EXISTS line_display_name TEXT');
   await query('ALTER TABLE users ADD COLUMN IF NOT EXISTS line_picture_url TEXT');
+  await query('ALTER TABLE users ADD COLUMN IF NOT EXISTS invite_code TEXT');
 
   await query(`CREATE TABLE IF NOT EXISTS prizes (
     id SERIAL PRIMARY KEY,
@@ -70,6 +71,7 @@ async function initDb({ query, adminUsername, adminPassword }) {
   await query('CREATE INDEX IF NOT EXISTS draw_logs_user_id_id_desc_idx ON draw_logs(user_id, id DESC)');
   await query('CREATE INDEX IF NOT EXISTS prizes_quantity_id_idx ON prizes(quantity, id)');
   await query('CREATE UNIQUE INDEX IF NOT EXISTS users_line_user_id_unique_idx ON users(line_user_id)');
+  await query('CREATE UNIQUE INDEX IF NOT EXISTS users_invite_code_unique_idx ON users(invite_code)');
   await query('CREATE INDEX IF NOT EXISTS line_invites_inviter_user_id_idx ON line_invites(inviter_user_id)');
   await query('CREATE INDEX IF NOT EXISTS line_webhook_events_created_id_desc_idx ON line_webhook_events(created_at DESC, id DESC)');
   await query('CREATE INDEX IF NOT EXISTS line_webhook_events_line_user_id_idx ON line_webhook_events(line_user_id)');

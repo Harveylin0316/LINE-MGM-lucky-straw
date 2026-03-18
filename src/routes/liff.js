@@ -139,10 +139,41 @@ function registerLiffRoutes(app, deps) {
     }
   }
 
-  function parseReferrerId(value) {
-    const id = Number.parseInt(value, 10);
-    if (!Number.isFinite(id) || id <= 0) return null;
-    return id;
+  async function resolveInviterUserId(refValue) {
+    if (typeof refValue !== 'string' || !refValue.trim()) return null;
+    const normalized = refValue.trim();
+    const codeRs = await query('SELECT id FROM users WHERE invite_code = $1', [normalized]);
+    if (codeRs.rowCount > 0) return Number(codeRs.rows[0].id);
+
+    // Backward compatibility for old numeric links that were already shared.
+    if (/^\d+$/.test(normalized)) {
+      const fallbackId = Number.parseInt(normalized, 10);
+      if (Number.isFinite(fallbackId) && fallbackId > 0) return fallbackId;
+    }
+    return null;
+  }
+
+  async function ensureInviteCode(userId) {
+    const found = await query('SELECT invite_code FROM users WHERE id = $1', [userId]);
+    if (found.rowCount === 0) return null;
+    const current = found.rows[0]?.invite_code;
+    if (current) return current;
+
+    for (let i = 0; i < 8; i += 1) {
+      const candidate = crypto.randomBytes(9).toString('base64url');
+      try {
+        const updated = await query(
+          'UPDATE users SET invite_code = $1 WHERE id = $2 AND (invite_code IS NULL OR invite_code = \'\') RETURNING invite_code',
+          [candidate, userId]
+        );
+        if (updated.rowCount > 0) return updated.rows[0].invite_code;
+        const latest = await query('SELECT invite_code FROM users WHERE id = $1', [userId]);
+        if (latest.rowCount > 0 && latest.rows[0]?.invite_code) return latest.rows[0].invite_code;
+      } catch (err) {
+        if (err?.code !== '23505') throw err;
+      }
+    }
+    return null;
   }
 
   async function getInviteStats(inviterUserId) {
@@ -157,20 +188,47 @@ function registerLiffRoutes(app, deps) {
     return rows.rows[0] || { rewarded_count: 0, pending_count: 0 };
   }
 
-  function requireLiffLogin(req, res, next) {
-    if (req.authUser && req.authUser.uid) return next();
-    const nextPath = normalizeLiffNextPath(req.originalUrl, '/liff/lottery');
-    return res.redirect(`/liff/login?next=${encodeURIComponent(nextPath)}`);
+  async function getLineLinkedUser(userId) {
+    if (!Number.isInteger(Number(userId))) return null;
+    const rs = await query('SELECT id, username, line_user_id FROM users WHERE id = $1', [userId]);
+    if (rs.rowCount === 0) return null;
+    return rs.rows[0];
+  }
+
+  async function requireLiffLogin(req, res, next) {
+    try {
+      if (req.authUser && req.authUser.uid) {
+        const lineUser = await getLineLinkedUser(req.authUser.uid);
+        if (lineUser && lineUser.line_user_id) {
+          return next();
+        }
+        clearAuthCookie(res);
+        return res.redirect('/liff/login?reason=line_only');
+      }
+      const nextPath = normalizeLiffNextPath(req.originalUrl, '/liff/lottery');
+      return res.redirect(`/liff/login?next=${encodeURIComponent(nextPath)}`);
+    } catch (err) {
+      return next(err);
+    }
   }
 
   app.get('/liff', (_req, res) => {
     res.redirect('/liff/lottery');
   });
 
-  app.get('/liff/login', (req, res) => {
-    if (req.authUser && req.authUser.uid) return res.redirect('/liff/lottery');
-    const nextPath = normalizeLiffNextPath(req.query.next, '/liff/lottery');
-    res.render('liff_login', { nextPath, liffId: liffId || '' });
+  app.get('/liff/login', async (req, res, next) => {
+    try {
+      if (req.authUser && req.authUser.uid) {
+        const lineUser = await getLineLinkedUser(req.authUser.uid);
+        if (lineUser && lineUser.line_user_id) return res.redirect('/liff/lottery');
+        clearAuthCookie(res);
+      }
+      const nextPath = normalizeLiffNextPath(req.query.next, '/liff/lottery');
+      const reason = typeof req.query.reason === 'string' ? req.query.reason : '';
+      return res.render('liff_login', { nextPath, liffId: liffId || '', reason });
+    } catch (err) {
+      return next(err);
+    }
   });
 
   app.post('/liff/auth', async (req, res) => {
@@ -209,18 +267,24 @@ function registerLiffRoutes(app, deps) {
 
   app.get('/liff/r/:refUserId', requireLiffLogin, async (req, res, next) => {
     try {
-      const refUserId = parseReferrerId(req.params.refUserId);
+      const refUserId = await resolveInviterUserId(req.params.refUserId);
       const bindResult = await bindInviteIntent(refUserId, Number(req.authUser.uid));
       if (bindResult === 'bound') {
-        if (lineOfficialAddFriendUrl) return res.redirect(lineOfficialAddFriendUrl);
-        setDrawResultCookie(res, '已綁定邀請關係，加入官方 LINE 後將回饋邀請者加碼次數。');
+        return res.render('liff_invite_confirm', {
+          user: req.authUser.un,
+          lineOfficialAddFriendUrl: lineOfficialAddFriendUrl || '',
+          statusText: '綁定成功！下一步請手動點擊按鈕加入官方 LINE@ 完成任務。'
+        });
       } else if (bindResult === 'self_ref') {
         setDrawResultCookie(res, '不能邀請自己。');
       } else if (bindResult === 'already_rewarded') {
         setDrawResultCookie(res, '你已完成過邀請任務。');
       } else if (bindResult === 'already_bound') {
-        if (lineOfficialAddFriendUrl) return res.redirect(lineOfficialAddFriendUrl);
-        setDrawResultCookie(res, '你已經綁定過此邀請關係。');
+        return res.render('liff_invite_confirm', {
+          user: req.authUser.un,
+          lineOfficialAddFriendUrl: lineOfficialAddFriendUrl || '',
+          statusText: '你已綁定過此邀請關係。請手動點擊按鈕前往加入官方 LINE@。'
+        });
       } else if (bindResult === 'bound_other') {
         setDrawResultCookie(res, '你已綁定其他邀請，無法重複綁定。');
       } else {
@@ -242,7 +306,9 @@ function registerLiffRoutes(app, deps) {
       const row = userRs.rows[0] || { draws_left: 0, extra_draws: 0 };
       const drawResult = consumeDrawResultCookie(req, res);
       const host = req.get('host');
-      const inviteLink = host ? `${req.protocol}://${host}/liff/r/${req.authUser.uid}` : `/liff/r/${req.authUser.uid}`;
+      const inviteCode = await ensureInviteCode(req.authUser.uid);
+      const invitePath = inviteCode ? `/liff/r/${inviteCode}` : '/liff/lottery';
+      const inviteLink = host ? `${req.protocol}://${host}${invitePath}` : invitePath;
       res.render('liff_lottery', {
         user: req.authUser.un,
         result: drawResult,

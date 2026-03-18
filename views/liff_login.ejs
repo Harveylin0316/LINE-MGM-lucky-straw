@@ -4,13 +4,14 @@
     <section class="liff-card">
       <h1>LIFF 抽獎入口</h1>
       <p class="muted">使用 LINE 帳號登入後，即可進入 LIFF 抽獎頁。</p>
+      ${reason === 'line_only' ? '<p class="error">LIFF 版本僅允許 LINE 登入，已自動登出非 LINE 帳號。</p>' : ''}
       <p id="liff-status" class="muted">準備初始化 LIFF...</p>
       <div id="liff-error" class="error" style="display:none;"></div>
       <div class="actions">
         <button id="liff-login-btn" type="button" class="btn primary">使用 LINE 登入</button>
-        <a class="btn" href="/register">註冊新帳號</a>
+        <a class="btn" href="/liff/login">重新整理</a>
       </div>
-      <p class="muted">若在外部瀏覽器測試，可先用一般登入：<a href="/login?next=${encodeURIComponent(nextPath || '/liff/lottery')}">前往 Web 登入</a></p>
+      <p class="muted">LIFF 版本已關閉一般帳號登入，請直接使用 LINE 登入。</p>
     </section>
     <script src="https://static.line-scdn.net/liff/edge/2/sdk.js"></script>
     <script>
