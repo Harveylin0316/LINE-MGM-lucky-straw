@@ -759,6 +759,93 @@ h1 {
   margin: 4px 0;
 }
 
+.liff-campaign {
+  padding: 16px;
+  background: linear-gradient(180deg, #fff 0%, #fffaf7 100%);
+}
+
+.liff-event-header {
+  margin: -16px -16px 12px;
+  aspect-ratio: 1024 / 522;
+  border-radius: 16px 16px 0 0;
+  background-image: url('/images/lottery-hero-bg.jpg');
+  background-size: cover;
+  background-position: center;
+  position: relative;
+}
+
+.liff-event-overlay {
+  position: absolute;
+  inset: 0;
+  padding: 12px;
+  display: flex;
+  flex-direction: column;
+  justify-content: flex-end;
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0.12) 30%, rgba(85, 52, 61, 0.36) 100%);
+  color: #fff;
+}
+
+.liff-event-overlay h1 {
+  margin: 0;
+  font-size: 26px;
+  font-weight: 800;
+  color: #fff;
+  text-shadow: 0 2px 6px rgba(0, 0, 0, 0.25);
+}
+
+.liff-event-kicker {
+  margin: 0 0 6px;
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 0.2px;
+  opacity: 0.95;
+}
+
+.liff-event-sub {
+  margin: 6px 0 0;
+  font-size: 14px;
+  font-weight: 700;
+}
+
+.liff-hello {
+  margin-top: 4px;
+}
+
+.liff-metric-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px;
+  margin-bottom: 10px;
+}
+
+.liff-metric-item {
+  border: 1px solid #eadfce;
+  border-radius: 12px;
+  background: #fff;
+  padding: 10px;
+}
+
+.liff-metric-item .label {
+  display: block;
+  font-size: 12px;
+  color: #6b7280;
+}
+
+.liff-metric-item strong {
+  display: block;
+  margin-top: 4px;
+  font-size: 20px;
+  color: #1f2937;
+}
+
+.liff-invite-box {
+  margin-top: 14px;
+  border: 1px dashed #e5c6b8;
+  border-radius: 12px;
+  background: #fff8f4;
+  padding: 12px;
+}
+
 .liff-hero-copy {
   font-weight: 600;
   color: #374151;
@@ -770,5 +857,15 @@ h1 {
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
+}
+
+@media (max-width: 640px) {
+  .liff-event-overlay h1 {
+    font-size: 22px;
+  }
+
+  .liff-metric-item strong {
+    font-size: 18px;
+  }
 }
 
