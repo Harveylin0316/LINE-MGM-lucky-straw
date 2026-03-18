@@ -6,6 +6,7 @@
       <h1>會員登入</h1>
       ${error ? `<p class="error">${error}</p>` : ''}
       <form method="post" action="/login" class="form">
+        <input type="hidden" name="nextPath" value="${nextPath || '/lottery'}" />
         <label>
           帳號
           <input type="text" name="username" required />

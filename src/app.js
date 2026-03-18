@@ -11,6 +11,7 @@ const { pickPrizeByQuantity, enrichPrizesWithHitRate } = require('./core/lottery
 const { createViewStateCore } = require('./core/viewState');
 const { initDb } = require('./core/dbInit');
 const { registerWebRoutes } = require('./routes/web');
+const { registerLiffRoutes } = require('./routes/liff');
 
 const isProduction = process.env.NODE_ENV === 'production';
 const ADMIN_USERNAME = process.env.ADMIN_USERNAME || 'admin';
@@ -128,6 +129,13 @@ registerWebRoutes(app, {
   query,
   pool,
   authCore,
+  lotteryCore,
+  viewStateCore
+});
+
+registerLiffRoutes(app, {
+  query,
+  pool,
   lotteryCore,
   viewStateCore
 });

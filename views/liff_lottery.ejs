@@ -1,0 +1,45 @@
+<%-
+  include('layout_liff', {
+    body: `
+    <section class="liff-card">
+      <h1>Lucky Straw LIFF</h1>
+      <p class="muted">這是 LIFF 版本骨架頁。抽獎核心與 Web 共用同一套邏輯。</p>
+
+      <div class="liff-stats">
+        <p>剩餘抽獎次數：<strong>${typeof drawsLeft !== 'undefined' ? drawsLeft : 0}</strong></p>
+        <p>邀請加碼次數：<strong>${typeof extraDraws !== 'undefined' ? extraDraws : 0}</strong></p>
+      </div>
+
+      ${
+        result
+          ? `<div class="draw-result ${result.includes('恭喜中獎') ? 'win' : 'normal'}">
+              ${result.includes('恭喜中獎') ? '<div class="draw-result-title">🎉 恭喜中獎！</div>' : ''}
+              <div class="draw-result-text">${result}</div>
+            </div>`
+          : ''
+      }
+
+      <h2 class="liff-title">可抽獎品</h2>
+      ${
+        Array.isArray(availablePrizes) && availablePrizes.length > 0
+          ? `<div class="available-prizes">
+              ${availablePrizes.map(p => `<span class="prize-pill">${p.name}</span>`).join('')}
+            </div>`
+          : '<p class="muted">目前尚無可抽獎品。</p>'
+      }
+
+      ${
+        (typeof drawsLeft !== 'undefined' ? drawsLeft : 0) > 0
+          ? `
+      <form method="post" action="/liff/lottery/draw" class="draw-form">
+        <button type="submit" class="draw-button">立即抽獎</button>
+      </form>
+      `
+          : '<p class="muted center-text">您目前抽獎次數已用完，邀請好友可再獲得次數。</p>'
+      }
+
+      <p class="muted center-text">需要完整後台功能可切換到 <a href="/lottery">Web 版本</a></p>
+    </section>
+  `
+  })
+%>

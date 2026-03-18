@@ -17,6 +17,13 @@ async function logPrizeChange(client, payload) {
   );
 }
 
+function normalizeNextPath(rawNextPath, fallbackPath = '/lottery') {
+  if (typeof rawNextPath !== 'string') return fallbackPath;
+  if (!rawNextPath.startsWith('/')) return fallbackPath;
+  if (rawNextPath.startsWith('//')) return fallbackPath;
+  return rawNextPath;
+}
+
 function registerWebRoutes(app, deps) {
   const {
     query,
@@ -76,27 +83,29 @@ function registerWebRoutes(app, deps) {
     }
   });
 
-  app.get('/login', (_req, res) => {
-    res.render('login', { error: null, isAdmin: false });
+  app.get('/login', (req, res) => {
+    const nextPath = normalizeNextPath(req.query.next, '/lottery');
+    res.render('login', { error: null, isAdmin: false, nextPath });
   });
 
   app.post('/login', async (req, res) => {
     const { username, password } = req.body;
+    const nextPath = normalizeNextPath(req.body.nextPath, '/lottery');
     if (!username || !password) {
-      return res.render('login', { error: '請輸入帳號與密碼', isAdmin: false });
+      return res.render('login', { error: '請輸入帳號與密碼', isAdmin: false, nextPath });
     }
     const found = await query('SELECT id, username, password_hash, is_admin FROM users WHERE username = $1', [username]);
     if (found.rowCount === 0) {
-      return res.render('login', { error: '帳號或密碼錯誤', isAdmin: false });
+      return res.render('login', { error: '帳號或密碼錯誤', isAdmin: false, nextPath });
     }
     const user = found.rows[0];
     const ok = await bcrypt.compare(password, user.password_hash);
     if (!ok) {
-      return res.render('login', { error: '帳號或密碼錯誤', isAdmin: false });
+      return res.render('login', { error: '帳號或密碼錯誤', isAdmin: false, nextPath });
     }
     const token = signAuthToken(user);
     setAuthCookie(res, token);
-    return res.redirect('/lottery');
+    return res.redirect(nextPath);
   });
 
   app.post('/logout', (_req, res) => {
