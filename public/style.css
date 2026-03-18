@@ -908,37 +908,14 @@ h1 {
   color: #5f4b32;
 }
 
-.liff-grand-prize-wrap {
-  margin-bottom: 10px;
-  border: 2px solid #dfb400;
-  border-radius: 16px;
-  background: #fffef9;
-  padding: 10px;
-}
-
-.liff-grand-prize-image {
-  width: 100%;
-  display: block;
-  border-radius: 10px;
-  border: 1px solid #d6c4a4;
-}
-
-.liff-grand-prize-card-image {
-  width: 100%;
-  margin-top: 8px;
-  display: block;
-  border-radius: 10px;
-  border: 1px solid #d6c4a4;
-}
-
-.liff-prize-image-card {
+.liff-prize-section-static {
+  border: 1px solid #dcc58c;
   border-radius: 12px;
   overflow: hidden;
-  border: 1px solid #dcc58c;
   background: #fff;
 }
 
-.liff-prize-full-image {
+.liff-prize-section-image {
   width: 100%;
   display: block;
 }

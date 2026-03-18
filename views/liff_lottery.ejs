@@ -33,97 +33,13 @@
       </div>
 
       <h2 class="liff-title">OpenRice 活動抽獎</h2>
-      ${
-        (() => {
-          if (!Array.isArray(availablePrizes) || availablePrizes.length === 0) {
-            return '<p class="muted">目前尚無可抽獎品。</p>';
-          }
-
-          function detectTier(name) {
-            if (/頭獎/.test(name)) return '頭獎';
-            if (/貳獎|二獎/.test(name)) return '貳獎';
-            if (/參獎|三獎/.test(name)) return '參獎';
-            if (/早鳥/.test(name)) return '早鳥獎';
-            return '活動獎項';
-          }
-
-          function tierImagePath(tier) {
-            if (tier === '頭獎') return '/images/prize-card-head.png';
-            if (tier === '貳獎') return '/images/prize-card-second.png';
-            if (tier === '參獎') return '/images/prize-card-third.png';
-            if (tier === '早鳥獎') return '/images/prize-card-earlybird.png';
-            return '';
-          }
-
-          function detectType(name) {
-            if (/里數|亞洲萬里通|里程/.test(name)) return 'miles';
-            return 'cash';
-          }
-
-          function formatPrize(name) {
-            const raw = String(name || '').trim();
-            const withoutTier = raw.replace(/^(頭獎|貳獎|二獎|參獎|三獎|早鳥獎?)[:：]\s*/, '');
-            const match = withoutTier.match(/^(.*?)(（.*）)$/);
-            if (match) {
-              return {
-                main: match[1].trim(),
-                sub: match[2].trim()
-              };
-            }
-            return {
-              main: withoutTier,
-              sub: ''
-            };
-          }
-
-          const grandPrize = availablePrizes.find(
-            (p) => /頭獎/.test(p.name || '') && /亞洲萬里通|里數|里程/.test(p.name || '')
-          );
-          const displayPrizes = grandPrize ? availablePrizes.filter((p) => p !== grandPrize) : availablePrizes;
-
-          const grandBlock = grandPrize
-            ? `<div class="liff-grand-prize-wrap">
-                <img
-                  class="liff-grand-prize-image"
-                  src="/images/grand-prize-banner.png"
-                  alt="分享好友領刮刮樂，最高20,000「亞洲萬里通」里數等你拿"
-                />
-                <img
-                  class="liff-grand-prize-card-image"
-                  src="/images/prize-card-head.png"
-                  alt="${grandPrize.name || '頭獎'}"
-                />
-              </div>`
-            : '';
-
-          return `${grandBlock}<div class="liff-prize-grid">
-            ${displayPrizes
-              .map((p) => {
-                const tier = detectTier(p.name || '');
-                const imagePath = tierImagePath(tier);
-                if (imagePath) {
-                  return `<article class="liff-prize-image-card">
-                    <img class="liff-prize-full-image" src="${imagePath}" alt="${p.name || tier}" />
-                  </article>`;
-                }
-
-                const type = detectType(p.name || '');
-                const formatted = formatPrize(p.name || '');
-                const accentClass = type === 'miles' ? 'miles' : 'cash';
-                const icon = type === 'miles' ? 'A' : 'RD$';
-                return `<article class="liff-prize-card ${accentClass}">
-                    <span class="liff-prize-badge">${tier}</span>
-                    <div class="liff-prize-side">${icon}</div>
-                    <div class="liff-prize-content">
-                      <p class="liff-prize-main">${formatted.main}</p>
-                      ${formatted.sub ? `<p class="liff-prize-sub">${formatted.sub}</p>` : ''}
-                    </div>
-                  </article>`;
-              })
-              .join('')}
-          </div>`;
-        })()
-      }
+      <div class="liff-prize-section-static">
+        <img
+          src="/images/prize-section-board.png"
+          alt="OpenRice 活動抽獎獎項"
+          class="liff-prize-section-image"
+        />
+      </div>
 
       ${
         (typeof drawsLeft !== 'undefined' ? drawsLeft : 0) > 0
