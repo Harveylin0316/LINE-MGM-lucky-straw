@@ -43,9 +43,21 @@ async function initDb({ query, adminUsername, adminPassword }) {
     created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
   )`);
 
+  await query(`CREATE TABLE IF NOT EXISTS line_invites (
+    id SERIAL PRIMARY KEY,
+    inviter_user_id INTEGER NOT NULL,
+    invitee_line_user_id TEXT NOT NULL UNIQUE,
+    status TEXT NOT NULL DEFAULT 'pending',
+    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    followed_at TIMESTAMPTZ,
+    rewarded_at TIMESTAMPTZ
+  )`);
+
   await query('CREATE INDEX IF NOT EXISTS draw_logs_user_id_id_desc_idx ON draw_logs(user_id, id DESC)');
   await query('CREATE INDEX IF NOT EXISTS prizes_quantity_id_idx ON prizes(quantity, id)');
   await query('CREATE UNIQUE INDEX IF NOT EXISTS users_line_user_id_unique_idx ON users(line_user_id)');
+  await query('CREATE INDEX IF NOT EXISTS line_invites_inviter_user_id_idx ON line_invites(inviter_user_id)');
 
   const adminCheck = await query('SELECT id FROM users WHERE username = $1', [adminUsername]);
   if (adminCheck.rowCount === 0) {

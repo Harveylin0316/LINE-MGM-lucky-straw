@@ -39,11 +39,45 @@
           : '<p class="muted center-text">您目前抽獎次數已用完，邀請好友可再獲得次數。</p>'
       }
 
+      <h2 class="liff-title">邀請加碼任務</h2>
+      <div class="liff-stats">
+        <p>已成功加碼：<strong>${typeof rewardedInviteCount !== 'undefined' ? rewardedInviteCount : 0}</strong></p>
+        <p>待完成邀請：<strong>${typeof pendingInviteCount !== 'undefined' ? pendingInviteCount : 0}</strong></p>
+      </div>
+      <p class="muted">分享以下連結給朋友，朋友打開後加入官方 LINE@，你就會獲得加碼次數。</p>
+      <code class="invite-link" id="liff-invite-link">${inviteLink || ''}</code>
+      <div class="actions">
+        <button type="button" class="btn" id="copy-invite-link-btn">複製邀請連結</button>
+        ${
+          lineOfficialAddFriendUrl
+            ? `<a class="btn primary" href="${lineOfficialAddFriendUrl}" target="_blank" rel="noopener noreferrer">加入官方 LINE@</a>`
+            : ''
+        }
+      </div>
+
       <p class="muted center-text">需要完整後台功能可切換到 <a href="/lottery">Web 版本</a></p>
       <form method="post" action="/liff/logout" class="draw-form">
         <button type="submit" class="btn">登出 LIFF</button>
       </form>
     </section>
+    <script>
+      (function () {
+        var btn = document.getElementById('copy-invite-link-btn');
+        var linkEl = document.getElementById('liff-invite-link');
+        if (!btn || !linkEl) return;
+        btn.addEventListener('click', async function () {
+          try {
+            await navigator.clipboard.writeText(linkEl.textContent || '');
+            btn.textContent = '已複製';
+            setTimeout(function () {
+              btn.textContent = '複製邀請連結';
+            }, 1200);
+          } catch (_err) {
+            btn.textContent = '複製失敗';
+          }
+        });
+      })();
+    </script>
   `
   })
 %>

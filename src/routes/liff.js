@@ -9,7 +9,7 @@ function normalizeLiffNextPath(rawNextPath, fallbackPath = '/liff/lottery') {
 }
 
 function registerLiffRoutes(app, deps) {
-  const { query, pool, authCore, lotteryCore, viewStateCore, liffId } = deps;
+  const { query, pool, authCore, lotteryCore, viewStateCore, liffId, lineOfficialAddFriendUrl } = deps;
   const { pickPrizeByQuantity } = lotteryCore;
   const { signAuthToken, setAuthCookie, clearAuthCookie } = authCore;
   const {
@@ -73,6 +73,78 @@ function registerLiffRoutes(app, deps) {
     return inserted.rows[0];
   }
 
+  async function bindInviteIntent(inviterUserId, inviteeUserId) {
+    if (!Number.isInteger(inviterUserId) || inviterUserId <= 0) return 'invalid_ref';
+    if (!Number.isInteger(inviteeUserId) || inviteeUserId <= 0) return 'invalid_user';
+    if (inviterUserId === inviteeUserId) return 'self_ref';
+
+    const client = await pool.connect();
+    try {
+      await client.query('BEGIN');
+      const inviteeRs = await client.query('SELECT line_user_id FROM users WHERE id = $1 FOR UPDATE', [inviteeUserId]);
+      if (inviteeRs.rowCount === 0 || !inviteeRs.rows[0].line_user_id) {
+        await client.query('ROLLBACK');
+        return 'missing_line_account';
+      }
+
+      const inviterRs = await client.query('SELECT id FROM users WHERE id = $1', [inviterUserId]);
+      if (inviterRs.rowCount === 0) {
+        await client.query('ROLLBACK');
+        return 'invalid_ref';
+      }
+
+      const inviteeLineUserId = inviteeRs.rows[0].line_user_id;
+      const inserted = await client.query(
+        `INSERT INTO line_invites (inviter_user_id, invitee_line_user_id, status)
+         VALUES ($1, $2, 'pending')
+         ON CONFLICT (invitee_line_user_id) DO NOTHING
+         RETURNING id`,
+        [inviterUserId, inviteeLineUserId]
+      );
+      if (inserted.rowCount > 0) {
+        await client.query('COMMIT');
+        return 'bound';
+      }
+
+      const existing = await client.query(
+        'SELECT inviter_user_id, status FROM line_invites WHERE invitee_line_user_id = $1',
+        [inviteeLineUserId]
+      );
+      await client.query('COMMIT');
+      if (existing.rowCount === 0) return 'exists';
+      const row = existing.rows[0];
+      if (Number(row.inviter_user_id) === inviterUserId) {
+        if (row.status === 'rewarded') return 'already_rewarded';
+        if (row.status === 'capped') return 'already_capped';
+        return 'already_bound';
+      }
+      return 'bound_other';
+    } catch (err) {
+      await client.query('ROLLBACK');
+      throw err;
+    } finally {
+      client.release();
+    }
+  }
+
+  function parseReferrerId(value) {
+    const id = Number.parseInt(value, 10);
+    if (!Number.isFinite(id) || id <= 0) return null;
+    return id;
+  }
+
+  async function getInviteStats(inviterUserId) {
+    const rows = await query(
+      `SELECT
+         COUNT(*) FILTER (WHERE status = 'rewarded')::int AS rewarded_count,
+         COUNT(*) FILTER (WHERE status = 'pending')::int AS pending_count
+       FROM line_invites
+       WHERE inviter_user_id = $1`,
+      [inviterUserId]
+    );
+    return rows.rows[0] || { rewarded_count: 0, pending_count: 0 };
+  }
+
   function requireLiffLogin(req, res, next) {
     if (req.authUser && req.authUser.uid) return next();
     const nextPath = normalizeLiffNextPath(req.originalUrl, '/liff/lottery');
@@ -123,20 +195,50 @@ function registerLiffRoutes(app, deps) {
     return res.redirect('/liff/login');
   });
 
+  app.get('/liff/r/:refUserId', requireLiffLogin, async (req, res, next) => {
+    try {
+      const refUserId = parseReferrerId(req.params.refUserId);
+      const bindResult = await bindInviteIntent(refUserId, Number(req.authUser.uid));
+      if (bindResult === 'bound') {
+        setDrawResultCookie(res, '已綁定邀請關係，加入官方 LINE 後將回饋邀請者加碼次數。');
+      } else if (bindResult === 'self_ref') {
+        setDrawResultCookie(res, '不能邀請自己。');
+      } else if (bindResult === 'already_rewarded') {
+        setDrawResultCookie(res, '你已完成過邀請任務。');
+      } else if (bindResult === 'already_bound') {
+        setDrawResultCookie(res, '你已經綁定過此邀請關係。');
+      } else if (bindResult === 'bound_other') {
+        setDrawResultCookie(res, '你已綁定其他邀請，無法重複綁定。');
+      } else {
+        setDrawResultCookie(res, '邀請連結無效或無法綁定。');
+      }
+      return res.redirect('/liff/lottery');
+    } catch (err) {
+      next(err);
+    }
+  });
+
   app.get('/liff/lottery', requireLiffLogin, async (req, res, next) => {
     try {
-      const [userRs, availablePrizes] = await Promise.all([
-        query('SELECT draws_left, extra_draws FROM users WHERE id = $1', [req.authUser.uid]),
-        getAvailablePrizes()
+      const [userRs, availablePrizes, inviteStats] = await Promise.all([
+        query('SELECT draws_left, extra_draws, line_user_id FROM users WHERE id = $1', [req.authUser.uid]),
+        getAvailablePrizes(),
+        getInviteStats(req.authUser.uid)
       ]);
       const row = userRs.rows[0] || { draws_left: 0, extra_draws: 0 };
       const drawResult = consumeDrawResultCookie(req, res);
+      const host = req.get('host');
+      const inviteLink = host ? `${req.protocol}://${host}/liff/r/${req.authUser.uid}` : `/liff/r/${req.authUser.uid}`;
       res.render('liff_lottery', {
         user: req.authUser.un,
         result: drawResult,
         drawsLeft: row.draws_left || 0,
         extraDraws: row.extra_draws || 0,
-        availablePrizes
+        availablePrizes,
+        inviteLink,
+        rewardedInviteCount: inviteStats.rewarded_count || 0,
+        pendingInviteCount: inviteStats.pending_count || 0,
+        lineOfficialAddFriendUrl: lineOfficialAddFriendUrl || ''
       });
     } catch (err) {
       next(err);

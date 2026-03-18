@@ -12,6 +12,7 @@ const { createViewStateCore } = require('./core/viewState');
 const { initDb } = require('./core/dbInit');
 const { registerWebRoutes } = require('./routes/web');
 const { registerLiffRoutes } = require('./routes/liff');
+const { createLineWebhookHandler } = require('./routes/lineWebhook');
 
 const isProduction = process.env.NODE_ENV === 'production';
 const ADMIN_USERNAME = process.env.ADMIN_USERNAME || 'admin';
@@ -22,6 +23,9 @@ const JWT_SECRET =
   (isProduction ? '' : 'local-dev-only-jwt-secret-change-before-production-123');
 const DATABASE_URL = process.env.DATABASE_URL;
 const LIFF_ID = process.env.LIFF_ID || '';
+const LINE_CHANNEL_SECRET = process.env.LINE_CHANNEL_SECRET || '';
+const LINE_OFFICIAL_ADD_FRIEND_URL = process.env.LINE_OFFICIAL_ADD_FRIEND_URL || '';
+const LIFF_INVITE_BONUS_MAX = Number.parseInt(process.env.LIFF_INVITE_BONUS_MAX || '20', 10);
 
 if (!DATABASE_URL) {
   throw new Error('Missing DATABASE_URL. Please configure Postgres connection string.');
@@ -95,6 +99,15 @@ app.use(
     etag: true
   })
 );
+app.post(
+  '/webhooks/line',
+  express.raw({ type: 'application/json' }),
+  createLineWebhookHandler({
+    pool,
+    channelSecret: LINE_CHANNEL_SECRET,
+    inviteBonusMax: Number.isFinite(LIFF_INVITE_BONUS_MAX) ? LIFF_INVITE_BONUS_MAX : 20
+  })
+);
 app.use(express.json());
 app.use(express.urlencoded({ extended: false }));
 app.use(cookieParser());
@@ -142,7 +155,8 @@ registerLiffRoutes(app, {
   authCore,
   lotteryCore,
   viewStateCore,
-  liffId: LIFF_ID
+  liffId: LIFF_ID,
+  lineOfficialAddFriendUrl: LINE_OFFICIAL_ADD_FRIEND_URL
 });
 
 app.use((err, _req, res, _next) => {
