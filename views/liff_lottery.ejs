@@ -3,13 +3,7 @@
     body: `
     <section class="liff-card liff-campaign">
       <div class="liff-event-header">
-        <div class="liff-event-overlay">
-          <div class="liff-event-copy">
-            <p class="liff-event-kicker">OpenRice LINE 專屬活動</p>
-            <h1>分享好友拿加碼</h1>
-            <p class="liff-event-sub">最高抽 20,000 里程數</p>
-          </div>
-        </div>
+        <div class="liff-event-overlay"></div>
       </div>
       <p class="muted liff-hello">嗨，<strong>${displayName || user || '朋友'}</strong> 👋</p>
 
@@ -59,22 +53,18 @@
 
       <div class="liff-invite-box">
       <h2 class="liff-title">邀請好友加碼</h2>
-      <p class="muted">每位好友完成加入官方 LINE@ 可加碼 1 次，最多 2 次，剩餘可加碼 <strong>${Math.max(0, 2 - (typeof rewardedInviteCount !== 'undefined' ? rewardedInviteCount : 0))}</strong> 次。</p>
+      <p class="muted">每位好友完成加入 OpenRice LINE@ 可加碼 1 次，最多 2 次，剩餘可加碼 <strong>${Math.max(0, 2 - (typeof rewardedInviteCount !== 'undefined' ? rewardedInviteCount : 0))}</strong> 次。</p>
       <code class="invite-link invite-link-compact" id="liff-invite-link" title="${inviteLink || ''}">${inviteLink || ''}</code>
       <div class="actions">
         <button type="button" class="btn primary" id="share-invite-btn">分享邀請給好友</button>
         <button type="button" class="btn" id="copy-invite-btn">複製邀請連結</button>
         ${
           lineOfficialAddFriendUrl
-            ? `<a class="btn" href="${lineOfficialAddFriendUrl}" target="_blank" rel="noopener noreferrer">加入官方 LINE@</a>`
+            ? `<a class="btn" href="${lineOfficialAddFriendUrl}" target="_blank" rel="noopener noreferrer">加入 OpenRice LINE@</a>`
             : ''
         }
       </div>
       </div>
-
-      <form method="post" action="/liff/logout" class="draw-form">
-        <button type="submit" class="btn">登出 LINE 帳號</button>
-      </form>
     </section>
     <script src="https://static.line-scdn.net/liff/edge/2/sdk.js"></script>
     <script>
