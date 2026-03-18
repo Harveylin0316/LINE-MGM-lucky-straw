@@ -76,14 +76,14 @@
           const result = await liff.shareTargetPicker([
             {
               type: 'text',
-              text: '我在 Lucky Straw 抽獎活動，送你一個邀請連結，加入官方 LINE@ 就能幫我加碼，一起玩！\n' + inviteLink
+              text: '我在 Lucky Straw 抽獎活動，送你一個邀請連結，加入官方 LINE@ 就能幫我加碼，一起玩！\\n' + inviteLink
             }
           ]);
           return result !== null;
         }
 
         function openLineShareFallback(inviteLink) {
-          var text = '我在 Lucky Straw 抽獎活動，送你一個邀請連結，加入官方 LINE@ 就能幫我加碼，一起玩！\n' + inviteLink;
+          var text = '我在 Lucky Straw 抽獎活動，送你一個邀請連結，加入官方 LINE@ 就能幫我加碼，一起玩！\\n' + inviteLink;
           window.location.href = 'https://line.me/R/msg/text/?' + encodeURIComponent(text);
         }
 
