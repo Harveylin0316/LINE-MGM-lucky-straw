@@ -69,6 +69,9 @@
 
         async function toPermanentLiffUrl(url) {
           if (!url) return url;
+          if (/^https:\/\/liff\.line\.me\//.test(url)) {
+            return url;
+          }
           if (typeof liff === 'undefined' || !liff.permanentLink || typeof liff.permanentLink.createUrlBy !== 'function') {
             return url;
           }

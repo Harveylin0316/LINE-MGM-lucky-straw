@@ -8,6 +8,13 @@ function normalizeLiffNextPath(rawNextPath, fallbackPath = '/liff/lottery') {
   return rawNextPath;
 }
 
+function buildLiffPermanentUrl(liffId, routePath, fallbackPath = '/liff/lottery') {
+  const safeLiffId = typeof liffId === 'string' ? liffId.trim() : '';
+  const safeRoutePath = typeof routePath === 'string' && routePath.startsWith('/') ? routePath : fallbackPath;
+  if (!safeLiffId) return safeRoutePath;
+  return `https://liff.line.me/${encodeURIComponent(safeLiffId)}${safeRoutePath}`;
+}
+
 function registerLiffRoutes(app, deps) {
   const {
     query,
@@ -305,10 +312,9 @@ function registerLiffRoutes(app, deps) {
       ]);
       const row = userRs.rows[0] || { draws_left: 0, extra_draws: 0 };
       const drawResult = consumeDrawResultCookie(req, res);
-      const host = req.get('host');
       const inviteCode = await ensureInviteCode(req.authUser.uid);
-      const invitePath = inviteCode ? `/liff/r/${inviteCode}` : '/liff/lottery';
-      const inviteLink = host ? `${req.protocol}://${host}${invitePath}` : invitePath;
+      const invitePath = inviteCode ? `/r/${encodeURIComponent(inviteCode)}` : '/lottery';
+      const inviteLink = buildLiffPermanentUrl(liffId, invitePath, '/liff/lottery');
       res.render('liff_lottery', {
         user: req.authUser.un,
         result: drawResult,
