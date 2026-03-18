@@ -964,6 +964,64 @@ h1 {
   transition: opacity 0.2s ease;
 }
 
+.scratch-card.scratch-result {
+  border-color: #d1d5db;
+}
+
+.scratch-card.scratch-result.win {
+  border-color: #f59e0b;
+  box-shadow: 0 8px 22px rgba(245, 158, 11, 0.28);
+}
+
+.scratch-card.scratch-result.normal {
+  border-color: #cbd5e1;
+  box-shadow: 0 8px 18px rgba(100, 116, 139, 0.22);
+}
+
+.scratch-result-card {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  text-align: center;
+  padding: 12px;
+  background: linear-gradient(180deg, #fff7cc, #fff);
+}
+
+.scratch-card.scratch-result.normal .scratch-result-card {
+  background: linear-gradient(180deg, #f8fafc, #fff);
+}
+
+.scratch-result-title {
+  font-size: 20px;
+  font-weight: 900;
+  color: #9a3412;
+  line-height: 1.2;
+}
+
+.scratch-card.scratch-result.normal .scratch-result-title {
+  color: #334155;
+}
+
+.scratch-result-text {
+  margin-top: 6px;
+  font-size: 18px;
+  font-weight: 800;
+  color: #7c2d12;
+  line-height: 1.3;
+}
+
+.scratch-card.scratch-result.normal .scratch-result-text {
+  color: #1f2937;
+}
+
+.scratch-card.scratch-disabled {
+  border-color: #d1d5db;
+  box-shadow: none;
+}
+
 .liff-invite-box {
   margin-top: 14px;
   border: 1px dashed #e5c6b8;
@@ -1042,6 +1100,14 @@ h1 {
     font-size: 16px;
     padding: 0 10px;
     text-align: center;
+  }
+
+  .scratch-result-title {
+    font-size: 18px;
+  }
+
+  .scratch-result-text {
+    font-size: 16px;
   }
 }
 
