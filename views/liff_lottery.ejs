@@ -34,11 +34,60 @@
 
       <h2 class="liff-title">OpenRice 活動抽獎</h2>
       ${
-        Array.isArray(availablePrizes) && availablePrizes.length > 0
-          ? `<div class="available-prizes">
-              ${availablePrizes.map(p => `<span class="prize-pill">${p.name}</span>`).join('')}
-            </div>`
-          : '<p class="muted">目前尚無可抽獎品。</p>'
+        (() => {
+          if (!Array.isArray(availablePrizes) || availablePrizes.length === 0) {
+            return '<p class="muted">目前尚無可抽獎品。</p>';
+          }
+
+          function detectTier(name) {
+            if (/頭獎/.test(name)) return '頭獎';
+            if (/貳獎|二獎/.test(name)) return '貳獎';
+            if (/參獎|三獎/.test(name)) return '參獎';
+            if (/早鳥/.test(name)) return '早鳥獎';
+            return '活動獎項';
+          }
+
+          function detectType(name) {
+            if (/里數|亞洲萬里通|里程/.test(name)) return 'miles';
+            return 'cash';
+          }
+
+          function formatPrize(name) {
+            const raw = String(name || '').trim();
+            const withoutTier = raw.replace(/^(頭獎|貳獎|二獎|參獎|三獎|早鳥獎?)[:：]\s*/, '');
+            const match = withoutTier.match(/^(.*?)(（.*）)$/);
+            if (match) {
+              return {
+                main: match[1].trim(),
+                sub: match[2].trim()
+              };
+            }
+            return {
+              main: withoutTier,
+              sub: ''
+            };
+          }
+
+          return `<div class="liff-prize-grid">
+            ${availablePrizes
+              .map((p) => {
+                const tier = detectTier(p.name || '');
+                const type = detectType(p.name || '');
+                const formatted = formatPrize(p.name || '');
+                const accentClass = type === 'miles' ? 'miles' : 'cash';
+                const icon = type === 'miles' ? 'A' : 'RD$';
+                return `<article class="liff-prize-card ${accentClass}">
+                  <span class="liff-prize-badge">${tier}</span>
+                  <div class="liff-prize-side">${icon}</div>
+                  <div class="liff-prize-content">
+                    <p class="liff-prize-main">${formatted.main}</p>
+                    ${formatted.sub ? `<p class="liff-prize-sub">${formatted.sub}</p>` : ''}
+                  </div>
+                </article>`;
+              })
+              .join('')}
+          </div>`;
+        })()
       }
 
       ${

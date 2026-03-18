@@ -822,6 +822,92 @@ h1 {
   color: #1f2937;
 }
 
+.liff-prize-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
+}
+
+.liff-prize-card {
+  position: relative;
+  display: flex;
+  min-height: 114px;
+  border: 3px solid #dfb400;
+  border-radius: 18px;
+  background: #fff;
+  overflow: hidden;
+}
+
+.liff-prize-badge {
+  position: absolute;
+  left: -12px;
+  top: -14px;
+  z-index: 2;
+  border: 3px solid #b08900;
+  background: #fff8dc;
+  color: #5b4200;
+  border-radius: 999px;
+  min-width: 52px;
+  min-height: 52px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 6px;
+  line-height: 1.05;
+  font-size: 12px;
+  font-weight: 800;
+  box-shadow: 0 2px 6px rgba(91, 66, 0, 0.16);
+}
+
+.liff-prize-side {
+  width: 96px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 36px;
+  font-weight: 900;
+  color: #fff;
+  letter-spacing: 0.5px;
+}
+
+.liff-prize-card.cash .liff-prize-side {
+  background: #facc15;
+  color: #3f3000;
+  font-size: 28px;
+}
+
+.liff-prize-card.miles .liff-prize-side {
+  background: #0b7a82;
+  font-family: "Times New Roman", serif;
+}
+
+.liff-prize-content {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  padding: 16px 12px 12px;
+}
+
+.liff-prize-content p {
+  margin: 0;
+  color: #3f3f46;
+}
+
+.liff-prize-main {
+  font-weight: 800;
+  line-height: 1.3;
+  font-size: 19px;
+  color: #2f2a26;
+}
+
+.liff-prize-sub {
+  margin-top: 4px;
+  font-size: 13px;
+  line-height: 1.25;
+  color: #5f4b32;
+}
+
 .liff-invite-box {
   margin-top: 14px;
   border: 1px dashed #e5c6b8;
@@ -865,6 +951,27 @@ h1 {
 }
 
 @media (max-width: 640px) {
+  .liff-prize-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .liff-prize-side {
+    width: 74px;
+    font-size: 28px;
+  }
+
+  .liff-prize-card.cash .liff-prize-side {
+    font-size: 20px;
+  }
+
+  .liff-prize-main {
+    font-size: 15px;
+  }
+
+  .liff-prize-sub {
+    font-size: 12px;
+  }
+
   .liff-metric-item strong {
     font-size: 18px;
   }
