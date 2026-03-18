@@ -240,7 +240,8 @@ function registerLiffRoutes(app, deps) {
         inviteLink,
         rewardedInviteCount: inviteStats.rewarded_count || 0,
         pendingInviteCount: inviteStats.pending_count || 0,
-        lineOfficialAddFriendUrl: lineOfficialAddFriendUrl || ''
+        lineOfficialAddFriendUrl: lineOfficialAddFriendUrl || '',
+        liffId: liffId || ''
       });
     } catch (err) {
       next(err);

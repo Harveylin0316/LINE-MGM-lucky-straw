@@ -47,7 +47,7 @@
       <p class="muted">分享以下連結給朋友，朋友打開後加入官方 LINE@，你就會獲得加碼次數。</p>
       <code class="invite-link" id="liff-invite-link">${inviteLink || ''}</code>
       <div class="actions">
-        <button type="button" class="btn" id="copy-invite-link-btn">複製邀請連結</button>
+        <button type="button" class="btn primary" id="share-invite-btn">分享邀請給好友</button>
         ${
           lineOfficialAddFriendUrl
             ? `<a class="btn primary" href="${lineOfficialAddFriendUrl}" target="_blank" rel="noopener noreferrer">加入官方 LINE@</a>`
@@ -60,20 +60,49 @@
         <button type="submit" class="btn">登出 LIFF</button>
       </form>
     </section>
+    <script src="https://static.line-scdn.net/liff/edge/2/sdk.js"></script>
     <script>
       (function () {
-        var btn = document.getElementById('copy-invite-link-btn');
+        var btn = document.getElementById('share-invite-btn');
         var linkEl = document.getElementById('liff-invite-link');
+        var liffId = ${JSON.stringify(liffId || '')};
         if (!btn || !linkEl) return;
+
+        async function shareViaLiff(inviteLink) {
+          if (!liffId || typeof liff === 'undefined') return false;
+          await liff.init({ liffId: liffId });
+          if (!liff.isLoggedIn()) return false;
+          if (!liff.isApiAvailable('shareTargetPicker')) return false;
+          const result = await liff.shareTargetPicker([
+            {
+              type: 'text',
+              text: '我在 Lucky Straw 抽獎活動，送你一個邀請連結，加入官方 LINE@ 就能幫我加碼，一起玩！\n' + inviteLink
+            }
+          ]);
+          return result !== null;
+        }
+
+        function openLineShareFallback(inviteLink) {
+          var text = '我在 Lucky Straw 抽獎活動，送你一個邀請連結，加入官方 LINE@ 就能幫我加碼，一起玩！\n' + inviteLink;
+          window.location.href = 'https://line.me/R/msg/text/?' + encodeURIComponent(text);
+        }
+
         btn.addEventListener('click', async function () {
           try {
-            await navigator.clipboard.writeText(linkEl.textContent || '');
-            btn.textContent = '已複製';
+            var inviteLink = (linkEl.textContent || '').trim();
+            if (!inviteLink) return;
+            var shared = await shareViaLiff(inviteLink);
+            if (!shared) {
+              openLineShareFallback(inviteLink);
+              return;
+            }
+            btn.textContent = '已開啟分享';
             setTimeout(function () {
-              btn.textContent = '複製邀請連結';
+              btn.textContent = '分享邀請給好友';
             }, 1200);
           } catch (_err) {
-            btn.textContent = '複製失敗';
+            var inviteLink = (linkEl.textContent || '').trim();
+            if (inviteLink) openLineShareFallback(inviteLink);
           }
         });
       })();
