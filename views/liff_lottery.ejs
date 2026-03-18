@@ -3,11 +3,11 @@
     body: `
     <section class="liff-card">
       <h1>Lucky Straw LINE 活動</h1>
-      <p class="muted">歡迎來到 LINE 活動抽獎頁。</p>
-      <p class="muted">目前使用者：<strong>${user || '-'}</strong></p>
+      <p class="muted liff-hero-copy">OpenRice 訂餐廳能賺現金，今天就有機會抽中 2 萬里程數。</p>
+      <p class="muted">嗨，<strong>${displayName || user || '朋友'}</strong> 👋</p>
 
       <div class="liff-stats">
-        <p>剩餘抽獎次數：<strong>${typeof drawsLeft !== 'undefined' ? drawsLeft : 0}</strong></p>
+        <p>可抽次數：<strong>${typeof drawsLeft !== 'undefined' ? drawsLeft : 0}</strong></p>
         <p>邀請加碼次數：<strong>${typeof extraDraws !== 'undefined' ? extraDraws : 0}</strong></p>
       </div>
 
@@ -33,10 +33,10 @@
         (typeof drawsLeft !== 'undefined' ? drawsLeft : 0) > 0
           ? `
       <form method="post" action="/liff/lottery/draw" class="draw-form">
-        <button type="submit" class="draw-button">立即抽獎</button>
+        <button type="submit" class="draw-button">立即抽獎（有機會中 2 萬里程數）</button>
       </form>
       `
-          : '<p class="muted center-text">您目前抽獎次數已用完，邀請好友可再獲得次數。</p>'
+          : '<p class="muted center-text">目前可抽次數為 0，邀請 1 位好友完成任務可再獲得 1 次抽獎機會。</p>'
       }
 
       <h2 class="liff-title">邀請加碼任務</h2>
@@ -44,13 +44,15 @@
         <p>已成功加碼：<strong>${typeof rewardedInviteCount !== 'undefined' ? rewardedInviteCount : 0}</strong></p>
         <p>待完成邀請：<strong>${typeof pendingInviteCount !== 'undefined' ? pendingInviteCount : 0}</strong></p>
       </div>
+      <p class="muted">待完成邀請代表：好友已點開你的連結，但還沒完成加入官方 LINE@。</p>
       <p class="muted">分享以下連結給朋友，朋友打開後加入官方 LINE@，你就會獲得加碼次數。</p>
-      <code class="invite-link" id="liff-invite-link">${inviteLink || ''}</code>
+      <code class="invite-link invite-link-compact" id="liff-invite-link" title="${inviteLink || ''}">${inviteLink || ''}</code>
       <div class="actions">
         <button type="button" class="btn primary" id="share-invite-btn">分享邀請給好友</button>
+        <button type="button" class="btn" id="copy-invite-btn">複製邀請連結</button>
         ${
           lineOfficialAddFriendUrl
-            ? `<a class="btn primary" href="${lineOfficialAddFriendUrl}" target="_blank" rel="noopener noreferrer">加入官方 LINE@</a>`
+            ? `<a class="btn" href="${lineOfficialAddFriendUrl}" target="_blank" rel="noopener noreferrer">加入官方 LINE@</a>`
             : ''
         }
       </div>
@@ -63,6 +65,7 @@
     <script>
       (function () {
         var btn = document.getElementById('share-invite-btn');
+        var copyBtn = document.getElementById('copy-invite-btn');
         var linkEl = document.getElementById('liff-invite-link');
         var liffId = ${JSON.stringify(liffId || '')};
         if (!btn || !linkEl) return;
@@ -80,6 +83,15 @@
         function openLineShareFallback(inviteLink) {
           var text = 'OpenRice 訂餐廳能賺現金，現在還有抽獎活動，按下就知道有沒有抽中，大獎有 2 萬里程數！來試試手氣吧 👇\\n' + inviteLink;
           window.location.href = 'https://line.me/R/msg/text/?' + encodeURIComponent(text);
+        }
+
+        async function copyInviteLink(inviteLink) {
+          if (!inviteLink) return false;
+          if (navigator.clipboard && typeof navigator.clipboard.writeText === 'function') {
+            await navigator.clipboard.writeText(inviteLink);
+            return true;
+          }
+          return false;
         }
 
         btn.addEventListener('click', async function () {
@@ -100,6 +112,27 @@
             if (inviteLink) openLineShareFallback(inviteLink);
           }
         });
+
+        if (copyBtn) {
+          copyBtn.addEventListener('click', async function () {
+            try {
+              var inviteLink = (linkEl.textContent || '').trim();
+              if (!inviteLink) return;
+              var copied = await copyInviteLink(inviteLink);
+              if (!copied) {
+                window.prompt('請手動複製邀請連結', inviteLink);
+                return;
+              }
+              copyBtn.textContent = '已複製';
+              setTimeout(function () {
+                copyBtn.textContent = '複製邀請連結';
+              }, 1200);
+            } catch (_err) {
+              var inviteLink = (linkEl.textContent || '').trim();
+              if (inviteLink) window.prompt('請手動複製邀請連結', inviteLink);
+            }
+          });
+        }
       })();
     </script>
   `

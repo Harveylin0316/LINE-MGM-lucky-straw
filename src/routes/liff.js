@@ -306,7 +306,9 @@ function registerLiffRoutes(app, deps) {
   app.get('/liff/lottery', requireLiffLogin, async (req, res, next) => {
     try {
       const [userRs, availablePrizes, inviteStats] = await Promise.all([
-        query('SELECT draws_left, extra_draws, line_user_id FROM users WHERE id = $1', [req.authUser.uid]),
+        query('SELECT draws_left, extra_draws, line_user_id, line_display_name, username FROM users WHERE id = $1', [
+          req.authUser.uid
+        ]),
         getAvailablePrizes(),
         getInviteStats(req.authUser.uid)
       ]);
@@ -320,6 +322,7 @@ function registerLiffRoutes(app, deps) {
         result: drawResult,
         drawsLeft: row.draws_left || 0,
         extraDraws: row.extra_draws || 0,
+        displayName: row.line_display_name || row.username || req.authUser.un,
         availablePrizes,
         inviteLink,
         rewardedInviteCount: inviteStats.rewarded_count || 0,
