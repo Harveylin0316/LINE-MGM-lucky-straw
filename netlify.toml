@@ -1,5 +1,6 @@
 [build]
   functions = "netlify/functions"
+  publish = "public"
   command = "npm ci"
 
 [build.environment]
