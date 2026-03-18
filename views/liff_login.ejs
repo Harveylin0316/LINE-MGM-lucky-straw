@@ -2,16 +2,16 @@
   include('layout_liff', {
     body: `
     <section class="liff-card">
-      <h1>LIFF 抽獎入口</h1>
-      <p class="muted">使用 LINE 帳號登入後，即可進入 LIFF 抽獎頁。</p>
-      ${reason === 'line_only' ? '<p class="error">LIFF 版本僅允許 LINE 登入，已自動登出非 LINE 帳號。</p>' : ''}
-      <p id="liff-status" class="muted">準備初始化 LIFF...</p>
+      <h1>LINE 抽獎入口</h1>
+      <p class="muted">使用 LINE 帳號登入後，即可進入活動抽獎頁。</p>
+      ${reason === 'line_only' ? '<p class="error">此活動頁僅允許 LINE 登入，已自動登出非 LINE 帳號。</p>' : ''}
+      <p id="liff-status" class="muted">準備初始化活動頁...</p>
       <div id="liff-error" class="error" style="display:none;"></div>
       <div class="actions">
         <button id="liff-login-btn" type="button" class="btn primary">使用 LINE 登入</button>
         <a class="btn" href="/liff/login">重新整理</a>
       </div>
-      <p class="muted">LIFF 版本已關閉一般帳號登入，請直接使用 LINE 登入。</p>
+      <p class="muted">此活動頁已關閉一般帳號登入，請直接使用 LINE 登入。</p>
     </section>
     <script src="https://static.line-scdn.net/liff/edge/2/sdk.js"></script>
     <script>
@@ -42,7 +42,7 @@
           });
           const payload = await response.json().catch(function () { return null; });
           if (!response.ok || !payload || !payload.ok) {
-            setError('LIFF 登入驗證失敗，請稍後再試。');
+            setError('LINE 登入驗證失敗，請稍後再試。');
             statusEl.textContent = '驗證失敗';
             return;
           }
@@ -51,12 +51,12 @@
 
         async function startLoginFlow() {
           if (!liffId) {
-            statusEl.textContent = '尚未設定 LIFF_ID';
-            setError('伺服器尚未設定 LIFF_ID，請先在環境變數加入 LIFF_ID。');
+            statusEl.textContent = '尚未設定活動 ID';
+            setError('活動設定尚未完成，請稍後再試或聯絡管理員。');
             return;
           }
 
-          statusEl.textContent = '初始化 LIFF...';
+          statusEl.textContent = '初始化活動頁...';
           await liff.init({ liffId: liffId });
 
           if (!liff.isLoggedIn()) {
@@ -71,7 +71,7 @@
         btn.addEventListener('click', function () {
           startLoginFlow().catch(function (err) {
             console.error(err);
-            setError('LIFF 初始化失敗，請稍後再試。');
+            setError('活動頁初始化失敗，請稍後再試。');
             statusEl.textContent = '初始化失敗';
           });
         });
