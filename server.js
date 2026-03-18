@@ -146,6 +146,23 @@ function clearAuthCookie(res) {
   res.clearCookie('auth_token');
 }
 
+function setDrawResultCookie(res, resultText) {
+  res.cookie('lottery_draw_result', resultText, {
+    httpOnly: true,
+    sameSite: 'lax',
+    secure: isProduction,
+    maxAge: 2 * 60 * 1000
+  });
+}
+
+function consumeDrawResultCookie(req, res) {
+  const result = req.cookies.lottery_draw_result;
+  if (result) {
+    res.clearCookie('lottery_draw_result');
+  }
+  return result || null;
+}
+
 function authMiddleware(req, _res, next) {
   const token = req.cookies.auth_token;
   if (!token) {
@@ -357,10 +374,11 @@ app.get('/lottery', requireLogin, async (req, res, next) => {
     ]);
     const row = userRs.rows[0] || { draws_left: 0, extra_draws: 0 };
     const refLink = buildRefLink(req, req.authUser.uid);
+    const drawResult = consumeDrawResultCookie(req, res);
     res.render('lottery', {
       user: req.authUser.un,
       isAdmin: !!req.authUser.adm,
-      result: null,
+      result: drawResult,
       drawsLeft: row.draws_left || 0,
       extraDraws: row.extra_draws || 0,
       refLink,
@@ -385,33 +403,17 @@ app.post('/lottery/draw', requireLogin, async (req, res, next) => {
     }
 
     const currentLeft = Number(userRs.rows[0].draws_left || 0);
-    const extraDraws = Number(userRs.rows[0].extra_draws || 0);
     if (currentLeft <= 0) {
       await client.query('ROLLBACK');
-      const availablePrizes = await getAvailablePrizes();
-      return res.render('lottery', {
-        user: req.authUser.un,
-        isAdmin: !!req.authUser.adm,
-        result: '您的抽獎次數已用完',
-        drawsLeft: 0,
-        extraDraws,
-        refLink: buildRefLink(req, req.authUser.uid),
-        availablePrizes
-      });
+      setDrawResultCookie(res, '您的抽獎次數已用完');
+      return res.redirect('/lottery');
     }
 
     const prizeRs = await client.query('SELECT id, name, quantity FROM prizes WHERE quantity > 0 ORDER BY id ASC FOR UPDATE');
     if (prizeRs.rowCount === 0) {
       await client.query('ROLLBACK');
-      return res.render('lottery', {
-        user: req.authUser.un,
-        isAdmin: !!req.authUser.adm,
-        result: '目前沒有可抽獎品，請聯絡管理員補庫存',
-        drawsLeft: currentLeft,
-        extraDraws,
-        refLink: buildRefLink(req, req.authUser.uid),
-        availablePrizes: []
-      });
+      setDrawResultCookie(res, '目前沒有可抽獎品，請聯絡管理員補庫存');
+      return res.redirect('/lottery');
     }
 
     const picked = pickPrizeByQuantity(prizeRs.rows);
@@ -425,16 +427,8 @@ app.post('/lottery/draw', requireLogin, async (req, res, next) => {
     await client.query('COMMIT');
 
     invalidateAvailablePrizesCache();
-    const availablePrizes = await getAvailablePrizes(query, { forceRefresh: true });
-    return res.render('lottery', {
-      user: req.authUser.un,
-      isAdmin: !!req.authUser.adm,
-      result: message,
-      drawsLeft: currentLeft - 1,
-      extraDraws,
-      refLink: buildRefLink(req, req.authUser.uid),
-      availablePrizes
-    });
+    setDrawResultCookie(res, message);
+    return res.redirect('/lottery');
   } catch (err) {
     await client.query('ROLLBACK');
     next(err);
