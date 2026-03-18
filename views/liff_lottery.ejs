@@ -55,12 +55,6 @@
           function formatPrize(name) {
             const raw = String(name || '').trim();
             const withoutTier = raw.replace(/^(頭獎|貳獎|二獎|參獎|三獎|早鳥獎?)[:：]\s*/, '');
-            if (/頭獎/.test(raw) && /亞洲萬里通|里數|里程/.test(raw)) {
-              return {
-                main: '分享好友領刮刮樂',
-                sub: '最高20,000「亞洲萬里通」里數等你拿'
-              };
-            }
             const match = withoutTier.match(/^(.*?)(（.*）)$/);
             if (match) {
               return {
@@ -82,12 +76,17 @@
                 const formatted = formatPrize(p.name || '');
                 const accentClass = type === 'miles' ? 'miles' : 'cash';
                 const icon = type === 'miles' ? 'A' : 'RD$';
+                const isGrandMiles = /頭獎/.test(p.name || '') && /亞洲萬里通|里數|里程/.test(p.name || '');
                 return `<article class="liff-prize-card ${accentClass}">
                   <span class="liff-prize-badge">${tier}</span>
                   <div class="liff-prize-side">${icon}</div>
                   <div class="liff-prize-content">
-                    <p class="liff-prize-main">${formatted.main}</p>
-                    ${formatted.sub ? `<p class="liff-prize-sub">${formatted.sub}</p>` : ''}
+                    ${
+                      isGrandMiles
+                        ? '<img class="liff-prize-banner-image" src="/images/grand-prize-banner.png" alt="分享好友領刮刮樂，最高20,000「亞洲萬里通」里數等你拿" />'
+                        : `<p class="liff-prize-main">${formatted.main}</p>
+                           ${formatted.sub ? `<p class="liff-prize-sub">${formatted.sub}</p>` : ''}`
+                    }
                   </div>
                 </article>`;
               })
