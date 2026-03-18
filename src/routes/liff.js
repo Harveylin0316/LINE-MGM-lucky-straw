@@ -200,12 +200,14 @@ function registerLiffRoutes(app, deps) {
       const refUserId = parseReferrerId(req.params.refUserId);
       const bindResult = await bindInviteIntent(refUserId, Number(req.authUser.uid));
       if (bindResult === 'bound') {
+        if (lineOfficialAddFriendUrl) return res.redirect(lineOfficialAddFriendUrl);
         setDrawResultCookie(res, '已綁定邀請關係，加入官方 LINE 後將回饋邀請者加碼次數。');
       } else if (bindResult === 'self_ref') {
         setDrawResultCookie(res, '不能邀請自己。');
       } else if (bindResult === 'already_rewarded') {
         setDrawResultCookie(res, '你已完成過邀請任務。');
       } else if (bindResult === 'already_bound') {
+        if (lineOfficialAddFriendUrl) return res.redirect(lineOfficialAddFriendUrl);
         setDrawResultCookie(res, '你已經綁定過此邀請關係。');
       } else if (bindResult === 'bound_other') {
         setDrawResultCookie(res, '你已綁定其他邀請，無法重複綁定。');
