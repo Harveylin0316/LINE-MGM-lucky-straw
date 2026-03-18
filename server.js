@@ -51,9 +51,15 @@ const viewsDir = resolveAssetDir('views', 'index.ejs');
 const publicDir = resolveAssetDir('public', 'style.css');
 
 app.set('trust proxy', 1);
+app.disable('x-powered-by');
 app.set('view engine', 'ejs');
 app.set('views', viewsDir);
-app.use(express.static(publicDir));
+app.use(
+  express.static(publicDir, {
+    maxAge: isProduction ? '1d' : 0,
+    etag: true
+  })
+);
 app.use(express.urlencoded({ extended: false }));
 app.use(cookieParser());
 app.use(
@@ -74,6 +80,17 @@ app.use('/register', authLimiter);
 
 async function query(text, params = []) {
   return pool.query(text, params);
+}
+
+async function getAvailablePrizes(runQuery = query) {
+  const result = await runQuery('SELECT name FROM prizes WHERE quantity > 0 ORDER BY id ASC');
+  return result.rows || [];
+}
+
+function buildRefLink(req, userId) {
+  const host = req.get('host');
+  if (!host) return `/register?ref=${userId}`;
+  return `${req.protocol}://${host}/register?ref=${userId}`;
 }
 
 function signAuthToken(user) {
@@ -198,6 +215,9 @@ async function initDb() {
     created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
   )`);
 
+  await query('CREATE INDEX IF NOT EXISTS draw_logs_user_id_id_desc_idx ON draw_logs(user_id, id DESC)');
+  await query('CREATE INDEX IF NOT EXISTS prizes_quantity_id_idx ON prizes(quantity, id)');
+
   const adminCheck = await query('SELECT id FROM users WHERE username = $1', [ADMIN_USERNAME]);
   if (adminCheck.rowCount === 0) {
     if (!ADMIN_PASSWORD || ADMIN_PASSWORD.length < 8) {
@@ -230,11 +250,8 @@ app.use(async (_req, _res, next) => {
   }
 });
 
-app.get('/', (req, res) => {
-  res.render('index', {
-    user: req.authUser ? req.authUser.un : null,
-    isAdmin: !!(req.authUser && req.authUser.adm)
-  });
+app.get('/', requireLogin, (_req, res) => {
+  res.redirect('/lottery');
 });
 
 app.get('/register', (req, res) => {
@@ -302,10 +319,12 @@ app.post('/logout', (_req, res) => {
 
 app.get('/lottery', requireLogin, async (req, res, next) => {
   try {
-    const userRs = await query('SELECT draws_left, extra_draws FROM users WHERE id = $1', [req.authUser.uid]);
+    const [userRs, availablePrizes] = await Promise.all([
+      query('SELECT draws_left, extra_draws FROM users WHERE id = $1', [req.authUser.uid]),
+      getAvailablePrizes()
+    ]);
     const row = userRs.rows[0] || { draws_left: 0, extra_draws: 0 };
-    const prizeRs = await query('SELECT name FROM prizes WHERE quantity > 0 ORDER BY id ASC');
-    const refLink = `https://${req.headers.host}/register?ref=${req.authUser.uid}`;
+    const refLink = buildRefLink(req, req.authUser.uid);
     res.render('lottery', {
       user: req.authUser.un,
       isAdmin: !!req.authUser.adm,
@@ -313,7 +332,7 @@ app.get('/lottery', requireLogin, async (req, res, next) => {
       drawsLeft: row.draws_left || 0,
       extraDraws: row.extra_draws || 0,
       refLink,
-      availablePrizes: prizeRs.rows || []
+      availablePrizes
     });
   } catch (err) {
     next(err);
@@ -337,15 +356,15 @@ app.post('/lottery/draw', requireLogin, async (req, res, next) => {
     const extraDraws = Number(userRs.rows[0].extra_draws || 0);
     if (currentLeft <= 0) {
       await client.query('ROLLBACK');
-      const prizeRs = await query('SELECT name FROM prizes WHERE quantity > 0 ORDER BY id ASC');
+      const availablePrizes = await getAvailablePrizes();
       return res.render('lottery', {
         user: req.authUser.un,
         isAdmin: !!req.authUser.adm,
         result: '您的抽獎次數已用完',
         drawsLeft: 0,
         extraDraws,
-        refLink: `https://${req.headers.host}/register?ref=${req.authUser.uid}`,
-        availablePrizes: prizeRs.rows || []
+        refLink: buildRefLink(req, req.authUser.uid),
+        availablePrizes
       });
     }
 
@@ -358,7 +377,7 @@ app.post('/lottery/draw', requireLogin, async (req, res, next) => {
         result: '目前沒有可抽獎品，請聯絡管理員補庫存',
         drawsLeft: currentLeft,
         extraDraws,
-        refLink: `https://${req.headers.host}/register?ref=${req.authUser.uid}`,
+        refLink: buildRefLink(req, req.authUser.uid),
         availablePrizes: []
       });
     }
@@ -373,15 +392,15 @@ app.post('/lottery/draw', requireLogin, async (req, res, next) => {
     );
     await client.query('COMMIT');
 
-    const latestPrizeRs = await query('SELECT name FROM prizes WHERE quantity > 0 ORDER BY id ASC');
+    const availablePrizes = await getAvailablePrizes();
     return res.render('lottery', {
       user: req.authUser.un,
       isAdmin: !!req.authUser.adm,
       result: message,
       drawsLeft: currentLeft - 1,
       extraDraws,
-      refLink: `https://${req.headers.host}/register?ref=${req.authUser.uid}`,
-      availablePrizes: latestPrizeRs.rows || []
+      refLink: buildRefLink(req, req.authUser.uid),
+      availablePrizes
     });
   } catch (err) {
     await client.query('ROLLBACK');
