@@ -72,13 +72,13 @@
           await liff.init({ liffId: liffId });
           if (!liff.isLoggedIn()) return false;
           if (!liff.isApiAvailable('shareTargetPicker')) return false;
-          const text = '我在 Lucky Straw 抽獎活動，送你一個邀請連結，加入官方 LINE@ 就能幫我加碼，一起玩！\\n' + inviteLink;
+          const text = 'OpenRice 訂餐廳能賺現金，現在還有抽獎活動，按下就知道有沒有抽中，大獎有 2 萬里程數！來試試手氣吧 👇\\n' + inviteLink;
           const result = await liff.shareTargetPicker([{ type: 'text', text: text }]);
           return result !== null;
         }
 
         function openLineShareFallback(inviteLink) {
-          var text = '我在 Lucky Straw 抽獎活動，送你一個邀請連結，加入官方 LINE@ 就能幫我加碼，一起玩！\\n' + inviteLink;
+          var text = 'OpenRice 訂餐廳能賺現金，現在還有抽獎活動，按下就知道有沒有抽中，大獎有 2 萬里程數！來試試手氣吧 👇\\n' + inviteLink;
           window.location.href = 'https://line.me/R/msg/text/?' + encodeURIComponent(text);
         }
 
