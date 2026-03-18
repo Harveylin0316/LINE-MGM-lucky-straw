@@ -8,6 +8,55 @@
       <p class="muted liff-hello">嗨，<strong>${displayName || user || '朋友'}</strong> 👋</p>
       <p class="liff-brand-line">使用 OpenRice app訂位餐廳，餐餐吃飯折抵現金</p>
 
+      ${
+        (() => {
+          const canScratch = (typeof drawsLeft !== 'undefined' ? drawsLeft : 0) > 0;
+          const hasResult = !!result;
+          const isWin = hasResult && String(result).includes('恭喜中獎');
+
+          if (hasResult) {
+            return `<section class="scratch-zone">
+              <div class="scratch-card scratch-result ${isWin ? 'win' : 'normal'}">
+                <div class="scratch-result-card">
+                  ${isWin ? '<div class="scratch-result-title">🎉 恭喜中獎！</div>' : '<div class="scratch-result-title">結果揭曉</div>'}
+                  <div class="scratch-result-text">${result}</div>
+                  ${isWin ? '<p class="scratch-result-note">請於LINE@聯繫如何兌換</p>' : ''}
+                </div>
+              </div>
+              ${
+                canScratch
+                  ? `<div class="actions scratch-result-actions">
+                      <a class="btn primary" href="/liff/lottery">再刮一次（剩餘${typeof drawsLeft !== 'undefined' ? drawsLeft : 0}次）</a>
+                    </div>`
+                  : '<p class="muted center-text">目前可刮次數為 0，邀請 1 位好友完成任務可再獲得 1 次刮刮樂機會。</p>'
+              }
+            </section>`;
+          }
+
+          if (!canScratch) {
+            return `<section class="scratch-zone">
+              <div class="scratch-card scratch-disabled">
+                <div class="scratch-underlay">🎁 目前可刮次數為 0</div>
+              </div>
+              <p class="muted center-text">邀請 1 位好友完成任務可再獲得 1 次刮刮樂機會。</p>
+            </section>`;
+          }
+
+          return `<section class="scratch-zone">
+            <p class="muted center-text">滑動刮開卡片，立即揭曉結果。</p>
+            <div id="scratch-card" class="scratch-card" role="button" tabindex="0" aria-label="刮開卡片開始刮刮樂">
+              <div class="scratch-underlay">🎁 刮開看看今天手氣</div>
+              <canvas id="scratch-canvas" class="scratch-canvas"></canvas>
+              <div id="scratch-gate" class="scratch-gate">
+                <button id="scratch-start-btn" type="button" class="btn primary scratch-start-btn">開始刮（剩餘${typeof drawsLeft !== 'undefined' ? drawsLeft : 0}次）</button>
+              </div>
+            </div>
+            <p id="scratch-hint" class="muted center-text">刮開超過 45% 會自動揭曉結果</p>
+            <form id="scratch-draw-form" method="post" action="/liff/lottery/draw" class="draw-form"></form>
+          </section>`;
+        })()
+      }
+
       <div class="liff-metric-grid">
         <div class="liff-metric-item">
           <span class="label">可刮次數</span>
@@ -31,45 +80,6 @@
           class="liff-prize-section-image"
         />
       </div>
-
-      ${
-        (() => {
-          const canScratch = (typeof drawsLeft !== 'undefined' ? drawsLeft : 0) > 0;
-          const hasResult = !!result;
-          const isWin = hasResult && String(result).includes('恭喜中獎');
-
-          if (hasResult) {
-            return `<section class="scratch-zone">
-              <div class="scratch-card scratch-result ${isWin ? 'win' : 'normal'}">
-                <div class="scratch-result-card">
-                  ${isWin ? '<div class="scratch-result-title">🎉 恭喜中獎！</div>' : '<div class="scratch-result-title">結果揭曉</div>'}
-                  <div class="scratch-result-text">${result}</div>
-                </div>
-              </div>
-              ${canScratch ? '<p class="muted center-text">還有次數的話，往下滑再刮一次。</p>' : '<p class="muted center-text">目前可刮次數為 0，邀請 1 位好友完成任務可再獲得 1 次刮刮樂機會。</p>'}
-            </section>`;
-          }
-
-          if (!canScratch) {
-            return `<section class="scratch-zone">
-              <div class="scratch-card scratch-disabled">
-                <div class="scratch-underlay">🎁 目前可刮次數為 0</div>
-              </div>
-              <p class="muted center-text">邀請 1 位好友完成任務可再獲得 1 次刮刮樂機會。</p>
-            </section>`;
-          }
-
-          return `<section class="scratch-zone">
-            <p class="muted center-text">滑動刮開卡片，立即揭曉結果。</p>
-            <div id="scratch-card" class="scratch-card" role="button" tabindex="0" aria-label="刮開卡片開始刮刮樂">
-              <div class="scratch-underlay">🎁 刮開看看今天手氣</div>
-              <canvas id="scratch-canvas" class="scratch-canvas"></canvas>
-            </div>
-            <p id="scratch-hint" class="muted center-text">刮開超過 45% 會自動揭曉結果</p>
-            <form id="scratch-draw-form" method="post" action="/liff/lottery/draw" class="draw-form"></form>
-          </section>`;
-        })()
-      }
 
       <div class="liff-invite-box">
       <h2 class="liff-title">邀請好友加碼</h2>
@@ -164,6 +174,8 @@
           var canvas = document.getElementById('scratch-canvas');
           var hint = document.getElementById('scratch-hint');
           var form = document.getElementById('scratch-draw-form');
+          var gate = document.getElementById('scratch-gate');
+          var startBtn = document.getElementById('scratch-start-btn');
           if (!card || !canvas || !form) return;
 
           var ctx = canvas.getContext('2d');
@@ -176,6 +188,7 @@
 
           var submitted = false;
           var isDrawing = false;
+          var started = false;
           var brushRadius = 22;
 
           function submitDraw() {
@@ -231,15 +244,27 @@
           }
 
           function handleScratchMove(x, y) {
-            if (!isDrawing || submitted) return;
+            if (!started || !isDrawing || submitted) return;
             eraseAt(x, y);
             if (scratchedRatio() >= 0.45) {
               submitDraw();
             }
           }
 
+          function startScratch() {
+            if (started) return;
+            started = true;
+            if (gate) gate.style.display = 'none';
+            if (hint) hint.textContent = '開始刮吧！刮開超過 45% 會自動揭曉結果';
+          }
+
+          if (startBtn) {
+            startBtn.addEventListener('click', startScratch);
+          }
+
           card.addEventListener('pointerdown', function (e) {
             if (submitted) return;
+            if (!started) return;
             isDrawing = true;
             card.setPointerCapture(e.pointerId);
             handleScratchMove(e.clientX, e.clientY);
@@ -260,6 +285,10 @@
           card.addEventListener('keydown', function (e) {
             if (e.key === 'Enter' || e.key === ' ') {
               e.preventDefault();
+              if (!started) {
+                startScratch();
+                return;
+              }
               submitDraw();
             }
           });
