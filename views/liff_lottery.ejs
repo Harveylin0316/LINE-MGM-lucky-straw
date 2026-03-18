@@ -4,6 +4,7 @@
     <section class="liff-card">
       <h1>Lucky Straw LIFF</h1>
       <p class="muted">這是 LIFF 版本骨架頁。抽獎核心與 Web 共用同一套邏輯。</p>
+      <p class="muted">目前使用者：<strong>${user || '-'}</strong></p>
 
       <div class="liff-stats">
         <p>剩餘抽獎次數：<strong>${typeof drawsLeft !== 'undefined' ? drawsLeft : 0}</strong></p>
@@ -39,6 +40,9 @@
       }
 
       <p class="muted center-text">需要完整後台功能可切換到 <a href="/lottery">Web 版本</a></p>
+      <form method="post" action="/liff/logout" class="draw-form">
+        <button type="submit" class="btn">登出 LIFF</button>
+      </form>
     </section>
   `
   })

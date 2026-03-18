@@ -1,3 +1,6 @@
+const bcrypt = require('bcryptjs');
+const crypto = require('crypto');
+
 function normalizeLiffNextPath(rawNextPath, fallbackPath = '/liff/lottery') {
   if (typeof rawNextPath !== 'string') return fallbackPath;
   if (!rawNextPath.startsWith('/liff')) return fallbackPath;
@@ -6,14 +9,69 @@ function normalizeLiffNextPath(rawNextPath, fallbackPath = '/liff/lottery') {
 }
 
 function registerLiffRoutes(app, deps) {
-  const { query, pool, lotteryCore, viewStateCore } = deps;
+  const { query, pool, authCore, lotteryCore, viewStateCore, liffId } = deps;
   const { pickPrizeByQuantity } = lotteryCore;
+  const { signAuthToken, setAuthCookie, clearAuthCookie } = authCore;
   const {
     setDrawResultCookie,
     consumeDrawResultCookie,
     invalidateAvailablePrizesCache,
     getAvailablePrizes
   } = viewStateCore;
+
+  async function fetchLineProfile(accessToken) {
+    const response = await fetch('https://api.line.me/v2/profile', {
+      method: 'GET',
+      headers: {
+        Authorization: `Bearer ${accessToken}`
+      }
+    });
+    if (!response.ok) {
+      return null;
+    }
+    return response.json();
+  }
+
+  function buildLineUsernameBase(lineUserId) {
+    const cleaned = String(lineUserId || '').toLowerCase().replace(/[^a-z0-9]/g, '');
+    const suffix = cleaned.slice(-12) || crypto.randomBytes(4).toString('hex');
+    return `line_${suffix}`;
+  }
+
+  async function findUniqueLineUsername(client, lineUserId) {
+    const base = buildLineUsernameBase(lineUserId);
+    for (let i = 0; i < 100; i += 1) {
+      const candidate = i === 0 ? base : `${base}_${i}`;
+      const exists = await client.query('SELECT id FROM users WHERE username = $1', [candidate]);
+      if (exists.rowCount === 0) return candidate;
+    }
+    return `line_${crypto.randomBytes(8).toString('hex')}`;
+  }
+
+  async function upsertLineUser(client, profile) {
+    const existing = await client.query('SELECT id, username, is_admin FROM users WHERE line_user_id = $1 FOR UPDATE', [
+      profile.userId
+    ]);
+    if (existing.rowCount > 0) {
+      await client.query('UPDATE users SET line_display_name = $1, line_picture_url = $2 WHERE id = $3', [
+        profile.displayName || null,
+        profile.pictureUrl || null,
+        existing.rows[0].id
+      ]);
+      return existing.rows[0];
+    }
+
+    const username = await findUniqueLineUsername(client, profile.userId);
+    const randomPassword = crypto.randomBytes(24).toString('hex');
+    const passwordHash = await bcrypt.hash(randomPassword, 10);
+    const inserted = await client.query(
+      `INSERT INTO users (username, password_hash, draws_left, extra_draws, is_admin, line_user_id, line_display_name, line_picture_url)
+       VALUES ($1, $2, 1, 0, false, $3, $4, $5)
+       RETURNING id, username, is_admin`,
+      [username, passwordHash, profile.userId, profile.displayName || null, profile.pictureUrl || null]
+    );
+    return inserted.rows[0];
+  }
 
   function requireLiffLogin(req, res, next) {
     if (req.authUser && req.authUser.uid) return next();
@@ -28,7 +86,41 @@ function registerLiffRoutes(app, deps) {
   app.get('/liff/login', (req, res) => {
     if (req.authUser && req.authUser.uid) return res.redirect('/liff/lottery');
     const nextPath = normalizeLiffNextPath(req.query.next, '/liff/lottery');
-    res.render('liff_login', { nextPath });
+    res.render('liff_login', { nextPath, liffId: liffId || '' });
+  });
+
+  app.post('/liff/auth', async (req, res) => {
+    const accessToken = typeof req.body?.accessToken === 'string' ? req.body.accessToken : '';
+    const nextPath = normalizeLiffNextPath(req.body?.nextPath, '/liff/lottery');
+    if (!accessToken) {
+      return res.status(400).json({ ok: false, error: 'missing_access_token' });
+    }
+
+    const profile = await fetchLineProfile(accessToken);
+    if (!profile || !profile.userId) {
+      return res.status(401).json({ ok: false, error: 'invalid_line_access_token' });
+    }
+
+    const client = await pool.connect();
+    try {
+      await client.query('BEGIN');
+      const user = await upsertLineUser(client, profile);
+      await client.query('COMMIT');
+      const token = signAuthToken(user);
+      setAuthCookie(res, token);
+      return res.json({ ok: true, redirect: nextPath });
+    } catch (err) {
+      await client.query('ROLLBACK');
+      console.error('LIFF auth failed:', err.message);
+      return res.status(500).json({ ok: false, error: 'liff_auth_failed' });
+    } finally {
+      client.release();
+    }
+  });
+
+  app.post('/liff/logout', (_req, res) => {
+    clearAuthCookie(res);
+    return res.redirect('/liff/login');
   });
 
   app.get('/liff/lottery', requireLiffLogin, async (req, res, next) => {

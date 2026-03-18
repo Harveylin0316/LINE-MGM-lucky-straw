@@ -11,6 +11,10 @@ async function initDb({ query, adminUsername, adminPassword }) {
     is_admin BOOLEAN NOT NULL DEFAULT false
   )`);
 
+  await query('ALTER TABLE users ADD COLUMN IF NOT EXISTS line_user_id TEXT');
+  await query('ALTER TABLE users ADD COLUMN IF NOT EXISTS line_display_name TEXT');
+  await query('ALTER TABLE users ADD COLUMN IF NOT EXISTS line_picture_url TEXT');
+
   await query(`CREATE TABLE IF NOT EXISTS prizes (
     id SERIAL PRIMARY KEY,
     name TEXT NOT NULL,
@@ -41,6 +45,7 @@ async function initDb({ query, adminUsername, adminPassword }) {
 
   await query('CREATE INDEX IF NOT EXISTS draw_logs_user_id_id_desc_idx ON draw_logs(user_id, id DESC)');
   await query('CREATE INDEX IF NOT EXISTS prizes_quantity_id_idx ON prizes(quantity, id)');
+  await query('CREATE UNIQUE INDEX IF NOT EXISTS users_line_user_id_unique_idx ON users(line_user_id)');
 
   const adminCheck = await query('SELECT id FROM users WHERE username = $1', [adminUsername]);
   if (adminCheck.rowCount === 0) {

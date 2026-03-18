@@ -21,6 +21,7 @@ const JWT_SECRET =
   process.env.SESSION_SECRET ||
   (isProduction ? '' : 'local-dev-only-jwt-secret-change-before-production-123');
 const DATABASE_URL = process.env.DATABASE_URL;
+const LIFF_ID = process.env.LIFF_ID || '';
 
 if (!DATABASE_URL) {
   throw new Error('Missing DATABASE_URL. Please configure Postgres connection string.');
@@ -94,6 +95,7 @@ app.use(
     etag: true
   })
 );
+app.use(express.json());
 app.use(express.urlencoded({ extended: false }));
 app.use(cookieParser());
 app.use(
@@ -111,6 +113,7 @@ const authLimiter = rateLimit({
 
 app.use('/login', authLimiter);
 app.use('/register', authLimiter);
+app.use('/liff/auth', authLimiter);
 app.use(authCore.authMiddleware);
 
 app.use(async (_req, _res, next) => {
@@ -136,8 +139,10 @@ registerWebRoutes(app, {
 registerLiffRoutes(app, {
   query,
   pool,
+  authCore,
   lotteryCore,
-  viewStateCore
+  viewStateCore,
+  liffId: LIFF_ID
 });
 
 app.use((err, _req, res, _next) => {
