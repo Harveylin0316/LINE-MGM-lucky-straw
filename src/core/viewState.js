@@ -38,7 +38,9 @@ function createViewStateCore({ query, isProduction }) {
     ) {
       return availablePrizesCache.value;
     }
-    const result = await runQuery('SELECT name FROM prizes WHERE quantity > 0 ORDER BY id ASC LIMIT 200');
+    const result = await runQuery(
+      "SELECT name FROM prizes WHERE quantity > 0 AND name !~* '^\\s*test\\b' ORDER BY id ASC LIMIT 200"
+    );
     if (canReadWriteCache) {
       availablePrizesCache = {
         value: result.rows || [],

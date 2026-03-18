@@ -55,6 +55,12 @@
           function formatPrize(name) {
             const raw = String(name || '').trim();
             const withoutTier = raw.replace(/^(頭獎|貳獎|二獎|參獎|三獎|早鳥獎?)[:：]\s*/, '');
+            if (/頭獎/.test(raw) && /亞洲萬里通|里數|里程/.test(raw)) {
+              return {
+                main: '分享好友領刮刮樂',
+                sub: '最高20,000「亞洲萬里通」里數等你拿'
+              };
+            }
             const match = withoutTier.match(/^(.*?)(（.*）)$/);
             if (match) {
               return {

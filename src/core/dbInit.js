@@ -84,6 +84,7 @@ async function initDb({ query, adminUsername, adminPassword }) {
   await query('CREATE INDEX IF NOT EXISTS line_invites_inviter_user_id_idx ON line_invites(inviter_user_id)');
   await query('CREATE INDEX IF NOT EXISTS line_webhook_events_created_id_desc_idx ON line_webhook_events(created_at DESC, id DESC)');
   await query('CREATE INDEX IF NOT EXISTS line_webhook_events_line_user_id_idx ON line_webhook_events(line_user_id)');
+  await query("DELETE FROM prizes WHERE name ~* '^\\s*test\\b'");
 
   const adminCheck = await query('SELECT id FROM users WHERE username = $1', [adminUsername]);
   if (adminCheck.rowCount === 0) {

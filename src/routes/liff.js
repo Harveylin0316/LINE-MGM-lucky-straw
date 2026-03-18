@@ -352,7 +352,9 @@ function registerLiffRoutes(app, deps) {
         return res.redirect('/liff/lottery');
       }
 
-      const prizeRs = await client.query('SELECT id, name, quantity FROM prizes WHERE quantity > 0 ORDER BY id ASC FOR UPDATE');
+      const prizeRs = await client.query(
+        "SELECT id, name, quantity FROM prizes WHERE quantity > 0 AND name !~* '^\\s*test\\b' ORDER BY id ASC FOR UPDATE"
+      );
       if (prizeRs.rowCount === 0) {
         await client.query('ROLLBACK');
         setDrawResultCookie(res, '目前沒有可抽獎品，請聯絡管理員補庫存');
