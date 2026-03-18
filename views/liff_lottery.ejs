@@ -67,11 +67,27 @@
         var liffId = ${JSON.stringify(liffId || '')};
         if (!btn || !linkEl) return;
 
+        async function toPermanentLiffUrl(url) {
+          if (!url) return url;
+          if (typeof liff === 'undefined' || !liff.permanentLink || typeof liff.permanentLink.createUrlBy !== 'function') {
+            return url;
+          }
+          try {
+            return await liff.permanentLink.createUrlBy(url);
+          } catch (err) {
+            console.warn('createUrlBy failed, fallback to raw invite link', err);
+            return url;
+          }
+        }
+
         async function shareViaLiff(inviteLink) {
           if (!liffId || typeof liff === 'undefined') {
             return { ok: false, reason: 'liff_unavailable' };
           }
           await liff.init({ liffId: liffId });
+          if (typeof liff.isInClient === 'function' && !liff.isInClient()) {
+            return { ok: false, reason: 'not_liff_browser' };
+          }
           if (!liff.isLoggedIn()) {
             return { ok: false, reason: 'not_logged_in' };
           }
@@ -80,6 +96,7 @@
           }
 
           try {
+            var shareUri = await toPermanentLiffUrl(inviteLink);
             const result = await liff.shareTargetPicker([
               {
                 type: 'flex',
@@ -125,7 +142,7 @@
                         action: {
                           type: 'uri',
                           label: '立即參加',
-                          uri: inviteLink
+                          uri: shareUri
                         }
                       }
                     ]
@@ -150,7 +167,15 @@
             var shareResult = await shareViaLiff(inviteLink);
             if (!shareResult.ok) {
               if (shareResult.reason !== 'cancelled') {
-                alert('目前無法使用 LINE 卡片分享，請確認你是從 LINE 內開啟活動頁後再試一次。');
+                if (shareResult.reason === 'not_liff_browser') {
+                  var openInLiffUrl = liffId ? ('https://liff.line.me/' + encodeURIComponent(liffId)) : '';
+                  if (openInLiffUrl && confirm('你目前不在 LIFF 活動視窗，需先切換後才能分享卡片。是否立即重新開啟？')) {
+                    window.location.href = openInLiffUrl;
+                    return;
+                  }
+                } else {
+                  alert('目前無法使用 LINE 卡片分享。請確認 LINE 版本為最新版，並從 LIFF 活動頁開啟後再試一次。');
+                }
               }
               return;
             }
