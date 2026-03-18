@@ -68,25 +68,36 @@
             };
           }
 
-          return `<div class="liff-prize-grid">
-            ${availablePrizes
+          const grandPrize = availablePrizes.find(
+            (p) => /頭獎/.test(p.name || '') && /亞洲萬里通|里數|里程/.test(p.name || '')
+          );
+          const displayPrizes = grandPrize ? availablePrizes.filter((p) => p !== grandPrize) : availablePrizes;
+
+          const grandBlock = grandPrize
+            ? `<div class="liff-grand-prize-wrap">
+                <img
+                  class="liff-grand-prize-image"
+                  src="/images/grand-prize-banner.png"
+                  alt="分享好友領刮刮樂，最高20,000「亞洲萬里通」里數等你拿"
+                />
+                <p class="liff-grand-prize-text">${grandPrize.name || ''}</p>
+              </div>`
+            : '';
+
+          return `${grandBlock}<div class="liff-prize-grid">
+            ${displayPrizes
               .map((p) => {
                 const tier = detectTier(p.name || '');
                 const type = detectType(p.name || '');
                 const formatted = formatPrize(p.name || '');
                 const accentClass = type === 'miles' ? 'miles' : 'cash';
                 const icon = type === 'miles' ? 'A' : 'RD$';
-                const isGrandMiles = /頭獎/.test(p.name || '') && /亞洲萬里通|里數|里程/.test(p.name || '');
                 return `<article class="liff-prize-card ${accentClass}">
                   <span class="liff-prize-badge">${tier}</span>
                   <div class="liff-prize-side">${icon}</div>
                   <div class="liff-prize-content">
-                    ${
-                      isGrandMiles
-                        ? '<img class="liff-prize-banner-image" src="/images/grand-prize-banner.png" alt="分享好友領刮刮樂，最高20,000「亞洲萬里通」里數等你拿" />'
-                        : `<p class="liff-prize-main">${formatted.main}</p>
-                           ${formatted.sub ? `<p class="liff-prize-sub">${formatted.sub}</p>` : ''}`
-                    }
+                    <p class="liff-prize-main">${formatted.main}</p>
+                    ${formatted.sub ? `<p class="liff-prize-sub">${formatted.sub}</p>` : ''}
                   </div>
                 </article>`;
               })
