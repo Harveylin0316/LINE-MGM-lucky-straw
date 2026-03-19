@@ -23,18 +23,47 @@ function registerLiffRoutes(app, deps) {
     lotteryCore,
     viewStateCore,
     liffId,
+    lineChannelAccessToken,
+    inviteBonusMax,
     lineOfficialAddFriendUrl,
     lineUserPasswordHashRounds
   } = deps;
   const { pickPrizeByQuantity } = lotteryCore;
   const { signAuthToken, setAuthCookie, clearAuthCookie } = authCore;
   const hashRounds = Math.min(12, Math.max(4, Number(lineUserPasswordHashRounds || 6)));
+  const inviteLimit = Math.max(0, Number.isFinite(Number(inviteBonusMax)) ? Number(inviteBonusMax) : 2);
   const {
     setDrawResultCookie,
     consumeDrawResultCookie,
     invalidateAvailablePrizesCache,
     getAvailablePrizes
   } = viewStateCore;
+
+  async function pushLineTextMessage(lineUserId, text) {
+    if (!lineUserId || !lineChannelAccessToken || !text) return false;
+    try {
+      const response = await fetch('https://api.line.me/v2/bot/message/push', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${lineChannelAccessToken}`
+        },
+        body: JSON.stringify({
+          to: lineUserId,
+          messages: [{ type: 'text', text }]
+        })
+      });
+      if (!response.ok) {
+        const detail = await response.text().catch(() => '');
+        console.error('LINE push failed:', response.status, detail);
+        return false;
+      }
+      return true;
+    } catch (err) {
+      console.error('LINE push failed:', err.message);
+      return false;
+    }
+  }
 
   async function fetchLineProfile(accessToken) {
     const response = await fetch('https://api.line.me/v2/profile', {
@@ -339,7 +368,7 @@ function registerLiffRoutes(app, deps) {
     const client = await pool.connect();
     try {
       await client.query('BEGIN');
-      const userRs = await client.query('SELECT draws_left FROM users WHERE id = $1 FOR UPDATE', [req.authUser.uid]);
+      const userRs = await client.query('SELECT draws_left, line_user_id FROM users WHERE id = $1 FOR UPDATE', [req.authUser.uid]);
       if (userRs.rowCount === 0) {
         await client.query('ROLLBACK');
         return res.redirect('/liff/lottery');
@@ -362,6 +391,7 @@ function registerLiffRoutes(app, deps) {
       }
 
       const picked = pickPrizeByQuantity(prizeRs.rows);
+      const lineUserId = userRs.rows[0]?.line_user_id || null;
       await client.query('UPDATE prizes SET quantity = quantity - 1 WHERE id = $1 AND quantity > 0', [picked.id]);
       await client.query('UPDATE users SET draws_left = draws_left - 1 WHERE id = $1', [req.authUser.uid]);
       const message = `恭喜中獎！獲得：${picked.name}`;
@@ -370,6 +400,20 @@ function registerLiffRoutes(app, deps) {
         [req.authUser.uid, picked.name, message]
       );
       await client.query('COMMIT');
+
+      const inviteStats = await getInviteStats(req.authUser.uid);
+      const rewardedCount = Number(inviteStats?.rewarded_count || 0);
+      const remainingInviteBonus = Math.max(0, inviteLimit - rewardedCount);
+      const pushLines = [
+        '🌸 春日野餐祭中獎通知',
+        `恭喜你刮中：${picked.name}`,
+        '',
+        `你還可透過邀請好友加入 OpenRice LINE@，再獲得 ${remainingInviteBonus} 次刮刮樂機會（每位好友 +1，最多 ${inviteLimit} 次）。`
+      ];
+      if (lineOfficialAddFriendUrl) {
+        pushLines.push(`立即前往 LINE@：${lineOfficialAddFriendUrl}`);
+      }
+      await pushLineTextMessage(lineUserId, pushLines.join('\n'));
 
       invalidateAvailablePrizesCache();
       setDrawResultCookie(res, message);
