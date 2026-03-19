@@ -60,18 +60,28 @@ function registerLiffRoutes(app, deps) {
     }
   }
 
-  async function pushLineTextMessage(lineUserId, text, extra = {}) {
+  async function pushLineMessages(lineUserId, messages, extra = {}) {
+    const normalizedMessages = Array.isArray(messages)
+      ? messages
+          .map(item => (typeof item === 'string' ? item.trim() : ''))
+          .filter(Boolean)
+          .map(text => ({ type: 'text', text }))
+      : [];
     const logPayload = {
       userId: extra.userId || null,
       lineUserId,
       pushType: 'winner_notification',
-      body: { text, ...extra }
+      body: { messages: normalizedMessages, ...extra }
     };
-    if (!lineUserId || !lineChannelAccessToken || !text) {
+    if (!lineUserId || !lineChannelAccessToken || normalizedMessages.length === 0) {
       await logLinePush({
         ...logPayload,
         status: 'skipped',
-        detail: !lineUserId ? 'missing_line_user_id' : !lineChannelAccessToken ? 'missing_channel_access_token' : 'empty_text'
+        detail: !lineUserId
+          ? 'missing_line_user_id'
+          : !lineChannelAccessToken
+            ? 'missing_channel_access_token'
+            : 'empty_messages'
       });
       return false;
     }
@@ -84,7 +94,7 @@ function registerLiffRoutes(app, deps) {
         },
         body: JSON.stringify({
           to: lineUserId,
-          messages: [{ type: 'text', text }]
+          messages: normalizedMessages
         })
       });
       if (!response.ok) {
@@ -454,23 +464,27 @@ function registerLiffRoutes(app, deps) {
       const inviteStats = await getInviteStats(req.authUser.uid);
       const rewardedCount = Number(inviteStats?.rewarded_count || 0);
       const remainingInviteBonus = Math.max(0, inviteLimit - rewardedCount);
-      const pushLines = [
-        '🌸 春日野餐祭中獎通知',
-        `恭喜你刮中：${picked.name}`,
-        '',
-        `你還可透過邀請好友加入 OpenRice LINE@，再獲得 ${remainingInviteBonus} 次刮刮樂機會（每位好友 +1，最多 ${inviteLimit} 次）。`
-      ];
+      const inviteCode = await ensureInviteCode(req.authUser.uid);
+      const invitePath = inviteCode ? `/liff/r/${encodeURIComponent(inviteCode)}` : '/liff/lottery';
+      const inviteLink = buildLiffPermanentUrl(liffId, invitePath, '/liff/lottery');
+
+      const firstMessage = `🌸 春日野餐祭中獎通知\n恭喜你刮中：${picked.name}`;
+      let secondMessage =
+        `你還可透過邀請好友加入 OpenRice LINE@，再獲得 ${remainingInviteBonus} 次刮刮樂機會（每位好友 +1，最多 ${inviteLimit} 次）。`;
+      if (inviteLink) {
+        secondMessage += `\n分享專屬邀請連結：${inviteLink}`;
+      }
       if (lineOfficialAddFriendUrl) {
-        pushLines.push(`立即前往 LINE@：${lineOfficialAddFriendUrl}`);
+        secondMessage += `\nOpenRice LINE@：${lineOfficialAddFriendUrl}`;
       }
       // Keep scratch-card UX responsive: send LINE push in background.
-      const pushText = pushLines.join('\n');
       Promise.resolve()
         .then(() =>
-          pushLineTextMessage(lineUserId, pushText, {
+          pushLineMessages(lineUserId, [firstMessage, secondMessage], {
             userId: req.authUser.uid,
             prizeName: picked.name,
-            remainingInviteBonus
+            remainingInviteBonus,
+            inviteLink
           })
         )
         .catch(err => {
