@@ -26,8 +26,9 @@
               ${
                 canScratch
                   ? `<div class="actions scratch-result-actions">
-                      <a class="btn primary" href="/liff/lottery">再刮一次（剩餘${typeof drawsLeft !== 'undefined' ? drawsLeft : 0}次）</a>
-                    </div>`
+                      <a class="btn primary" href="/liff/lottery" id="retry-scratch-btn">再刮一次（剩餘${typeof drawsLeft !== 'undefined' ? drawsLeft : 0}次）</a>
+                    </div>
+                    <p id="retry-loading-hint" class="muted center-text retry-loading-hint" style="display:none;">讀取中，請勿關閉視窗</p>`
                   : '<p class="muted center-text">目前可刮次數為 0，快邀請 1 位好友完成任務，再獲得 1 次春日刮刮樂機會。</p>'
               }
             </section>`;
@@ -103,6 +104,8 @@
         var btn = document.getElementById('share-invite-btn');
         var copyBtn = document.getElementById('copy-invite-btn');
         var linkEl = document.getElementById('liff-invite-link');
+        var retryBtn = document.getElementById('retry-scratch-btn');
+        var retryLoadingHint = document.getElementById('retry-loading-hint');
         var liffId = ${JSON.stringify(liffId || '')};
         var liffInitPromise = null;
         if (!btn || !linkEl) return;
@@ -190,6 +193,14 @@
               var inviteLink = (linkEl.textContent || '').trim();
               if (inviteLink) window.prompt('請手動複製邀請連結', inviteLink);
             }
+          });
+        }
+
+        if (retryBtn && retryLoadingHint) {
+          retryBtn.addEventListener('click', function () {
+            retryLoadingHint.style.display = 'block';
+            retryBtn.setAttribute('aria-disabled', 'true');
+            retryBtn.style.pointerEvents = 'none';
           });
         }
 
