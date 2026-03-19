@@ -109,6 +109,7 @@
           if (!liffId || typeof liff === 'undefined') return false;
           await liff.init({ liffId: liffId });
           if (!liff.isLoggedIn()) return false;
+          if (!liff.isInClient()) return false;
           if (!liff.isApiAvailable('shareTargetPicker')) return false;
           const text = 'OpenRice 訂餐廳能賺現金，現在還有刮刮樂活動，刮開就知道有沒有中，大獎有 2 萬里程數！來試試手氣吧 👇\\n' + inviteLink;
           const result = await liff.shareTargetPicker([{ type: 'text', text: text }]);
@@ -135,16 +136,36 @@
             if (!inviteLink) return;
             var shared = await shareViaLiff(inviteLink);
             if (!shared) {
-              openLineShareFallback(inviteLink);
+              var copied = await copyInviteLink(inviteLink);
+              if (copied) {
+                alert('目前無法直接開啟 LINE 好友分享，已幫你複製邀請連結。請貼給好友即可。');
+              } else {
+                window.prompt('目前無法直接開啟分享，請手動複製邀請連結', inviteLink);
+              }
               return;
             }
             btn.textContent = '已開啟分享';
             setTimeout(function () {
               btn.textContent = '分享邀請給好友';
             }, 1200);
-          } catch (_err) {
+          } catch (err) {
             var inviteLink = (linkEl.textContent || '').trim();
-            if (inviteLink) openLineShareFallback(inviteLink);
+            if (!inviteLink) return;
+            var isLiffClient = false;
+            try {
+              isLiffClient = typeof liff !== 'undefined' && liff.isInClient && liff.isInClient();
+            } catch (_ignore) {}
+            if (!isLiffClient) {
+              openLineShareFallback(inviteLink);
+              return;
+            }
+            copyInviteLink(inviteLink).then(function (copied) {
+              if (copied) {
+                alert('分享暫時失敗，已幫你複製邀請連結。請貼給好友即可。');
+              } else {
+                window.prompt('分享暫時失敗，請手動複製邀請連結', inviteLink);
+              }
+            });
           }
         });
 

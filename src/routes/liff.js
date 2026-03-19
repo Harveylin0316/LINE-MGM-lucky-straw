@@ -315,7 +315,7 @@ function registerLiffRoutes(app, deps) {
       const row = userRs.rows[0] || { draws_left: 0, extra_draws: 0 };
       const drawResult = consumeDrawResultCookie(req, res);
       const inviteCode = await ensureInviteCode(req.authUser.uid);
-      const invitePath = inviteCode ? `/r/${encodeURIComponent(inviteCode)}` : '/lottery';
+      const invitePath = inviteCode ? `/liff/r/${encodeURIComponent(inviteCode)}` : '/liff/lottery';
       const inviteLink = buildLiffPermanentUrl(liffId, invitePath, '/liff/lottery');
       res.render('liff_lottery', {
         user: req.authUser.un,
