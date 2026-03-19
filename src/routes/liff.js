@@ -478,7 +478,7 @@ function registerLiffRoutes(app, deps) {
       const firstMessage = `🌸 春日野餐祭中獎通知\n恭喜你刮中：${picked.name}`;
       let secondMessage = `你還可透過邀請好友加入 OpenRice LINE@，再獲得 ${remainingInviteBonus} 次刮刮樂機會。`;
       if (inviteLink) {
-        secondMessage += `\n${inviteLink}`;
+        secondMessage += `\n\n分享你的專屬邀請連結：\n${inviteLink}`;
       }
       // Keep scratch-card UX responsive: send LINE push in background.
       Promise.resolve()
