@@ -1,0 +1,135 @@
+<%-
+  include('layout', {
+    user: user,
+    isAdmin: isAdmin,
+    body: `
+    <section class="card">
+      <h1>管理員 - 活動成效報表</h1>
+      <p class="muted">快速查看活動成效與用戶使用次數，協助偵測異常使用。</p>
+      <p>
+        <a class="btn" href="/admin/prizes">回到獎品設定</a>
+        <a class="btn" href="/admin/line/webhooks">LINE Webhook 診斷</a>
+      </p>
+
+      <div class="report-grid">
+        <div class="report-card"><span>總用戶數</span><strong>${summary.totalUsers}</strong></div>
+        <div class="report-card"><span>總刮刮樂次數</span><strong>${summary.totalDraws}</strong></div>
+        <div class="report-card"><span>總中獎次數</span><strong>${summary.totalWins}</strong></div>
+        <div class="report-card"><span>中獎率</span><strong>${summary.winRatePct}%</strong></div>
+        <div class="report-card"><span>近24小時使用次數</span><strong>${summary.draws24h}</strong></div>
+        <div class="report-card"><span>近7天活躍用戶</span><strong>${summary.activeUsers7d}</strong></div>
+        <div class="report-card"><span>已完成邀請</span><strong>${summary.rewardedInvites}</strong></div>
+        <div class="report-card"><span>待完成邀請</span><strong>${summary.pendingInvites}</strong></div>
+        <div class="report-card"><span>LINE 推播成功</span><strong>${summary.pushSuccess}</strong></div>
+        <div class="report-card"><span>LINE 推播失敗</span><strong>${summary.pushFailed}</strong></div>
+        <div class="report-card danger"><span>LINE 推播失敗(24h)</span><strong>${summary.pushFailed24h}</strong></div>
+        <div class="report-card danger"><span>疑似異常用戶(24h >= 20次)</span><strong>${summary.suspiciousUsers24h}</strong></div>
+      </div>
+
+      <h2 style="margin-top: 20px;">用戶使用明細</h2>
+      <form method="get" action="/admin/reports" class="form report-filter-form">
+        <label>
+          依帳號或 LINE 名稱搜尋
+          <input type="text" name="q" value="${keyword || ''}" placeholder="例如：hen 或 line_" />
+        </label>
+        <button type="submit" class="btn primary">搜尋</button>
+      </form>
+
+      ${
+        Array.isArray(users) && users.length > 0
+          ? `<table class="prize-table">
+              <thead>
+                <tr>
+                  <th>用戶ID</th>
+                  <th>帳號</th>
+                  <th>LINE 顯示名稱</th>
+                  <th>已使用次數</th>
+                  <th>中獎次數</th>
+                  <th>剩餘次數</th>
+                  <th>加碼次數</th>
+                  <th>24h使用</th>
+                  <th>7d使用</th>
+                  <th>最後使用時間</th>
+                  <th>風險</th>
+                </tr>
+              </thead>
+              <tbody>
+                ${users
+                  .map((u) => {
+                    const riskTag = Number(u.draws_24h || 0) >= 20 || Number(u.draws_7d || 0) >= 60;
+                    const lineName = u.line_display_name ? u.line_display_name : '-';
+                    const lastUsed = u.last_draw_at ? new Date(u.last_draw_at).toLocaleString('zh-TW') : '-';
+                    return `<tr>
+                      <td>${u.id}</td>
+                      <td>${u.username}</td>
+                      <td>${lineName}</td>
+                      <td>${u.draws_used}</td>
+                      <td>${u.wins}</td>
+                      <td>${u.draws_left}</td>
+                      <td>${u.extra_draws}</td>
+                      <td>${u.draws_24h}</td>
+                      <td>${u.draws_7d}</td>
+                      <td>${lastUsed}</td>
+                      <td>${riskTag ? '<span class="risk-chip">⚠ 需檢查</span>' : '<span class="ok-chip">正常</span>'}</td>
+                    </tr>`;
+                  })
+                  .join('')}
+              </tbody>
+            </table>`
+          : '<p class="muted">目前查無符合條件的用戶資料。</p>'
+      }
+
+      <div class="actions">
+        ${hasPrevPage ? `<a class="btn" href="/admin/reports?page=${page - 1}${keyword ? `&q=${encodeURIComponent(keyword)}` : ''}">上一頁</a>` : ''}
+        ${hasNextPage ? `<a class="btn" href="/admin/reports?page=${page + 1}${keyword ? `&q=${encodeURIComponent(keyword)}` : ''}">下一頁</a>` : ''}
+      </div>
+
+      <h2 style="margin-top: 24px;">LINE 推播紀錄（最近 30 筆）</h2>
+      ${
+        Array.isArray(pushLogs) && pushLogs.length > 0
+          ? `<table class="prize-table">
+              <thead>
+                <tr>
+                  <th>時間</th>
+                  <th>用戶ID</th>
+                  <th>LINE User ID</th>
+                  <th>類型</th>
+                  <th>狀態</th>
+                  <th>HTTP</th>
+                  <th>錯誤詳情</th>
+                </tr>
+              </thead>
+              <tbody>
+                ${pushLogs
+                  .map((r) => {
+                    const createdAt = r.created_at ? new Date(r.created_at).toLocaleString('zh-TW') : '-';
+                    const status = String(r.status || '').toLowerCase();
+                    const statusHtml =
+                      status === 'success'
+                        ? '<span class="ok-chip">成功</span>'
+                        : status === 'failed'
+                          ? '<span class="risk-chip">失敗</span>'
+                          : '<span class="warn-chip">略過</span>';
+                    const lineUserId = r.line_user_id ? String(r.line_user_id) : '-';
+                    const shortLineUserId =
+                      lineUserId.length > 18 ? `${lineUserId.slice(0, 8)}...${lineUserId.slice(-6)}` : lineUserId;
+                    const detail = r.detail ? String(r.detail).replace(/</g, '&lt;').replace(/>/g, '&gt;') : '-';
+                    return `<tr>
+                      <td>${createdAt}</td>
+                      <td>${r.user_id || '-'}</td>
+                      <td title="${lineUserId}">${shortLineUserId}</td>
+                      <td>${r.push_type || '-'}</td>
+                      <td>${statusHtml}</td>
+                      <td>${r.http_status || '-'}</td>
+                      <td>${detail}</td>
+                    </tr>`;
+                  })
+                  .join('')}
+              </tbody>
+            </table>`
+          : '<p class="muted">目前還沒有 LINE 推播紀錄。</p>'
+      }
+    </section>
+  `
+  })
+%>

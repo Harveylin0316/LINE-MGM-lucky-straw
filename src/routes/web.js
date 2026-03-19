@@ -288,6 +288,127 @@ function registerWebRoutes(app, deps) {
     }
   });
 
+  app.get('/admin/reports', requireAdmin, async (req, res, next) => {
+    try {
+      const pageSize = 50;
+      const page = parsePage(req.query.page);
+      const offset = (page - 1) * pageSize;
+      const rawKeyword = typeof req.query.q === 'string' ? req.query.q : '';
+      const keyword = rawKeyword.trim();
+
+      const summaryQueries = Promise.all([
+        query('SELECT COUNT(*)::int AS total FROM users'),
+        query('SELECT COUNT(*)::int AS total FROM draw_logs'),
+        query('SELECT COUNT(*)::int AS total FROM draw_logs WHERE is_win = true'),
+        query("SELECT COUNT(*)::int AS total FROM draw_logs WHERE created_at >= NOW() - INTERVAL '24 hours'"),
+        query("SELECT COUNT(DISTINCT user_id)::int AS total FROM draw_logs WHERE created_at >= NOW() - INTERVAL '7 days'"),
+        query(
+          "SELECT COUNT(*) FILTER (WHERE status = 'rewarded')::int AS rewarded, COUNT(*) FILTER (WHERE status = 'pending')::int AS pending FROM line_invites"
+        ),
+        query(
+          `SELECT COUNT(*)::int AS total
+           FROM (
+             SELECT user_id
+             FROM draw_logs
+             WHERE created_at >= NOW() - INTERVAL '24 hours'
+             GROUP BY user_id
+             HAVING COUNT(*) >= 20
+           ) t`
+        ),
+        query("SELECT COUNT(*)::int AS total FROM line_push_logs WHERE status = 'success'"),
+        query("SELECT COUNT(*)::int AS total FROM line_push_logs WHERE status = 'failed'"),
+        query("SELECT COUNT(*)::int AS total FROM line_push_logs WHERE status = 'failed' AND created_at >= NOW() - INTERVAL '24 hours'")
+      ]);
+
+      const userStatsBaseParams = [];
+      let userFilterSql = '';
+      if (keyword) {
+        userStatsBaseParams.push(`%${keyword}%`);
+        userFilterSql = 'WHERE (u.username ILIKE $1 OR COALESCE(u.line_display_name, \'\') ILIKE $1)';
+      }
+
+      const countSql = `SELECT COUNT(*)::int AS total FROM users u ${userFilterSql}`;
+      const countRs = await query(countSql, userStatsBaseParams);
+      const totalUsersForPage = countRs.rows[0]?.total || 0;
+
+      const listParams = [...userStatsBaseParams];
+      const limitPlaceholder = `$${listParams.length + 1}`;
+      const offsetPlaceholder = `$${listParams.length + 2}`;
+      listParams.push(pageSize, offset);
+
+      const userStatsSql = `
+        SELECT
+          u.id,
+          u.username,
+          u.line_display_name,
+          u.draws_left,
+          u.extra_draws,
+          COALESCE(COUNT(d.id), 0)::int AS draws_used,
+          COALESCE(COUNT(*) FILTER (WHERE d.is_win = true), 0)::int AS wins,
+          MAX(d.created_at) AS last_draw_at,
+          COALESCE(COUNT(*) FILTER (WHERE d.created_at >= NOW() - INTERVAL '24 hours'), 0)::int AS draws_24h,
+          COALESCE(COUNT(*) FILTER (WHERE d.created_at >= NOW() - INTERVAL '7 days'), 0)::int AS draws_7d
+        FROM users u
+        LEFT JOIN draw_logs d ON d.user_id = u.id
+        ${userFilterSql}
+        GROUP BY u.id, u.username, u.line_display_name, u.draws_left, u.extra_draws
+        ORDER BY draws_used DESC, u.id ASC
+        LIMIT ${limitPlaceholder} OFFSET ${offsetPlaceholder}
+      `;
+      const usersRs = await query(userStatsSql, listParams);
+      const pushLogsRs = await query(
+        `SELECT id, user_id, line_user_id, push_type, status, http_status, detail, created_at
+         FROM line_push_logs
+         ORDER BY id DESC
+         LIMIT 30`
+      );
+
+      const [
+        totalUsersRs,
+        totalDrawsRs,
+        totalWinsRs,
+        draws24hRs,
+        activeUsers7dRs,
+        inviteStatsRs,
+        suspiciousUsersRs,
+        pushSuccessRs,
+        pushFailedRs,
+        pushFailed24hRs
+      ] = await summaryQueries;
+
+      const totalDraws = totalDrawsRs.rows[0]?.total || 0;
+      const totalWins = totalWinsRs.rows[0]?.total || 0;
+      const winRatePct = totalDraws > 0 ? ((totalWins / totalDraws) * 100).toFixed(2) : '0.00';
+
+      return res.render('admin_reports', {
+        user: req.authUser.un,
+        isAdmin: true,
+        keyword,
+        users: usersRs.rows || [],
+        pushLogs: pushLogsRs.rows || [],
+        page,
+        hasPrevPage: page > 1,
+        hasNextPage: offset + (usersRs.rows || []).length < totalUsersForPage,
+        summary: {
+          totalUsers: totalUsersRs.rows[0]?.total || 0,
+          totalDraws,
+          totalWins,
+          winRatePct,
+          draws24h: draws24hRs.rows[0]?.total || 0,
+          activeUsers7d: activeUsers7dRs.rows[0]?.total || 0,
+          rewardedInvites: inviteStatsRs.rows[0]?.rewarded || 0,
+          pendingInvites: inviteStatsRs.rows[0]?.pending || 0,
+          suspiciousUsers24h: suspiciousUsersRs.rows[0]?.total || 0,
+          pushSuccess: pushSuccessRs.rows[0]?.total || 0,
+          pushFailed: pushFailedRs.rows[0]?.total || 0,
+          pushFailed24h: pushFailed24hRs.rows[0]?.total || 0
+        }
+      });
+    } catch (err) {
+      next(err);
+    }
+  });
+
   app.get('/admin/prizes/:id/edit', requireAdmin, async (req, res, next) => {
     try {
       const row = await query('SELECT id, name, quantity, created_at FROM prizes WHERE id = $1', [req.params.id]);
