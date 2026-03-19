@@ -746,7 +746,7 @@ h1 {
   margin-top: 10px;
   border: 1px solid #ffd300;
   border-radius: 12px;
-  background: #fffdf5;
+  background: #fefbde;
   padding: 12px;
   text-align: center;
 }
@@ -758,6 +758,7 @@ h1 {
   display: block;
   margin: 0 auto 8px;
   border-radius: 10px;
+  background: #fefbde;
 }
 
 .liff-client-only-title {
