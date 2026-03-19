@@ -3,10 +3,10 @@
     user: null,
     body: `
     <section class="card">
-      <h1>會員登入</h1>
+      <h1>${title || '管理員登入'}</h1>
       ${error ? `<p class="error">${error}</p>` : ''}
-      <form method="post" action="/login" class="form">
-        <input type="hidden" name="nextPath" value="${nextPath || '/lottery'}" />
+      <form method="post" action="${loginAction || '/admin/login'}" class="form">
+        <input type="hidden" name="nextPath" value="${nextPath || '/admin/prizes'}" />
         <label>
           帳號
           <input type="text" name="username" required />
@@ -17,7 +17,7 @@
         </label>
         <button type="submit" class="btn primary">登入</button>
       </form>
-      <p class="muted">還沒有帳號？<a href="/register">先去註冊</a></p>
+      <p class="muted">${hint || '此入口僅提供管理員登入。'}</p>
     </section>
   `
   })

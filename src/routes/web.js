@@ -17,9 +17,9 @@ async function logPrizeChange(client, payload) {
   );
 }
 
-function normalizeNextPath(rawNextPath, fallbackPath = '/lottery') {
+function normalizeNextPath(rawNextPath, fallbackPath = '/admin/prizes') {
   if (typeof rawNextPath !== 'string') return fallbackPath;
-  if (!rawNextPath.startsWith('/')) return fallbackPath;
+  if (!rawNextPath.startsWith('/admin')) return fallbackPath;
   if (rawNextPath.startsWith('//')) return fallbackPath;
   return rawNextPath;
 }
@@ -33,187 +33,92 @@ function registerWebRoutes(app, deps) {
     viewStateCore
   } = deps;
 
-  const { requireLogin, requireAdmin, signAuthToken, setAuthCookie, clearAuthCookie } = authCore;
-  const { pickPrizeByQuantity, enrichPrizesWithHitRate } = lotteryCore;
+  const { requireAdmin, signAuthToken, setAuthCookie, clearAuthCookie } = authCore;
+  const { enrichPrizesWithHitRate } = lotteryCore;
   const {
-    setDrawResultCookie,
-    consumeDrawResultCookie,
     invalidateAvailablePrizesCache,
-    getAvailablePrizes,
-    buildRefLink,
     parsePage
   } = viewStateCore;
 
-  app.get('/', requireLogin, (_req, res) => {
-    res.redirect('/lottery');
+  function renderAdminLogin(res, error = null, nextPath = '/admin/prizes') {
+    return res.render('login', {
+      error,
+      isAdmin: false,
+      nextPath,
+      loginAction: '/admin/login',
+      title: '管理員登入',
+      hint: '此入口僅提供管理員登入。'
+    });
+  }
+
+  app.get('/', (req, res) => {
+    if (req.authUser && req.authUser.adm) return res.redirect('/admin/prizes');
+    return res.redirect('/admin/login');
   });
 
-  app.get('/register', (req, res) => {
-    const referrerId = req.query.ref || '';
-    res.render('register', { error: null, referrerId, isAdmin: false });
+  app.get('/register', (_req, res) => {
+    return res.status(404).send('網頁版功能已關閉，請使用 LINE 活動頁。');
   });
 
-  app.post('/register', async (req, res) => {
-    const { username, password, referrerId } = req.body;
-    if (!username || !password) {
-      return res.render('register', { error: '請輸入帳號與密碼', referrerId, isAdmin: false });
-    }
-
-    try {
-      const hash = await bcrypt.hash(password, 10);
-      const inserted = await query(
-        'INSERT INTO users (username, password_hash, referrer_id) VALUES ($1, $2, $3) RETURNING id',
-        [username, hash, referrerId || null]
-      );
-      const newUserId = inserted.rows[0].id;
-
-      if (referrerId && Number(referrerId) !== Number(newUserId)) {
-        await query(
-          `UPDATE users
-           SET extra_draws = CASE WHEN extra_draws < 2 THEN extra_draws + 1 ELSE extra_draws END,
-               draws_left = CASE WHEN extra_draws < 2 THEN draws_left + 1 ELSE draws_left END
-           WHERE id = $1`,
-          [referrerId]
-        );
-      }
-      return res.redirect('/login');
-    } catch (err) {
-      const msg = String(err.message || '').includes('duplicate key') ? '此帳號已被使用' : '註冊失敗';
-      return res.render('register', { error: msg, referrerId, isAdmin: false });
-    }
+  app.post('/register', (_req, res) => {
+    return res.status(404).send('網頁版功能已關閉，請使用 LINE 活動頁。');
   });
 
-  app.get('/login', (req, res) => {
-    const nextPath = normalizeNextPath(req.query.next, '/lottery');
-    res.render('login', { error: null, isAdmin: false, nextPath });
+  app.get('/admin/login', (req, res) => {
+    const nextPath = normalizeNextPath(req.query.next, '/admin/prizes');
+    return renderAdminLogin(res, null, nextPath);
   });
 
-  app.post('/login', async (req, res) => {
+  app.get('/login', (_req, res) => {
+    return res.redirect('/admin/login');
+  });
+
+  async function handleAdminLogin(req, res) {
     const { username, password } = req.body;
-    const nextPath = normalizeNextPath(req.body.nextPath, '/lottery');
+    const nextPath = normalizeNextPath(req.body.nextPath, '/admin/prizes');
     if (!username || !password) {
-      return res.render('login', { error: '請輸入帳號與密碼', isAdmin: false, nextPath });
+      return renderAdminLogin(res, '請輸入帳號與密碼', nextPath);
     }
     const found = await query('SELECT id, username, password_hash, is_admin FROM users WHERE username = $1', [username]);
     if (found.rowCount === 0) {
-      return res.render('login', { error: '帳號或密碼錯誤', isAdmin: false, nextPath });
+      return renderAdminLogin(res, '帳號或密碼錯誤', nextPath);
     }
     const user = found.rows[0];
     const ok = await bcrypt.compare(password, user.password_hash);
     if (!ok) {
-      return res.render('login', { error: '帳號或密碼錯誤', isAdmin: false, nextPath });
+      return renderAdminLogin(res, '帳號或密碼錯誤', nextPath);
+    }
+    if (!(user.is_admin === true || user.is_admin === 1)) {
+      clearAuthCookie(res);
+      return renderAdminLogin(res, '此入口僅提供管理員登入', nextPath);
     }
     const token = signAuthToken(user);
     setAuthCookie(res, token);
     return res.redirect(nextPath);
-  });
+  }
+
+  app.post('/admin/login', handleAdminLogin);
+  app.post('/login', handleAdminLogin);
 
   app.post('/logout', (_req, res) => {
     clearAuthCookie(res);
-    res.redirect('/');
+    res.redirect('/admin/login');
   });
 
-  app.get('/lottery', requireLogin, async (req, res, next) => {
-    try {
-      const [userRs, availablePrizes] = await Promise.all([
-        query('SELECT draws_left, extra_draws FROM users WHERE id = $1', [req.authUser.uid]),
-        getAvailablePrizes()
-      ]);
-      const row = userRs.rows[0] || { draws_left: 0, extra_draws: 0 };
-      const refLink = buildRefLink(req, req.authUser.uid);
-      const drawResult = consumeDrawResultCookie(req, res);
-      res.render('lottery', {
-        user: req.authUser.un,
-        isAdmin: !!req.authUser.adm,
-        result: drawResult,
-        drawsLeft: row.draws_left || 0,
-        extraDraws: row.extra_draws || 0,
-        refLink,
-        availablePrizes
-      });
-    } catch (err) {
-      next(err);
-    }
+  app.get('/lottery', (_req, res) => {
+    return res.status(404).send('網頁版功能已關閉，請使用 LINE 活動頁。');
   });
 
-  app.post('/lottery/draw', requireLogin, async (req, res, next) => {
-    const client = await pool.connect();
-    try {
-      await client.query('BEGIN');
-      const userRs = await client.query(
-        'SELECT draws_left, extra_draws FROM users WHERE id = $1 FOR UPDATE',
-        [req.authUser.uid]
-      );
-      if (userRs.rowCount === 0) {
-        await client.query('ROLLBACK');
-        return res.redirect('/lottery');
-      }
-
-      const currentLeft = Number(userRs.rows[0].draws_left || 0);
-      if (currentLeft <= 0) {
-        await client.query('ROLLBACK');
-        setDrawResultCookie(res, '您的抽獎次數已用完');
-        return res.redirect('/lottery');
-      }
-
-      const prizeRs = await client.query(
-        "SELECT id, name, quantity FROM prizes WHERE quantity > 0 AND name !~* '^\\s*test\\b' ORDER BY id ASC FOR UPDATE"
-      );
-      if (prizeRs.rowCount === 0) {
-        await client.query('ROLLBACK');
-        setDrawResultCookie(res, '目前沒有可抽獎品，請聯絡管理員補庫存');
-        return res.redirect('/lottery');
-      }
-
-      const picked = pickPrizeByQuantity(prizeRs.rows);
-      await client.query('UPDATE prizes SET quantity = quantity - 1 WHERE id = $1 AND quantity > 0', [picked.id]);
-      await client.query('UPDATE users SET draws_left = draws_left - 1 WHERE id = $1', [req.authUser.uid]);
-      const message = `恭喜中獎！獲得：${picked.name}`;
-      await client.query(
-        'INSERT INTO draw_logs (user_id, is_win, prize_name, message) VALUES ($1, true, $2, $3)',
-        [req.authUser.uid, picked.name, message]
-      );
-      await client.query('COMMIT');
-
-      invalidateAvailablePrizesCache();
-      setDrawResultCookie(res, message);
-      return res.redirect('/lottery');
-    } catch (err) {
-      await client.query('ROLLBACK');
-      next(err);
-    } finally {
-      client.release();
-    }
+  app.post('/lottery/draw', (_req, res) => {
+    return res.status(404).send('網頁版功能已關閉，請使用 LINE 活動頁。');
   });
 
-  app.get('/lottery/draw', requireLogin, (_req, res) => {
-    res.redirect('/lottery');
+  app.get('/lottery/draw', (_req, res) => {
+    return res.status(404).send('網頁版功能已關閉，請使用 LINE 活動頁。');
   });
 
-  app.get('/my-draws', requireLogin, async (req, res, next) => {
-    try {
-      const pageSize = 30;
-      const page = parsePage(req.query.page);
-      const offset = (page - 1) * pageSize;
-      const [rows, total] = await Promise.all([
-        query(
-          'SELECT is_win, prize_name, message, created_at FROM draw_logs WHERE user_id = $1 ORDER BY id DESC LIMIT $2 OFFSET $3',
-          [req.authUser.uid, pageSize, offset]
-        ),
-        query('SELECT COUNT(*)::int AS total FROM draw_logs WHERE user_id = $1', [req.authUser.uid])
-      ]);
-      const totalCount = total.rows[0]?.total || 0;
-      res.render('my_draws', {
-        user: req.authUser.un,
-        isAdmin: !!req.authUser.adm,
-        records: rows.rows || [],
-        page,
-        hasPrevPage: page > 1,
-        hasNextPage: offset + (rows.rows || []).length < totalCount
-      });
-    } catch (err) {
-      next(err);
-    }
+  app.get('/my-draws', (_req, res) => {
+    return res.status(404).send('網頁版功能已關閉，請使用 LINE 活動頁。');
   });
 
   app.get('/admin/prizes', requireAdmin, async (req, res, next) => {

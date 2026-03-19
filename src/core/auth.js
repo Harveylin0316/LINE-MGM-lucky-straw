@@ -42,7 +42,13 @@ function createAuthCore({ jwtSecret, isProduction }) {
   }
 
   function requireAdmin(req, res, next) {
-    if (!req.authUser || !req.authUser.adm) return res.status(403).send('僅管理員可存取此頁面');
+    if (!req.authUser || !req.authUser.adm) {
+      if (req.authUser && !req.authUser.adm) {
+        clearAuthCookie(res);
+      }
+      const nextPath = typeof req.originalUrl === 'string' && req.originalUrl.startsWith('/admin') ? req.originalUrl : '/admin/prizes';
+      return res.redirect(`/admin/login?next=${encodeURIComponent(nextPath)}`);
+    }
     next();
   }
 

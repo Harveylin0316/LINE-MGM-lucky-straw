@@ -9,20 +9,20 @@
   <body>
     <header class="topbar">
       <div class="container">
-        <div class="brand">Lucky Straw 抽獎</div>
+        <div class="brand">Lucky Straw 管理後台</div>
         <nav>
           <% if (user) { %>
           <span class="welcome">嗨，<%= user %></span>
           <% if (isAdmin) { %>
           <a href="/admin/prizes">獎品設定</a>
+          <a href="/admin/reports">活動成效報表</a>
+          <a href="/admin/line/webhooks">LINE Webhook 診斷</a>
           <% } %>
-          <a href="/my-draws">我的抽獎紀錄</a>
           <form action="/logout" method="post" class="inline-form">
             <button type="submit">登出</button>
           </form>
           <% } else { %>
-          <a href="/login">登入</a>
-          <a href="/register">註冊</a>
+          <a href="/admin/login">管理員登入</a>
           <% } %>
         </nav>
       </div>
