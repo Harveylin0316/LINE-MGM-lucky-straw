@@ -46,8 +46,7 @@ function createAuthCore({ jwtSecret, isProduction, adminLoginPath = '/admin/logi
       if (req.authUser && !req.authUser.adm) {
         clearAuthCookie(res);
       }
-      const nextPath = typeof req.originalUrl === 'string' && req.originalUrl.startsWith('/admin') ? req.originalUrl : '/admin/prizes';
-      return res.redirect(`${adminLoginPath}?next=${encodeURIComponent(nextPath)}`);
+      return res.status(404).send('Not found');
     }
     next();
   }
