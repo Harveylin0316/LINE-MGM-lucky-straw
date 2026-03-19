@@ -3,15 +3,12 @@
     body: `
     <section class="liff-card">
       <h1>LINE 春日野餐祭入口</h1>
-      <p class="muted">使用 LINE 帳號登入後，即可進入春日野餐祭刮刮樂頁。</p>
+      <p class="muted">LINE 登入中...</p>
       ${reason === 'line_only' ? '<p class="error">此活動頁僅允許 LINE 登入，已自動登出非 LINE 帳號。</p>' : ''}
-      <p id="liff-status" class="muted">準備初始化春日野餐祭頁面...</p>
+      ${reason === 'line_client_only' ? '<p class="error">此活動僅限手機或 iPad 於 LINE App 內開啟。</p>' : ''}
+      <p id="liff-status" class="muted">LINE 登入中...</p>
       <div id="liff-error" class="error" style="display:none;"></div>
-      <div class="actions">
-        <button id="liff-login-btn" type="button" class="btn primary">使用 LINE 登入</button>
-        <a class="btn" href="/liff/login">重新整理</a>
-      </div>
-      <p class="muted">此活動頁已關閉一般帳號登入，請直接使用 LINE 登入。</p>
+      <p class="muted">此活動僅限手機或 iPad 於 LINE App 內開啟。</p>
     </section>
     <script src="https://static.line-scdn.net/liff/edge/2/sdk.js"></script>
     <script>
@@ -20,7 +17,6 @@
         var nextPath = ${JSON.stringify(nextPath || '/liff/lottery')};
         var statusEl = document.getElementById('liff-status');
         var errorEl = document.getElementById('liff-error');
-        var btn = document.getElementById('liff-login-btn');
 
         function setError(message) {
           errorEl.style.display = 'block';
@@ -56,11 +52,17 @@
             return;
           }
 
-          statusEl.textContent = '初始化春日野餐祭頁面...';
+          statusEl.textContent = 'LINE 登入中...';
           await liff.init({ liffId: liffId });
 
+          if (!liff.isInClient()) {
+            statusEl.textContent = '請改用 LINE App 開啟';
+            setError('此活動僅限手機或 iPad 於 LINE App 內開啟。');
+            return;
+          }
+
           if (!liff.isLoggedIn()) {
-            statusEl.textContent = '請使用 LINE 登入...';
+            statusEl.textContent = 'LINE 登入中...';
             liff.login({ redirectUri: window.location.href });
             return;
           }
@@ -68,16 +70,10 @@
           await submitLiffAuth();
         }
 
-        btn.addEventListener('click', function () {
-          startLoginFlow().catch(function (err) {
-            console.error(err);
-            setError('活動頁初始化失敗，請稍後再試。');
-            statusEl.textContent = '初始化失敗';
-          });
-        });
-
-        startLoginFlow().catch(function () {
-          statusEl.textContent = '等待手動登入';
+        startLoginFlow().catch(function (err) {
+          console.error(err);
+          setError('活動頁初始化失敗，請稍後再試。');
+          statusEl.textContent = '初始化失敗';
         });
       })();
     </script>

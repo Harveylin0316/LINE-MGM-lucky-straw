@@ -15,6 +15,13 @@ function buildLiffPermanentUrl(liffId, routePath, fallbackPath = '/liff/lottery'
   return `https://liff.line.me/${encodeURIComponent(safeLiffId)}${safeRoutePath}`;
 }
 
+function isLineMobileClientRequest(req) {
+  const userAgent = String(req.get('user-agent') || '');
+  const hasLineToken = /Line\//i.test(userAgent);
+  const isMobileOrTablet = /iPhone|iPad|Android/i.test(userAgent);
+  return hasLineToken && isMobileOrTablet;
+}
+
 function generateShortInviteCode() {
   const num = crypto.randomInt(0, 36 ** 4);
   return num.toString(36).padStart(4, '0');
@@ -300,6 +307,9 @@ function registerLiffRoutes(app, deps) {
 
   async function requireLiffLogin(req, res, next) {
     try {
+      if (!isLineMobileClientRequest(req)) {
+        return res.redirect('/liff/login?reason=line_client_only');
+      }
       if (req.authUser && req.authUser.uid) {
         const lineUser = await getLineLinkedUser(req.authUser.uid);
         if (lineUser && lineUser.line_user_id) {
