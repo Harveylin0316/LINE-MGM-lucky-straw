@@ -15,6 +15,11 @@ function buildLiffPermanentUrl(liffId, routePath, fallbackPath = '/liff/lottery'
   return `https://liff.line.me/${encodeURIComponent(safeLiffId)}${safeRoutePath}`;
 }
 
+function generateShortInviteCode() {
+  const num = crypto.randomInt(0, 36 ** 4);
+  return num.toString(36).padStart(4, '0');
+}
+
 function registerLiffRoutes(app, deps) {
   const {
     query,
@@ -252,19 +257,21 @@ function registerLiffRoutes(app, deps) {
   async function ensureInviteCode(userId) {
     const found = await query('SELECT invite_code FROM users WHERE id = $1', [userId]);
     if (found.rowCount === 0) return null;
-    const current = found.rows[0]?.invite_code;
-    if (current) return current;
+    let currentCode = String(found.rows[0]?.invite_code || '').trim();
+    if (/^[a-z0-9]{4}$/i.test(currentCode)) return currentCode;
 
-    for (let i = 0; i < 8; i += 1) {
-      const candidate = crypto.randomBytes(9).toString('base64url');
+    for (let i = 0; i < 40; i += 1) {
+      const candidate = generateShortInviteCode();
       try {
         const updated = await query(
-          'UPDATE users SET invite_code = $1 WHERE id = $2 AND (invite_code IS NULL OR invite_code = \'\') RETURNING invite_code',
-          [candidate, userId]
+          'UPDATE users SET invite_code = $1 WHERE id = $2 AND invite_code IS NOT DISTINCT FROM $3 RETURNING invite_code',
+          [candidate, userId, currentCode || null]
         );
         if (updated.rowCount > 0) return updated.rows[0].invite_code;
         const latest = await query('SELECT invite_code FROM users WHERE id = $1', [userId]);
-        if (latest.rowCount > 0 && latest.rows[0]?.invite_code) return latest.rows[0].invite_code;
+        const latestCode = String(latest.rows[0]?.invite_code || '').trim();
+        if (/^[a-z0-9]{4}$/i.test(latestCode)) return latestCode;
+        currentCode = latestCode;
       } catch (err) {
         if (err?.code !== '23505') throw err;
       }
@@ -361,7 +368,7 @@ function registerLiffRoutes(app, deps) {
     return res.redirect('/liff/login');
   });
 
-  app.get('/liff/r/:refUserId', requireLiffLogin, async (req, res, next) => {
+  async function handleInviteLanding(req, res, next) {
     try {
       const refUserId = await resolveInviterUserId(req.params.refUserId);
       const bindResult = await bindInviteIntent(refUserId, Number(req.authUser.uid));
@@ -390,7 +397,7 @@ function registerLiffRoutes(app, deps) {
     } catch (err) {
       next(err);
     }
-  });
+  }
 
   app.get('/liff/lottery', requireLiffLogin, async (req, res, next) => {
     try {
@@ -404,7 +411,7 @@ function registerLiffRoutes(app, deps) {
       const row = userRs.rows[0] || { draws_left: 0, extra_draws: 0 };
       const drawResult = consumeDrawResultCookie(req, res);
       const inviteCode = await ensureInviteCode(req.authUser.uid);
-      const invitePath = inviteCode ? `/liff/r/${encodeURIComponent(inviteCode)}` : '/liff/lottery';
+      const invitePath = inviteCode ? `/liff/${encodeURIComponent(inviteCode)}` : '/liff/lottery';
       const inviteLink = buildLiffPermanentUrl(liffId, invitePath, '/liff/lottery');
       res.render('liff_lottery', {
         user: req.authUser.un,
@@ -465,7 +472,7 @@ function registerLiffRoutes(app, deps) {
       const rewardedCount = Number(inviteStats?.rewarded_count || 0);
       const remainingInviteBonus = Math.max(0, inviteLimit - rewardedCount);
       const inviteCode = await ensureInviteCode(req.authUser.uid);
-      const invitePath = inviteCode ? `/liff/r/${encodeURIComponent(inviteCode)}` : '/liff/lottery';
+      const invitePath = inviteCode ? `/liff/${encodeURIComponent(inviteCode)}` : '/liff/lottery';
       const inviteLink = buildLiffPermanentUrl(liffId, invitePath, '/liff/lottery');
 
       const firstMessage = `🌸 春日野餐祭中獎通知\n恭喜你刮中：${picked.name}`;
@@ -497,6 +504,12 @@ function registerLiffRoutes(app, deps) {
       client.release();
     }
   });
+
+  // Keep this after concrete LIFF routes to avoid route shadowing.
+  // New shortest invite URL pattern under LIFF endpoint.
+  app.get('/liff/:refUserId', requireLiffLogin, handleInviteLanding);
+  // Backward compatibility for previously shared links.
+  app.get('/liff/r/:refUserId', requireLiffLogin, handleInviteLanding);
 }
 
 module.exports = { registerLiffRoutes };
