@@ -5,10 +5,21 @@
       <h1>LINE 春日野餐祭入口</h1>
       <p class="muted">LINE 登入中...</p>
       ${reason === 'line_only' ? '<p class="error">此活動頁僅允許 LINE 登入，已自動登出非 LINE 帳號。</p>' : ''}
-      ${reason === 'line_client_only' ? '<p class="error">請透過手機或平板的 LINE App 開啟此活動頁。</p>' : ''}
+      ${
+        reason === 'line_client_only'
+          ? `<div class="liff-client-only-box">
+              <img
+                src="/images/liff-line-client-only-mascot.png"
+                alt="請透過 LINE App 開啟"
+                class="liff-client-only-image"
+              />
+              <p class="liff-client-only-title">請透過手機或平板的 LINE App 開啟此活動頁</p>
+            </div>`
+          : ''
+      }
       <p id="liff-status" class="muted">LINE 登入中...</p>
       <div id="liff-error" class="error" style="display:none;"></div>
-      <p class="muted">非 LINE client 無法使用，請透過手機或平板的 LINE App 開啟。</p>
+      <p class="muted liff-client-only-note">非 LINE client 無法使用，請透過手機或平板的 LINE App 開啟。</p>
     </section>
     <script src="https://static.line-scdn.net/liff/edge/2/sdk.js"></script>
     <script>

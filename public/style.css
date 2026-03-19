@@ -742,6 +742,36 @@ h1 {
   margin: 0 0 8px;
 }
 
+.liff-client-only-box {
+  margin-top: 10px;
+  border: 1px solid #ffd300;
+  border-radius: 12px;
+  background: #fffdf5;
+  padding: 12px;
+  text-align: center;
+}
+
+.liff-client-only-image {
+  width: 150px;
+  max-width: 56%;
+  height: auto;
+  display: block;
+  margin: 0 auto 8px;
+  border-radius: 10px;
+}
+
+.liff-client-only-title {
+  margin: 0;
+  font-size: 14px;
+  font-weight: 800;
+  line-height: 1.4;
+  color: #e44e25;
+}
+
+.liff-client-only-note {
+  color: #4e3b2d;
+}
+
 .liff-title {
   margin-top: 16px;
   margin-bottom: 8px;
