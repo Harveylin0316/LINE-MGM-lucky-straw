@@ -214,6 +214,17 @@
           var isDrawing = false;
           var started = false;
           var brushRadius = 22;
+          var coverImageLoaded = false;
+          var coverImageFailed = false;
+          var coverImage = new Image();
+          coverImage.onload = function () {
+            coverImageLoaded = true;
+            setupCanvas();
+          };
+          coverImage.onerror = function () {
+            coverImageFailed = true;
+          };
+          coverImage.src = '/images/scratch-cover-spring-picnic.png';
 
           function submitDraw() {
             if (submitted) return;
@@ -232,19 +243,35 @@
             canvas.height = Math.floor(rect.height * ratio);
             ctx.setTransform(ratio, 0, 0, ratio, 0, 0);
 
-            // Silver foil-like overlay.
+            ctx.globalCompositeOperation = 'source-over';
+
+            if (coverImageLoaded && !coverImageFailed) {
+              var imgW = coverImage.naturalWidth || coverImage.width || rect.width;
+              var imgH = coverImage.naturalHeight || coverImage.height || rect.height;
+              var cardRatio = rect.width / Math.max(1, rect.height);
+              var imgRatio = imgW / Math.max(1, imgH);
+              var sx = 0;
+              var sy = 0;
+              var sWidth = imgW;
+              var sHeight = imgH;
+              if (imgRatio > cardRatio) {
+                sWidth = Math.max(1, imgH * cardRatio);
+                sx = (imgW - sWidth) / 2;
+              } else {
+                sHeight = Math.max(1, imgW / cardRatio);
+                sy = (imgH - sHeight) / 2;
+              }
+              ctx.drawImage(coverImage, sx, sy, sWidth, sHeight, 0, 0, rect.width, rect.height);
+              return;
+            }
+
+            // Fallback cover if image is not ready.
             var gradient = ctx.createLinearGradient(0, 0, rect.width, rect.height);
             gradient.addColorStop(0, '#a3a3a3');
             gradient.addColorStop(0.5, '#d4d4d4');
             gradient.addColorStop(1, '#9ca3af');
-            ctx.globalCompositeOperation = 'source-over';
             ctx.fillStyle = gradient;
             ctx.fillRect(0, 0, rect.width, rect.height);
-            ctx.fillStyle = 'rgba(255,255,255,0.85)';
-            ctx.font = '700 20px -apple-system, BlinkMacSystemFont, \"Segoe UI\", sans-serif';
-            ctx.textAlign = 'center';
-            ctx.textBaseline = 'middle';
-            ctx.fillText('刮刮樂', rect.width / 2, rect.height / 2);
           }
 
           function eraseAt(clientX, clientY) {
