@@ -103,11 +103,27 @@
         var copyBtn = document.getElementById('copy-invite-btn');
         var linkEl = document.getElementById('liff-invite-link');
         var liffId = ${JSON.stringify(liffId || '')};
+        var liffInitPromise = null;
         if (!btn || !linkEl) return;
 
-        async function shareViaLiff(inviteLink) {
+        async function ensureLiffReady() {
           if (!liffId || typeof liff === 'undefined') return false;
-          await liff.init({ liffId: liffId });
+          if (!liffInitPromise) {
+            liffInitPromise = liff
+              .init({ liffId: liffId })
+              .then(function () {
+                return true;
+              })
+              .catch(function () {
+                return false;
+              });
+          }
+          return liffInitPromise;
+        }
+
+        async function shareViaLiff(inviteLink) {
+          var ready = await ensureLiffReady();
+          if (!ready) return false;
           if (!liff.isLoggedIn()) return false;
           if (!liff.isInClient()) return false;
           if (!liff.isApiAvailable('shareTargetPicker')) return false;
@@ -134,14 +150,10 @@
           try {
             var inviteLink = (linkEl.textContent || '').trim();
             if (!inviteLink) return;
+            btn.disabled = true;
             var shared = await shareViaLiff(inviteLink);
             if (!shared) {
-              var copied = await copyInviteLink(inviteLink);
-              if (copied) {
-                alert('目前無法直接開啟 LINE 好友分享，已幫你複製邀請連結。請貼給好友即可。');
-              } else {
-                window.prompt('目前無法直接開啟分享，請手動複製邀請連結', inviteLink);
-              }
+              openLineShareFallback(inviteLink);
               return;
             }
             btn.textContent = '已開啟分享';
@@ -151,21 +163,11 @@
           } catch (err) {
             var inviteLink = (linkEl.textContent || '').trim();
             if (!inviteLink) return;
-            var isLiffClient = false;
-            try {
-              isLiffClient = typeof liff !== 'undefined' && liff.isInClient && liff.isInClient();
-            } catch (_ignore) {}
-            if (!isLiffClient) {
-              openLineShareFallback(inviteLink);
-              return;
-            }
-            copyInviteLink(inviteLink).then(function (copied) {
-              if (copied) {
-                alert('分享暫時失敗，已幫你複製邀請連結。請貼給好友即可。');
-              } else {
-                window.prompt('分享暫時失敗，請手動複製邀請連結', inviteLink);
-              }
-            });
+            openLineShareFallback(inviteLink);
+          } finally {
+            setTimeout(function () {
+              btn.disabled = false;
+            }, 300);
           }
         });
 
