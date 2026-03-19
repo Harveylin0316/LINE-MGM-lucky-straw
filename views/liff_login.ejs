@@ -19,7 +19,6 @@
       }
       <p id="liff-status" class="muted">LINE 登入中...</p>
       <div id="liff-error" class="error" style="display:none;"></div>
-      <p class="muted liff-client-only-note">請透過手機或平板的 LINE App 開啟。</p>
     </section>
     <script src="https://static.line-scdn.net/liff/edge/2/sdk.js"></script>
     <script>
@@ -67,7 +66,7 @@
           await liff.init({ liffId: liffId });
 
           if (!liff.isInClient()) {
-            statusEl.textContent = '請改用 LINE App 開啟';
+            statusEl.textContent = '';
             setError('請透過手機或平板的 LINE App 開啟此活動頁。');
             return;
           }
