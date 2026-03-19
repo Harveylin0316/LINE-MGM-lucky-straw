@@ -413,7 +413,13 @@ function registerLiffRoutes(app, deps) {
       if (lineOfficialAddFriendUrl) {
         pushLines.push(`立即前往 LINE@：${lineOfficialAddFriendUrl}`);
       }
-      await pushLineTextMessage(lineUserId, pushLines.join('\n'));
+      // Keep scratch-card UX responsive: send LINE push in background.
+      const pushText = pushLines.join('\n');
+      Promise.resolve()
+        .then(() => pushLineTextMessage(lineUserId, pushText))
+        .catch(err => {
+          console.error('LINE push async task failed:', err.message);
+        });
 
       invalidateAvailablePrizesCache();
       setDrawResultCookie(res, message);
