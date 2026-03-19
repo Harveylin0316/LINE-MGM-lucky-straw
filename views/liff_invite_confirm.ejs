@@ -2,9 +2,9 @@
   include('layout_liff', {
     body: `
     <section class="liff-card">
-      <h1>邀請任務綁定完成</h1>
+      <h1>春日邀請任務綁定完成</h1>
       <p class="muted">目前使用者：<strong>${user || '-'}</strong></p>
-      <p class="muted">${statusText || '已完成邀請綁定。'}</p>
+      <p class="muted">${statusText || '已完成春日邀請綁定。'}</p>
       ${
         lineOfficialAddFriendUrl
           ? `<div class="actions">
@@ -13,7 +13,7 @@
             </div>`
           : `<p class="error">尚未設定 OpenRice LINE@ 連結，請稍後再試。</p>
              <div class="actions">
-               <a class="btn" href="/liff/lottery">返回抽獎頁</a>
+               <a class="btn" href="/liff/lottery">返回刮刮樂頁</a>
              </div>`
       }
     </section>

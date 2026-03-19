@@ -2,10 +2,10 @@
   include('layout_liff', {
     body: `
     <section class="liff-card">
-      <h1>LINE 抽獎入口</h1>
-      <p class="muted">使用 LINE 帳號登入後，即可進入活動抽獎頁。</p>
+      <h1>LINE 春日野餐祭入口</h1>
+      <p class="muted">使用 LINE 帳號登入後，即可進入春日野餐祭刮刮樂頁。</p>
       ${reason === 'line_only' ? '<p class="error">此活動頁僅允許 LINE 登入，已自動登出非 LINE 帳號。</p>' : ''}
-      <p id="liff-status" class="muted">準備初始化活動頁...</p>
+      <p id="liff-status" class="muted">準備初始化春日野餐祭頁面...</p>
       <div id="liff-error" class="error" style="display:none;"></div>
       <div class="actions">
         <button id="liff-login-btn" type="button" class="btn primary">使用 LINE 登入</button>
@@ -56,7 +56,7 @@
             return;
           }
 
-          statusEl.textContent = '初始化活動頁...';
+          statusEl.textContent = '初始化春日野餐祭頁面...';
           await liff.init({ liffId: liffId });
 
           if (!liff.isLoggedIn()) {

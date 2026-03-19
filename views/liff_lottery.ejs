@@ -6,7 +6,7 @@
         <div class="liff-event-overlay"></div>
       </div>
       <p class="muted liff-hello">嗨，<strong>${displayName || user || '朋友'}</strong> 👋</p>
-      <p class="liff-brand-line">使用 OpenRice app訂位餐廳，餐餐吃飯折抵現金</p>
+      <p class="liff-brand-line">春日野餐祭開跑！使用 OpenRice app 訂位餐廳，餐餐吃飯折抵現金</p>
 
       ${
         (() => {
@@ -18,7 +18,7 @@
             return `<section class="scratch-zone">
               <div class="scratch-card scratch-result ${isWin ? 'win' : 'normal'}">
                 <div class="scratch-result-card">
-                  ${isWin ? '<div class="scratch-result-title">🎉 恭喜中獎！</div>' : '<div class="scratch-result-title">結果揭曉</div>'}
+                  ${isWin ? '<div class="scratch-result-title">🌸 春日好運中獎！</div>' : '<div class="scratch-result-title">春日結果揭曉</div>'}
                   <div class="scratch-result-text">${result}</div>
                   ${isWin ? '<p class="scratch-result-note">請於LINE@聯繫如何兌換</p>' : ''}
                 </div>
@@ -28,7 +28,7 @@
                   ? `<div class="actions scratch-result-actions">
                       <a class="btn primary" href="/liff/lottery">再刮一次（剩餘${typeof drawsLeft !== 'undefined' ? drawsLeft : 0}次）</a>
                     </div>`
-                  : '<p class="muted center-text">目前可刮次數為 0，邀請 1 位好友完成任務可再獲得 1 次刮刮樂機會。</p>'
+                  : '<p class="muted center-text">目前可刮次數為 0，快邀請 1 位好友完成任務，再獲得 1 次春日刮刮樂機會。</p>'
               }
             </section>`;
           }
@@ -38,20 +38,20 @@
               <div class="scratch-card scratch-disabled">
                 <div class="scratch-underlay">🎁 目前可刮次數為 0</div>
               </div>
-              <p class="muted center-text">邀請 1 位好友完成任務可再獲得 1 次刮刮樂機會。</p>
+              <p class="muted center-text">邀請 1 位好友完成任務可再獲得 1 次春日刮刮樂機會。</p>
             </section>`;
           }
 
           return `<section class="scratch-zone">
-            <p class="muted center-text">滑動刮開卡片，立即揭曉結果。</p>
+            <p class="muted center-text">滑動刮開卡片，揭曉你的春日好運。</p>
             <div id="scratch-card" class="scratch-card" role="button" tabindex="0" aria-label="刮開卡片開始刮刮樂">
-              <div class="scratch-underlay">🎁 刮開看看今天手氣</div>
+              <div class="scratch-underlay">🍀 刮開看看你的春日好運</div>
               <canvas id="scratch-canvas" class="scratch-canvas"></canvas>
               <div id="scratch-gate" class="scratch-gate">
                 <button id="scratch-start-btn" type="button" class="btn primary scratch-start-btn">開始刮（剩餘${typeof drawsLeft !== 'undefined' ? drawsLeft : 0}次）</button>
               </div>
             </div>
-            <p id="scratch-hint" class="muted center-text">刮開超過 45% 會自動揭曉結果</p>
+            <p id="scratch-hint" class="muted center-text">刮開超過 45% 會自動揭曉春日結果</p>
             <form id="scratch-draw-form" method="post" action="/liff/lottery/draw" class="draw-form"></form>
           </section>`;
         })()
@@ -59,34 +59,34 @@
 
       <div class="liff-metric-grid">
         <div class="liff-metric-item">
-          <span class="label">可刮次數</span>
+          <span class="label">春日可刮次數</span>
           <strong>${typeof drawsLeft !== 'undefined' ? drawsLeft : 0}</strong>
         </div>
         <div class="liff-metric-item">
-          <span class="label">加碼次數</span>
+          <span class="label">好友加碼次數</span>
           <strong>${typeof extraDraws !== 'undefined' ? extraDraws : 0}</strong>
         </div>
         <div class="liff-metric-item">
-          <span class="label">剩餘可邀請加碼</span>
+          <span class="label">剩餘好友加碼名額</span>
           <strong>${Math.max(0, 2 - (typeof rewardedInviteCount !== 'undefined' ? rewardedInviteCount : 0))}</strong>
         </div>
       </div>
 
-      <h2 class="liff-title">OpenRice 活動刮刮樂</h2>
+      <h2 class="liff-title">春日野餐祭 刮刮樂獎項</h2>
       <div class="liff-prize-section-static">
         <img
           src="/images/prize-section-board.png"
-          alt="OpenRice 活動刮刮樂獎項"
+          alt="春日野餐祭刮刮樂獎項"
           class="liff-prize-section-image"
         />
       </div>
 
       <div class="liff-invite-box">
-      <h2 class="liff-title">邀請好友加碼</h2>
+      <h2 class="liff-title">揪好友同行春日野餐祭</h2>
       <p class="muted">每位好友完成 OpenRice LINE@ 任務可加碼 1 次，最多 2 次，剩餘可加碼 <strong>${Math.max(0, 2 - (typeof rewardedInviteCount !== 'undefined' ? rewardedInviteCount : 0))}</strong> 次。</p>
       <code class="invite-link invite-link-compact" id="liff-invite-link" title="${inviteLink || ''}">${inviteLink || ''}</code>
       <div class="actions">
-        <button type="button" class="btn primary" id="share-invite-btn">分享邀請給好友</button>
+        <button type="button" class="btn primary" id="share-invite-btn">分享春日邀請給好友</button>
         <button type="button" class="btn" id="copy-invite-btn">複製邀請連結</button>
         ${
           lineOfficialAddFriendUrl
@@ -127,13 +127,13 @@
           if (!liff.isLoggedIn()) return false;
           if (!liff.isInClient()) return false;
           if (!liff.isApiAvailable('shareTargetPicker')) return false;
-          const text = 'OpenRice 訂餐廳能賺現金，現在還有刮刮樂活動，刮開就知道有沒有中，大獎有 2 萬里程數！來試試手氣吧 👇\\n' + inviteLink;
+          const text = 'OpenRice 春日野餐祭開跑！訂餐廳能賺現金，現在還有春日刮刮樂，刮開就知道有沒有中，大獎有 2 萬里程數！一起來試試手氣吧 👇\\n' + inviteLink;
           const result = await liff.shareTargetPicker([{ type: 'text', text: text }]);
           return result !== null;
         }
 
         function openLineShareFallback(inviteLink) {
-          var text = 'OpenRice 訂餐廳能賺現金，現在還有刮刮樂活動，刮開就知道有沒有中，大獎有 2 萬里程數！來試試手氣吧 👇\\n' + inviteLink;
+          var text = 'OpenRice 春日野餐祭開跑！訂餐廳能賺現金，現在還有春日刮刮樂，刮開就知道有沒有中，大獎有 2 萬里程數！一起來試試手氣吧 👇\\n' + inviteLink;
           window.location.href = 'https://line.me/R/msg/text/?' + encodeURIComponent(text);
         }
 
@@ -158,7 +158,7 @@
             }
             btn.textContent = '已開啟分享';
             setTimeout(function () {
-              btn.textContent = '分享邀請給好友';
+              btn.textContent = '分享春日邀請給好友';
             }, 1200);
           } catch (err) {
             var inviteLink = (linkEl.textContent || '').trim();
@@ -278,7 +278,7 @@
             if (started) return;
             started = true;
             if (gate) gate.style.display = 'none';
-            if (hint) hint.textContent = '開始刮吧！刮開超過 45% 會自動揭曉結果';
+            if (hint) hint.textContent = '開始刮吧！刮開超過 45% 會自動揭曉春日結果';
           }
 
           if (startBtn) {

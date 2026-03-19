@@ -348,7 +348,7 @@ function registerLiffRoutes(app, deps) {
       const currentLeft = Number(userRs.rows[0].draws_left || 0);
       if (currentLeft <= 0) {
         await client.query('ROLLBACK');
-        setDrawResultCookie(res, '您的抽獎次數已用完');
+        setDrawResultCookie(res, '您的刮刮樂次數已用完');
         return res.redirect('/liff/lottery');
       }
 
@@ -357,7 +357,7 @@ function registerLiffRoutes(app, deps) {
       );
       if (prizeRs.rowCount === 0) {
         await client.query('ROLLBACK');
-        setDrawResultCookie(res, '目前沒有可抽獎品，請聯絡管理員補庫存');
+        setDrawResultCookie(res, '目前沒有可刮獎品，請聯絡管理員補庫存');
         return res.redirect('/liff/lottery');
       }
 
