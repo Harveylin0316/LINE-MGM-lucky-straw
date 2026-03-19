@@ -29,6 +29,19 @@ const LINE_OFFICIAL_ADD_FRIEND_URL = process.env.LINE_OFFICIAL_ADD_FRIEND_URL ||
 const LIFF_INVITE_BONUS_MAX = Number.parseInt(process.env.LIFF_INVITE_BONUS_MAX || '20', 10);
 const LIFF_LINE_USER_BCRYPT_ROUNDS = Number.parseInt(process.env.LIFF_LINE_USER_BCRYPT_ROUNDS || '6', 10);
 
+function normalizeAdminLoginPath(rawPath) {
+  const fallback = '/admin/login';
+  if (typeof rawPath !== 'string') return fallback;
+  const trimmed = rawPath.trim();
+  if (!trimmed.startsWith('/')) return fallback;
+  if (trimmed.startsWith('//')) return fallback;
+  if (trimmed.length < 8) return fallback;
+  if (/[^a-zA-Z0-9/_-]/.test(trimmed)) return fallback;
+  return trimmed;
+}
+
+const ADMIN_LOGIN_PATH = normalizeAdminLoginPath(process.env.ADMIN_LOGIN_PATH || '/admin/login');
+
 if (!DATABASE_URL) {
   throw new Error('Missing DATABASE_URL. Please configure Postgres connection string.');
 }
@@ -63,7 +76,8 @@ async function query(text, params = []) {
 
 const authCore = createAuthCore({
   jwtSecret: JWT_SECRET,
-  isProduction
+  isProduction,
+  adminLoginPath: ADMIN_LOGIN_PATH
 });
 
 const lotteryCore = {
@@ -127,6 +141,7 @@ const authLimiter = rateLimit({
 });
 
 app.use('/login', authLimiter);
+app.use(ADMIN_LOGIN_PATH, authLimiter);
 app.use('/register', authLimiter);
 app.use('/liff/auth', authLimiter);
 app.use(authCore.authMiddleware);
@@ -148,7 +163,8 @@ registerWebRoutes(app, {
   pool,
   authCore,
   lotteryCore,
-  viewStateCore
+  viewStateCore,
+  adminLoginPath: ADMIN_LOGIN_PATH
 });
 
 registerLiffRoutes(app, {

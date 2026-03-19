@@ -30,7 +30,8 @@ function registerWebRoutes(app, deps) {
     pool,
     authCore,
     lotteryCore,
-    viewStateCore
+    viewStateCore,
+    adminLoginPath
   } = deps;
 
   const { requireAdmin, signAuthToken, setAuthCookie, clearAuthCookie } = authCore;
@@ -40,12 +41,14 @@ function registerWebRoutes(app, deps) {
     parsePage
   } = viewStateCore;
 
+  const hiddenAdminLoginPath = typeof adminLoginPath === 'string' && adminLoginPath.startsWith('/') ? adminLoginPath : '/admin/login';
+
   function renderAdminLogin(res, error = null, nextPath = '/admin/prizes') {
     return res.render('login', {
       error,
       isAdmin: false,
       nextPath,
-      loginAction: '/admin/login',
+      loginAction: hiddenAdminLoginPath,
       title: '管理員登入',
       hint: '此入口僅提供管理員登入。'
     });
@@ -53,7 +56,7 @@ function registerWebRoutes(app, deps) {
 
   app.get('/', (req, res) => {
     if (req.authUser && req.authUser.adm) return res.redirect('/admin/prizes');
-    return res.redirect('/admin/login');
+    return res.status(404).send('Not found');
   });
 
   app.get('/register', (_req, res) => {
@@ -64,13 +67,17 @@ function registerWebRoutes(app, deps) {
     return res.status(404).send('網頁版功能已關閉，請使用 LINE 活動頁。');
   });
 
-  app.get('/admin/login', (req, res) => {
+  app.get(hiddenAdminLoginPath, (req, res) => {
     const nextPath = normalizeNextPath(req.query.next, '/admin/prizes');
     return renderAdminLogin(res, null, nextPath);
   });
 
+  app.get('/admin/login', (_req, res) => {
+    return res.status(404).send('Not found');
+  });
+
   app.get('/login', (_req, res) => {
-    return res.redirect('/admin/login');
+    return res.status(404).send('Not found');
   });
 
   async function handleAdminLogin(req, res) {
@@ -97,12 +104,13 @@ function registerWebRoutes(app, deps) {
     return res.redirect(nextPath);
   }
 
-  app.post('/admin/login', handleAdminLogin);
-  app.post('/login', handleAdminLogin);
+  app.post(hiddenAdminLoginPath, handleAdminLogin);
+  app.post('/admin/login', (_req, res) => res.status(404).send('Not found'));
+  app.post('/login', (_req, res) => res.status(404).send('Not found'));
 
   app.post('/logout', (_req, res) => {
     clearAuthCookie(res);
-    res.redirect('/admin/login');
+    res.redirect(hiddenAdminLoginPath);
   });
 
   app.get('/lottery', (_req, res) => {

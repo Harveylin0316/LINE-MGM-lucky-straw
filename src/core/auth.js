@@ -1,6 +1,6 @@
 const jwt = require('jsonwebtoken');
 
-function createAuthCore({ jwtSecret, isProduction }) {
+function createAuthCore({ jwtSecret, isProduction, adminLoginPath = '/admin/login' }) {
   function signAuthToken(user) {
     return jwt.sign(
       { uid: user.id, un: user.username, adm: user.is_admin === true || user.is_admin === 1 },
@@ -37,7 +37,7 @@ function createAuthCore({ jwtSecret, isProduction }) {
   }
 
   function requireLogin(req, res, next) {
-    if (!req.authUser || !req.authUser.uid) return res.redirect('/login');
+    if (!req.authUser || !req.authUser.uid) return res.redirect(adminLoginPath);
     next();
   }
 
@@ -47,7 +47,7 @@ function createAuthCore({ jwtSecret, isProduction }) {
         clearAuthCookie(res);
       }
       const nextPath = typeof req.originalUrl === 'string' && req.originalUrl.startsWith('/admin') ? req.originalUrl : '/admin/prizes';
-      return res.redirect(`/admin/login?next=${encodeURIComponent(nextPath)}`);
+      return res.redirect(`${adminLoginPath}?next=${encodeURIComponent(nextPath)}`);
     }
     next();
   }
