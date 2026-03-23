@@ -870,6 +870,13 @@ h1 {
   line-height: 1.5;
 }
 
+.liff-win-redeem-hint {
+  margin: 12px 0 0;
+  font-size: 13px;
+  font-weight: 600;
+  color: #6b7280;
+}
+
 .liff-win-list {
   list-style: none;
   margin: 0;
@@ -908,7 +915,7 @@ h1 {
 }
 
 .liff-redemption-box {
-  margin: 0 0 16px;
+  margin: 18px 0 0;
   padding: 14px 14px 12px;
   border-radius: 14px;
   border: 2px solid #ffd300;

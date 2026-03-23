@@ -20,7 +20,7 @@
                 <div class="scratch-result-card">
                   ${isWin ? '<div class="scratch-result-title">🌸 春日好運中獎！</div>' : '<div class="scratch-result-title">春日結果揭曉</div>'}
                   <div class="scratch-result-text">${result}</div>
-                  ${isWin ? '<p class="scratch-result-note">請查看下方「兌換方式」與「我的中獎紀錄」完成兌換。</p>' : ''}
+                  ${isWin ? '<p class="scratch-result-note">請查看「我的中獎紀錄」，兌獎方式請看頁面最下方。</p>' : ''}
                 </div>
               </div>
               ${
@@ -85,24 +85,14 @@
             )
             .join('')}
         </ul>
+        <p class="liff-win-redeem-hint muted center-text">兌獎方式請看頁面下方</p>
       </section>`
           : `<section class="liff-win-history liff-win-history-empty" id="liff-win-history">
         <h2 class="liff-title">我的中獎紀錄</h2>
         <p class="muted">尚無中獎紀錄。刮中獎項後會顯示在這裡，方便你之後對照兌換。</p>
+        <p class="liff-win-redeem-hint muted center-text">兌獎方式請看頁面下方</p>
       </section>`
       }
-
-      <section class="liff-redemption-box" id="liff-redemption">
-        <h2 class="liff-title">兌換方式</h2>
-        <div class="liff-redemption-body">${typeof redemptionNoteHtml !== 'undefined' ? redemptionNoteHtml : ''}</div>
-        ${
-          lineOfficialAddFriendUrl
-            ? `<div class="actions liff-redemption-actions">
-            <a class="btn primary" href="${lineOfficialAddFriendUrl}" target="_blank" rel="noopener noreferrer">前往 OpenRice LINE@</a>
-          </div>`
-            : ''
-        }
-      </section>
 
       <h2 class="liff-title">春日野餐祭 刮刮樂獎項</h2>
       <div class="liff-prize-section-static">
@@ -128,6 +118,18 @@
       </div>
       </div>
       <p class="liff-campaign-note">活動期間至 4/30。若 5/1 仍有剩餘刮刮樂次數，將無法再使用。</p>
+
+      <section class="liff-redemption-box" id="liff-redemption">
+        <h2 class="liff-title">兌換方式</h2>
+        <div class="liff-redemption-body">${typeof redemptionNoteHtml !== 'undefined' ? redemptionNoteHtml : ''}</div>
+        ${
+          lineOfficialAddFriendUrl
+            ? `<div class="actions liff-redemption-actions">
+            <a class="btn primary" href="${lineOfficialAddFriendUrl}" target="_blank" rel="noopener noreferrer">前往 OpenRice LINE@</a>
+          </div>`
+            : ''
+        }
+      </section>
     </section>
     <script src="https://static.line-scdn.net/liff/edge/2/sdk.js"></script>
     <script>
