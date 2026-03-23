@@ -28,6 +28,8 @@ const LINE_CHANNEL_ACCESS_TOKEN = process.env.LINE_CHANNEL_ACCESS_TOKEN || '';
 const LINE_OFFICIAL_ADD_FRIEND_URL = process.env.LINE_OFFICIAL_ADD_FRIEND_URL || '';
 const LIFF_INVITE_BONUS_MAX = Number.parseInt(process.env.LIFF_INVITE_BONUS_MAX || '20', 10);
 const LIFF_LINE_USER_BCRYPT_ROUNDS = Number.parseInt(process.env.LIFF_LINE_USER_BCRYPT_ROUNDS || '6', 10);
+/** 自訂 LIFF 兌換說明（可含換行）；未設定則使用預設文案 */
+const LIFF_REDEMPTION_NOTE = process.env.LIFF_REDEMPTION_NOTE || '';
 
 function normalizeAdminLoginPath(rawPath) {
   const fallback = '/admin/login';
@@ -177,7 +179,8 @@ registerLiffRoutes(app, {
   lineChannelAccessToken: LINE_CHANNEL_ACCESS_TOKEN,
   inviteBonusMax: Number.isFinite(LIFF_INVITE_BONUS_MAX) ? LIFF_INVITE_BONUS_MAX : 20,
   lineOfficialAddFriendUrl: LINE_OFFICIAL_ADD_FRIEND_URL,
-  lineUserPasswordHashRounds: Number.isFinite(LIFF_LINE_USER_BCRYPT_ROUNDS) ? LIFF_LINE_USER_BCRYPT_ROUNDS : 6
+  lineUserPasswordHashRounds: Number.isFinite(LIFF_LINE_USER_BCRYPT_ROUNDS) ? LIFF_LINE_USER_BCRYPT_ROUNDS : 6,
+  liffRedemptionNote: LIFF_REDEMPTION_NOTE
 });
 
 app.use((err, _req, res, _next) => {

@@ -857,6 +857,76 @@ h1 {
   color: #4e3b2d;
 }
 
+.liff-win-history {
+  margin: 14px 0 12px;
+  padding: 12px 14px;
+  border-radius: 14px;
+  border: 1px solid rgba(228, 78, 37, 0.35);
+  background: linear-gradient(165deg, #fff9f4 0%, #fff 55%);
+}
+
+.liff-win-history-empty .muted {
+  margin: 0;
+  line-height: 1.5;
+}
+
+.liff-win-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.liff-win-item {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 10px 0;
+  border-bottom: 1px dashed rgba(78, 59, 45, 0.2);
+  font-size: 15px;
+  color: #4e3b2d;
+}
+
+.liff-win-item:last-child {
+  border-bottom: none;
+  padding-bottom: 2px;
+}
+
+.liff-win-prize {
+  font-weight: 800;
+  color: #c2410c;
+  flex: 1;
+  min-width: 0;
+}
+
+.liff-win-time {
+  font-size: 12px;
+  color: #6b7280;
+  font-weight: 600;
+  white-space: nowrap;
+}
+
+.liff-redemption-box {
+  margin: 0 0 16px;
+  padding: 14px 14px 12px;
+  border-radius: 14px;
+  border: 2px solid #ffd300;
+  background: #fffef5;
+  box-shadow: 0 2px 10px rgba(78, 59, 45, 0.06);
+}
+
+.liff-redemption-body {
+  font-size: 14px;
+  line-height: 1.65;
+  color: #4e3b2d;
+  margin: 0 0 10px;
+}
+
+.liff-redemption-actions {
+  margin-top: 4px;
+}
+
 .liff-prize-grid {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));

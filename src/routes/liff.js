@@ -38,12 +38,47 @@ function registerLiffRoutes(app, deps) {
     lineChannelAccessToken,
     inviteBonusMax,
     lineOfficialAddFriendUrl,
-    lineUserPasswordHashRounds
+    lineUserPasswordHashRounds,
+    liffRedemptionNote
   } = deps;
   const { pickPrizeByQuantity } = lotteryCore;
   const { signAuthToken, setAuthCookie, clearAuthCookie } = authCore;
   const hashRounds = Math.min(12, Math.max(4, Number(lineUserPasswordHashRounds || 6)));
   const inviteLimit = Math.max(0, Number.isFinite(Number(inviteBonusMax)) ? Number(inviteBonusMax) : 2);
+  const defaultRedemptionNote =
+    '1. 請開啟「OpenRice LINE@」對話視窗聯繫客服。\n' +
+    '2. 提供本頁「我的中獎紀錄」截圖或中獎畫面截圖，並說明欲兌換的獎項。\n' +
+    '3. 客服將依活動規則協助完成兌換（實際辦法以官方公告為準）。';
+
+  function escapeHtmlText(s) {
+    return String(s)
+      .replace(/&/g, '&amp;')
+      .replace(/</g, '&lt;')
+      .replace(/>/g, '&gt;')
+      .replace(/"/g, '&quot;');
+  }
+
+  function formatWinTime(value) {
+    if (!value) return '';
+    const d = value instanceof Date ? value : new Date(value);
+    if (Number.isNaN(d.getTime())) return '';
+    return d.toLocaleString('zh-TW', {
+      timeZone: 'Asia/Taipei',
+      year: 'numeric',
+      month: '2-digit',
+      day: '2-digit',
+      hour: '2-digit',
+      minute: '2-digit'
+    });
+  }
+
+  function redemptionNoteToHtml(note) {
+    return String(note)
+      .split(/\r?\n/)
+      .map(line => escapeHtmlText(line) || '\u00a0')
+      .join('<br>');
+  }
+
   const {
     setDrawResultCookie,
     consumeDrawResultCookie,
@@ -411,18 +446,34 @@ function registerLiffRoutes(app, deps) {
 
   app.get('/liff/lottery', requireLiffLogin, async (req, res, next) => {
     try {
-      const [userRs, availablePrizes, inviteStats] = await Promise.all([
+      const [userRs, availablePrizes, inviteStats, winsRs] = await Promise.all([
         query('SELECT draws_left, extra_draws, line_user_id, line_display_name, username FROM users WHERE id = $1', [
           req.authUser.uid
         ]),
         getAvailablePrizes(),
-        getInviteStats(req.authUser.uid)
+        getInviteStats(req.authUser.uid),
+        query(
+          `SELECT prize_name, message, created_at
+           FROM draw_logs
+           WHERE user_id = $1 AND is_win = true
+           ORDER BY id DESC
+           LIMIT 30`,
+          [req.authUser.uid]
+        )
       ]);
       const row = userRs.rows[0] || { draws_left: 0, extra_draws: 0 };
       const drawResult = consumeDrawResultCookie(req, res);
       const inviteCode = await ensureInviteCode(req.authUser.uid);
       const invitePath = inviteCode ? `/liff/${encodeURIComponent(inviteCode)}` : '/liff/lottery';
       const inviteLink = buildLiffPermanentUrl(liffId, invitePath, '/liff/lottery');
+      const redemptionNoteRaw =
+        typeof liffRedemptionNote === 'string' && liffRedemptionNote.trim()
+          ? liffRedemptionNote.trim()
+          : defaultRedemptionNote;
+      const recentWins = (winsRs.rows || []).map(r => ({
+        prizeName: escapeHtmlText(r.prize_name || '獎項'),
+        atText: escapeHtmlText(formatWinTime(r.created_at))
+      }));
       res.render('liff_lottery', {
         user: req.authUser.un,
         result: drawResult,
@@ -434,7 +485,9 @@ function registerLiffRoutes(app, deps) {
         rewardedInviteCount: inviteStats.rewarded_count || 0,
         pendingInviteCount: inviteStats.pending_count || 0,
         lineOfficialAddFriendUrl: lineOfficialAddFriendUrl || '',
-        liffId: liffId || ''
+        liffId: liffId || '',
+        recentWins,
+        redemptionNoteHtml: redemptionNoteToHtml(redemptionNoteRaw)
       });
     } catch (err) {
       next(err);
