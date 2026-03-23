@@ -819,6 +819,43 @@ h1 {
   margin-top: 4px;
 }
 
+.liff-campaign-official {
+  margin: 6px 0 10px;
+  font-size: 13px;
+}
+
+.liff-campaign-official a {
+  color: #c2410c;
+  font-weight: 700;
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
+
+.liff-campaign-official a:active {
+  color: #9a3412;
+}
+
+.liff-campaign-note-link {
+  color: #c2410c;
+  font-weight: 700;
+  text-decoration: underline;
+  text-underline-offset: 2px;
+  white-space: nowrap;
+}
+
+.liff-redemption-official {
+  margin: 0 0 12px;
+  font-size: 13px;
+  line-height: 1.5;
+}
+
+.liff-redemption-official a {
+  color: #c2410c;
+  font-weight: 700;
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
+
 .liff-brand-line {
   margin: 8px 0 12px;
   padding: 10px 12px;

@@ -30,6 +30,9 @@ const LIFF_INVITE_BONUS_MAX = Number.parseInt(process.env.LIFF_INVITE_BONUS_MAX 
 const LIFF_LINE_USER_BCRYPT_ROUNDS = Number.parseInt(process.env.LIFF_LINE_USER_BCRYPT_ROUNDS || '6', 10);
 /** 自訂 LIFF 兌換說明（可含換行）；未設定則使用預設文案 */
 const LIFF_REDEMPTION_NOTE = process.env.LIFF_REDEMPTION_NOTE || '';
+/** LIFF 內「官方活動／完整辦法」超連結（預設：OpenRice 春日活動頁） */
+const LIFF_CAMPAIGN_PAGE_URL =
+  process.env.LIFF_CAMPAIGN_PAGE_URL || 'https://tinyurl.com/mv3f9wfv';
 
 function normalizeAdminLoginPath(rawPath) {
   const fallback = '/admin/login';
@@ -180,7 +183,8 @@ registerLiffRoutes(app, {
   inviteBonusMax: Number.isFinite(LIFF_INVITE_BONUS_MAX) ? LIFF_INVITE_BONUS_MAX : 20,
   lineOfficialAddFriendUrl: LINE_OFFICIAL_ADD_FRIEND_URL,
   lineUserPasswordHashRounds: Number.isFinite(LIFF_LINE_USER_BCRYPT_ROUNDS) ? LIFF_LINE_USER_BCRYPT_ROUNDS : 6,
-  liffRedemptionNote: LIFF_REDEMPTION_NOTE
+  liffRedemptionNote: LIFF_REDEMPTION_NOTE,
+  liffCampaignPageUrl: LIFF_CAMPAIGN_PAGE_URL
 });
 
 app.use((err, _req, res, _next) => {

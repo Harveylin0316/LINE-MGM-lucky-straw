@@ -7,6 +7,11 @@
       </div>
       <p class="muted liff-hello">嗨，<strong>${displayName || user || '朋友'}</strong> 👋</p>
       <p class="liff-brand-line">春日野餐祭開跑！使用 OpenRice app 訂位餐廳，餐餐吃飯折抵現金</p>
+      ${
+        typeof campaignPageUrl === 'string' && campaignPageUrl
+          ? `<p class="liff-campaign-official muted center-text"><a href="${campaignPageUrl}" target="_blank" rel="noopener noreferrer">春日饗里 揪友野餐趣｜完整活動說明與辦法</a></p>`
+          : ''
+      }
 
       ${
         (() => {
@@ -117,11 +122,20 @@
         }
       </div>
       </div>
-      <p class="liff-campaign-note">活動期間至 4/30。若 5/1 仍有剩餘刮刮樂次數，將無法再使用。</p>
+      <p class="liff-campaign-note">活動期間至 4/30。若 5/1 仍有剩餘刮刮樂次數，將無法再使用。${
+        typeof campaignPageUrl === 'string' && campaignPageUrl
+          ? ` <a class="liff-campaign-note-link" href="${campaignPageUrl}" target="_blank" rel="noopener noreferrer">詳見官方活動網頁</a>`
+          : ''
+      }</p>
 
       <section class="liff-redemption-box" id="liff-redemption">
         <h2 class="liff-title">兌換方式</h2>
         <div class="liff-redemption-body">${typeof redemptionNoteHtml !== 'undefined' ? redemptionNoteHtml : ''}</div>
+        ${
+          typeof campaignPageUrl === 'string' && campaignPageUrl
+            ? `<p class="liff-redemption-official muted"><a href="${campaignPageUrl}" target="_blank" rel="noopener noreferrer">官方活動網頁（含兌獎時程與注意事項）</a></p>`
+            : ''
+        }
         ${
           lineOfficialAddFriendUrl
             ? `<div class="actions liff-redemption-actions">

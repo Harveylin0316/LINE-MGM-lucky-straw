@@ -39,8 +39,23 @@ function registerLiffRoutes(app, deps) {
     inviteBonusMax,
     lineOfficialAddFriendUrl,
     lineUserPasswordHashRounds,
-    liffRedemptionNote
+    liffRedemptionNote,
+    liffCampaignPageUrl
   } = deps;
+
+  function safeHttpUrl(raw) {
+    const s = typeof raw === 'string' ? raw.trim() : '';
+    if (!s) return '';
+    try {
+      const u = new URL(s);
+      if (u.protocol !== 'http:' && u.protocol !== 'https:') return '';
+      return u.href;
+    } catch {
+      return '';
+    }
+  }
+
+  const campaignPageUrlResolved = safeHttpUrl(liffCampaignPageUrl);
   const { pickPrizeByQuantity } = lotteryCore;
   const { signAuthToken, setAuthCookie, clearAuthCookie } = authCore;
   const hashRounds = Math.min(12, Math.max(4, Number(lineUserPasswordHashRounds || 6)));
@@ -487,7 +502,8 @@ function registerLiffRoutes(app, deps) {
         lineOfficialAddFriendUrl: lineOfficialAddFriendUrl || '',
         liffId: liffId || '',
         recentWins,
-        redemptionNoteHtml: redemptionNoteToHtml(redemptionNoteRaw)
+        redemptionNoteHtml: redemptionNoteToHtml(redemptionNoteRaw),
+        campaignPageUrl: campaignPageUrlResolved
       });
     } catch (err) {
       next(err);
