@@ -1,5 +1,13 @@
 const jwt = require('jsonwebtoken');
 
+function safeAdminNextPath(rawPath) {
+  if (typeof rawPath !== 'string') return '';
+  const pathOnly = rawPath.split('?')[0];
+  if (!pathOnly.startsWith('/admin')) return '';
+  if (pathOnly.startsWith('//')) return '';
+  return pathOnly;
+}
+
 function createAuthCore({ jwtSecret, isProduction, adminLoginPath = '/admin/login' }) {
   function signAuthToken(user) {
     return jwt.sign(
@@ -46,7 +54,9 @@ function createAuthCore({ jwtSecret, isProduction, adminLoginPath = '/admin/logi
       if (req.authUser && !req.authUser.adm) {
         clearAuthCookie(res);
       }
-      return res.status(404).send('Not found');
+      const returnTo = safeAdminNextPath(req.originalUrl || req.url) || '/admin/prizes';
+      const qs = new URLSearchParams({ next: returnTo });
+      return res.redirect(`${adminLoginPath}?${qs.toString()}`);
     }
     next();
   }
