@@ -1,6 +1,15 @@
 const bcrypt = require('bcryptjs');
 
-async function initDb({ query, adminUsername, adminPassword }) {
+/**
+ * Netlify 等 serverless：冷啟動若跑完整 DDL（30+ 次往返 DB）會讓首個請求極慢。
+ * 資料庫結構已就緒後，設環境變數 SKIP_DB_DDL_ON_BOOT=1 僅做 SELECT 1 驗證連線。
+ */
+async function initDb({ query, adminUsername, adminPassword, skipDdl = false }) {
+  if (skipDdl) {
+    await query('SELECT 1');
+    return;
+  }
+
   await query(`CREATE TABLE IF NOT EXISTS users (
     id SERIAL PRIMARY KEY,
     username TEXT UNIQUE NOT NULL,

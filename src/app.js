@@ -70,10 +70,16 @@ function resolveAssetDir(dirName, expectedFile) {
   return path.join(__dirname, '..', dirName);
 }
 
+/** Netlify Function 單實例建議小 pool，降低冷啟動建連成本 */
 const pool = new Pool({
   connectionString: DATABASE_URL,
-  ssl: isProduction ? { rejectUnauthorized: false } : false
+  ssl: isProduction ? { rejectUnauthorized: false } : false,
+  max: Number.parseInt(process.env.PG_POOL_MAX || '', 10) || (isProduction ? 2 : 10),
+  connectionTimeoutMillis: Number.parseInt(process.env.PG_CONNECTION_TIMEOUT_MS || '', 10) || 10000,
+  idleTimeoutMillis: 20000
 });
+
+const skipDbDdlOnBoot = process.env.SKIP_DB_DDL_ON_BOOT === '1';
 
 async function query(text, params = []) {
   return pool.query(text, params);
@@ -99,7 +105,8 @@ let initError = null;
 const initPromise = initDb({
   query,
   adminUsername: ADMIN_USERNAME,
-  adminPassword: ADMIN_PASSWORD
+  adminPassword: ADMIN_PASSWORD,
+  skipDdl: skipDbDdlOnBoot
 }).catch(err => {
   initError = err;
   console.error('Database initialization failed:', err.message);
