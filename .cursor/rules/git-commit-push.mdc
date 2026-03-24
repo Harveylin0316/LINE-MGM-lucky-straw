@@ -1,0 +1,14 @@
+---
+description: 完成變更後自動 git commit 並 push 到 origin
+alwaysApply: true
+---
+
+# Git：變更完成後 commit + push
+
+在本專案中，當你**依使用者要求完成程式／設定／資源修改**後：
+
+1. 若 `git status` 有未提交變更，**預設要**執行 `git add`（僅限本次任務相關檔案）、`git commit`（簡短繁中或英文訊息）、`git push` 到 `origin` 目前分支。
+2. **例外**（不要自動 commit/push）：使用者明確說「不要 commit」「先不要 push」「只改本機」等。
+3. 勿提交含密碼、token、完整 `.env` 的檔案；若 `.env` 僅本地使用應已在 `.gitignore`。
+
+完成後向使用者簡短回報 commit hash 與分支即可。
