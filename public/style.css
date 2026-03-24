@@ -1045,22 +1045,22 @@ h1 {
   display: flex;
   justify-content: center;
   align-items: center;
-  padding: 10px 12px;
+  padding: 0;
   border: 1px solid #dcc58c;
   border-radius: 12px;
   overflow: hidden;
-  background: #fff;
+  background: #e8e4dc;
+  line-height: 0;
 }
 
 .liff-prize-section-image {
-  width: auto;
+  width: 100%;
   max-width: 100%;
   height: auto;
   display: block;
   margin: 0 auto;
   object-fit: contain;
   object-position: center center;
-  transform: translateX(10px);
 }
 
 .scratch-zone {
