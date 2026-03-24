@@ -99,6 +99,12 @@ async function initDb({ query, adminUsername, adminPassword, skipDdl = false }) 
     `INSERT INTO campaign_settings (id) VALUES (1) ON CONFLICT (id) DO NOTHING`
   );
 
+  await query(`CREATE TABLE IF NOT EXISTS admin_login_throttle (
+    id BIGSERIAL PRIMARY KEY,
+    ip_key TEXT NOT NULL,
+    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+  )`);
+
   // Supabase exposes public schema via PostgREST by default.
   // Enable RLS on app tables to prevent direct external reads/writes.
   await query('ALTER TABLE users ENABLE ROW LEVEL SECURITY');
@@ -109,6 +115,11 @@ async function initDb({ query, adminUsername, adminPassword, skipDdl = false }) 
   await query('ALTER TABLE line_webhook_events ENABLE ROW LEVEL SECURITY');
   await query('ALTER TABLE line_push_logs ENABLE ROW LEVEL SECURITY');
   await query('ALTER TABLE campaign_settings ENABLE ROW LEVEL SECURITY');
+  await query('ALTER TABLE admin_login_throttle ENABLE ROW LEVEL SECURITY');
+
+  await query(
+    'CREATE INDEX IF NOT EXISTS admin_login_throttle_ip_created_idx ON admin_login_throttle (ip_key, created_at DESC)'
+  );
 
   await query('CREATE INDEX IF NOT EXISTS draw_logs_user_id_id_desc_idx ON draw_logs(user_id, id DESC)');
   await query('CREATE INDEX IF NOT EXISTS prizes_quantity_id_idx ON prizes(quantity, id)');

@@ -10,6 +10,7 @@ const { createAuthCore } = require('./core/auth');
 const { pickPrizeByQuantity, enrichPrizesWithHitRate } = require('./core/lottery');
 const { createViewStateCore } = require('./core/viewState');
 const { initDb } = require('./core/dbInit');
+const { createAdminLoginThrottle } = require('./core/adminLoginThrottle');
 const { registerWebRoutes } = require('./routes/web');
 const { registerLiffRoutes } = require('./routes/liff');
 const { createLineWebhookHandler } = require('./routes/lineWebhook');
@@ -46,6 +47,9 @@ function normalizeAdminLoginPath(rawPath) {
 }
 
 const ADMIN_LOGIN_PATH = normalizeAdminLoginPath(process.env.ADMIN_LOGIN_PATH || '/admin/login');
+const ADMIN_LOGIN_THROTTLE_WINDOW_MIN = Number.parseInt(process.env.ADMIN_LOGIN_THROTTLE_WINDOW_MIN || '15', 10);
+const ADMIN_LOGIN_MAX_ATTEMPTS = Number.parseInt(process.env.ADMIN_LOGIN_MAX_ATTEMPTS || '8', 10);
+const ADMIN_LOGIN_POST_RATE_MAX = Number.parseInt(process.env.ADMIN_LOGIN_POST_RATE_MAX || '10', 10);
 
 if (!DATABASE_URL) {
   throw new Error('Missing DATABASE_URL. Please configure Postgres connection string.');
@@ -101,6 +105,13 @@ const viewStateCore = createViewStateCore({
   isProduction
 });
 
+const adminLoginThrottle = createAdminLoginThrottle({
+  query,
+  hmacSecret: JWT_SECRET,
+  windowMinutes: ADMIN_LOGIN_THROTTLE_WINDOW_MIN,
+  maxAttempts: ADMIN_LOGIN_MAX_ATTEMPTS
+});
+
 let initError = null;
 const initPromise = initDb({
   query,
@@ -152,8 +163,30 @@ const authLimiter = rateLimit({
   legacyHeaders: false
 });
 
+const adminLoginPostLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000,
+  max: Math.max(3, ADMIN_LOGIN_POST_RATE_MAX),
+  standardHeaders: true,
+  legacyHeaders: false,
+  validate: { xForwardedForHeader: false }
+});
+
+const adminLoginGetLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000,
+  max: 120,
+  standardHeaders: true,
+  legacyHeaders: false,
+  validate: { xForwardedForHeader: false }
+});
+
+app.use((req, res, next) => {
+  if (req.path !== ADMIN_LOGIN_PATH) return next();
+  if (req.method === 'POST') return adminLoginPostLimiter(req, res, next);
+  if (req.method === 'GET') return adminLoginGetLimiter(req, res, next);
+  return next();
+});
+
 app.use('/login', authLimiter);
-app.use(ADMIN_LOGIN_PATH, authLimiter);
 app.use('/register', authLimiter);
 app.use('/liff/auth', authLimiter);
 app.use(authCore.authMiddleware);
@@ -176,7 +209,8 @@ registerWebRoutes(app, {
   authCore,
   lotteryCore,
   viewStateCore,
-  adminLoginPath: ADMIN_LOGIN_PATH
+  adminLoginPath: ADMIN_LOGIN_PATH,
+  adminLoginThrottle
 });
 
 registerLiffRoutes(app, {

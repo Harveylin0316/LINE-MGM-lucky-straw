@@ -32,7 +32,8 @@ function registerWebRoutes(app, deps) {
     authCore,
     lotteryCore,
     viewStateCore,
-    adminLoginPath
+    adminLoginPath,
+    adminLoginThrottle
   } = deps;
 
   const { requireAdmin, signAuthToken, setAuthCookie, clearAuthCookie } = authCore;
@@ -81,28 +82,42 @@ function registerWebRoutes(app, deps) {
     return res.status(404).send('Not found');
   });
 
-  async function handleAdminLogin(req, res) {
-    const { username, password } = req.body;
+  async function handleAdminLogin(req, res, next) {
     const nextPath = normalizeNextPath(req.body.nextPath, '/admin/prizes');
-    if (!username || !password) {
-      return renderAdminLogin(res, '請輸入帳號與密碼', nextPath);
+    try {
+      const ipKey = adminLoginThrottle.ipKeyFromReq(req);
+      if (await adminLoginThrottle.isBlocked(ipKey)) {
+        return renderAdminLogin(res, '登入嘗試過於頻繁，請稍後再試。', nextPath);
+      }
+
+      const { username, password } = req.body;
+      if (!username || !password) {
+        return renderAdminLogin(res, '請輸入帳號與密碼', nextPath);
+      }
+
+      const found = await query('SELECT id, username, password_hash, is_admin FROM users WHERE username = $1', [username]);
+      if (found.rowCount === 0) {
+        await adminLoginThrottle.recordFailure(ipKey);
+        return renderAdminLogin(res, '帳號或密碼錯誤', nextPath);
+      }
+      const user = found.rows[0];
+      const ok = await bcrypt.compare(password, user.password_hash);
+      if (!ok) {
+        await adminLoginThrottle.recordFailure(ipKey);
+        return renderAdminLogin(res, '帳號或密碼錯誤', nextPath);
+      }
+      if (!(user.is_admin === true || user.is_admin === 1)) {
+        await adminLoginThrottle.recordFailure(ipKey);
+        clearAuthCookie(res);
+        return renderAdminLogin(res, '此入口僅提供管理員登入', nextPath);
+      }
+      await adminLoginThrottle.clearFailures(ipKey);
+      const token = signAuthToken(user);
+      setAuthCookie(res, token);
+      return res.redirect(nextPath);
+    } catch (err) {
+      return next(err);
     }
-    const found = await query('SELECT id, username, password_hash, is_admin FROM users WHERE username = $1', [username]);
-    if (found.rowCount === 0) {
-      return renderAdminLogin(res, '帳號或密碼錯誤', nextPath);
-    }
-    const user = found.rows[0];
-    const ok = await bcrypt.compare(password, user.password_hash);
-    if (!ok) {
-      return renderAdminLogin(res, '帳號或密碼錯誤', nextPath);
-    }
-    if (!(user.is_admin === true || user.is_admin === 1)) {
-      clearAuthCookie(res);
-      return renderAdminLogin(res, '此入口僅提供管理員登入', nextPath);
-    }
-    const token = signAuthToken(user);
-    setAuthCookie(res, token);
-    return res.redirect(nextPath);
   }
 
   app.post(hiddenAdminLoginPath, handleAdminLogin);
