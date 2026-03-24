@@ -1,4 +1,5 @@
 const bcrypt = require('bcryptjs');
+const { parseTaipeiDatetimeLocal, toTaipeiDatetimeLocalInput } = require('../core/campaignWindow');
 
 async function logPrizeChange(client, payload) {
   await client.query(
@@ -127,6 +128,64 @@ function registerWebRoutes(app, deps) {
 
   app.get('/my-draws', (_req, res) => {
     return res.status(404).send('網頁版功能已關閉，請使用 LINE 活動頁。');
+  });
+
+  app.get('/admin/campaign', requireAdmin, async (req, res, next) => {
+    try {
+      const rs = await query('SELECT starts_at, ends_at, updated_at FROM campaign_settings WHERE id = 1');
+      const row = rs.rows[0] || {};
+      res.render('admin_campaign', {
+        user: req.authUser.un,
+        isAdmin: true,
+        error: null,
+        startsAtInput: toTaipeiDatetimeLocalInput(row.starts_at),
+        endsAtInput: toTaipeiDatetimeLocalInput(row.ends_at),
+        updatedAtText: row.updated_at ? String(row.updated_at) : ''
+      });
+    } catch (err) {
+      next(err);
+    }
+  });
+
+  app.post('/admin/campaign', requireAdmin, async (req, res, next) => {
+    const startsParsed = parseTaipeiDatetimeLocal(req.body.starts_at);
+    const endsParsed = parseTaipeiDatetimeLocal(req.body.ends_at);
+    if (startsParsed.error || endsParsed.error) {
+      return res.render('admin_campaign', {
+        user: req.authUser.un,
+        isAdmin: true,
+        error: startsParsed.error || endsParsed.error,
+        startsAtInput: typeof req.body.starts_at === 'string' ? req.body.starts_at : '',
+        endsAtInput: typeof req.body.ends_at === 'string' ? req.body.ends_at : '',
+        updatedAtText: ''
+      });
+    }
+    const startsAt = startsParsed.value;
+    const endsAt = endsParsed.value;
+    if (startsAt && endsAt && startsAt.getTime() > endsAt.getTime()) {
+      return res.render('admin_campaign', {
+        user: req.authUser.un,
+        isAdmin: true,
+        error: '開始時間不可晚於結束時間',
+        startsAtInput: typeof req.body.starts_at === 'string' ? req.body.starts_at : '',
+        endsAtInput: typeof req.body.ends_at === 'string' ? req.body.ends_at : '',
+        updatedAtText: ''
+      });
+    }
+    try {
+      await query(
+        `INSERT INTO campaign_settings (id, starts_at, ends_at, updated_at)
+         VALUES (1, $1, $2, NOW())
+         ON CONFLICT (id) DO UPDATE SET
+           starts_at = EXCLUDED.starts_at,
+           ends_at = EXCLUDED.ends_at,
+           updated_at = NOW()`,
+        [startsAt, endsAt]
+      );
+      return res.redirect('/admin/campaign');
+    } catch (err) {
+      next(err);
+    }
   });
 
   app.get('/admin/prizes', requireAdmin, async (req, res, next) => {

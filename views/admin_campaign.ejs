@@ -1,0 +1,29 @@
+<%-
+  include('layout', {
+    user: user,
+    isAdmin: isAdmin,
+    body: `
+    <section class="card">
+      <h1>活動時間</h1>
+      <p class="muted">設定刮刮樂可進行的時間區間。時間以<strong>台灣時間（Asia/Taipei）</strong>輸入。欄位留空表示不限制該端（例如只填結束日＝從現在起至結束前皆可刮）。</p>
+      ${error ? `<p class="error">${error}</p>` : ''}
+      ${updatedAtText ? `<p class="muted">上次更新：${String(updatedAtText).replace(/</g, '&lt;')}</p>` : ''}
+
+      <form method="post" action="/admin/campaign" class="form">
+        <label>
+          活動開始時間（可留空）
+          <input type="datetime-local" name="starts_at" value="${String(startsAtInput || '').replace(/"/g, '&quot;')}" />
+        </label>
+        <label>
+          活動結束時間（可留空）
+          <input type="datetime-local" name="ends_at" value="${String(endsAtInput || '').replace(/"/g, '&quot;')}" />
+        </label>
+        <div class="actions">
+          <button type="submit" class="btn primary">儲存</button>
+          <a class="btn" href="/admin/prizes">返回獎品設定</a>
+        </div>
+      </form>
+    </section>
+  `
+  })
+%>

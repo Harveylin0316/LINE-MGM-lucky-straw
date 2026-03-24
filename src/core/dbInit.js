@@ -89,6 +89,16 @@ async function initDb({ query, adminUsername, adminPassword, skipDdl = false }) 
     created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
   )`);
 
+  await query(`CREATE TABLE IF NOT EXISTS campaign_settings (
+    id SMALLINT PRIMARY KEY DEFAULT 1 CHECK (id = 1),
+    starts_at TIMESTAMPTZ,
+    ends_at TIMESTAMPTZ,
+    updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+  )`);
+  await query(
+    `INSERT INTO campaign_settings (id) VALUES (1) ON CONFLICT (id) DO NOTHING`
+  );
+
   // Supabase exposes public schema via PostgREST by default.
   // Enable RLS on app tables to prevent direct external reads/writes.
   await query('ALTER TABLE users ENABLE ROW LEVEL SECURITY');
@@ -98,6 +108,7 @@ async function initDb({ query, adminUsername, adminPassword, skipDdl = false }) 
   await query('ALTER TABLE line_invites ENABLE ROW LEVEL SECURITY');
   await query('ALTER TABLE line_webhook_events ENABLE ROW LEVEL SECURITY');
   await query('ALTER TABLE line_push_logs ENABLE ROW LEVEL SECURITY');
+  await query('ALTER TABLE campaign_settings ENABLE ROW LEVEL SECURITY');
 
   await query('CREATE INDEX IF NOT EXISTS draw_logs_user_id_id_desc_idx ON draw_logs(user_id, id DESC)');
   await query('CREATE INDEX IF NOT EXISTS prizes_quantity_id_idx ON prizes(quantity, id)');

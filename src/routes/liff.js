@@ -1,5 +1,6 @@
 const bcrypt = require('bcryptjs');
 const crypto = require('crypto');
+const { getCampaignPhase } = require('../core/campaignWindow');
 
 function normalizeLiffNextPath(rawNextPath, fallbackPath = '/liff/lottery') {
   if (typeof rawNextPath !== 'string') return fallbackPath;
@@ -520,7 +521,7 @@ function registerLiffRoutes(app, deps) {
   app.get('/liff/lottery', requireLiffLotteryPage, async (req, res, next) => {
     try {
       const row = req.liffLotteryContext || {};
-      const [availablePrizes, winsRs] = await Promise.all([
+      const [availablePrizes, winsRs, campaignRs] = await Promise.all([
         getAvailablePrizes(),
         query(
           `SELECT prize_name, message, created_at
@@ -529,8 +530,10 @@ function registerLiffRoutes(app, deps) {
            ORDER BY id DESC
            LIMIT 30`,
           [req.authUser.uid]
-        )
+        ),
+        query('SELECT starts_at, ends_at FROM campaign_settings WHERE id = 1')
       ]);
+      const campaignPhase = getCampaignPhase(campaignRs.rows[0] || null);
       const drawResult = consumeDrawResultCookie(req, res);
       const inviteCode = await ensureInviteCode(req.authUser.uid, row.invite_code);
       const invitePath = inviteCode ? `/liff/${encodeURIComponent(inviteCode)}` : '/liff/lottery';
@@ -557,7 +560,8 @@ function registerLiffRoutes(app, deps) {
         liffId: liffId || '',
         recentWins,
         redemptionNoteHtml: redemptionNoteToHtml(redemptionNoteRaw),
-        campaignPageUrl: campaignPageUrlResolved
+        campaignPageUrl: campaignPageUrlResolved,
+        campaignPhase
       });
     } catch (err) {
       next(err);
@@ -578,6 +582,15 @@ function registerLiffRoutes(app, deps) {
       if (currentLeft <= 0) {
         await client.query('ROLLBACK');
         setDrawResultCookie(res, '您的刮刮樂次數已用完');
+        return res.redirect('/liff/lottery');
+      }
+
+      const campaignRs = await client.query('SELECT starts_at, ends_at FROM campaign_settings WHERE id = 1');
+      const drawCampaignPhase = getCampaignPhase(campaignRs.rows[0] || null);
+      if (drawCampaignPhase !== 'active') {
+        await client.query('ROLLBACK');
+        const msg = drawCampaignPhase === 'not_started' ? '活動尚未開始' : '活動已經結束';
+        setDrawResultCookie(res, msg);
         return res.redirect('/liff/lottery');
       }
 

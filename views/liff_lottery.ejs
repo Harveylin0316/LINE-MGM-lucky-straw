@@ -10,6 +10,7 @@
 
       ${
         (() => {
+          const phase = typeof campaignPhase !== 'undefined' ? campaignPhase : 'active';
           const canScratch = (typeof drawsLeft !== 'undefined' ? drawsLeft : 0) > 0;
           const hasResult = !!result;
           const isWin = hasResult && String(result).includes('恭喜中獎');
@@ -31,6 +32,24 @@
                     <p id="retry-loading-hint" class="muted center-text retry-loading-hint" style="display:none;">讀取中，請勿關閉視窗</p>`
                   : '<p class="muted center-text">目前可刮次數為 0，快邀請 1 位好友完成任務，再獲得 1 次春日刮刮樂機會。</p>'
               }
+            </section>`;
+          }
+
+          if (phase === 'not_started') {
+            return `<section class="scratch-zone">
+              <div class="scratch-card scratch-disabled">
+                <div class="scratch-underlay">⏳ 活動尚未開始</div>
+              </div>
+              <p class="muted center-text">活動尚未開始，請於活動開跑後再來刮刮樂。</p>
+            </section>`;
+          }
+
+          if (phase === 'ended') {
+            return `<section class="scratch-zone">
+              <div class="scratch-card scratch-disabled">
+                <div class="scratch-underlay">🏁 活動已經結束</div>
+              </div>
+              <p class="muted center-text">活動已經結束，感謝您的參與。</p>
             </section>`;
           }
 
