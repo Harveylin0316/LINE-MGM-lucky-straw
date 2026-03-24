@@ -463,7 +463,7 @@ h1 {
   margin: 0 auto;
   aspect-ratio: 1024 / 522;
   background-color: #f3d3dc;
-  background-image: url('/images/lottery-hero-bg.jpg');
+  background-image: url('/images/lottery-hero-bg.png');
   background-size: contain;
   background-position: top center;
   background-repeat: no-repeat;
@@ -803,7 +803,7 @@ h1 {
   margin: -16px -16px 12px;
   aspect-ratio: 1024 / 522;
   border-radius: 16px 16px 0 0;
-  background-image: url('/images/lottery-hero-bg.jpg');
+  background-image: url('/images/lottery-hero-bg.png');
   background-size: cover;
   background-position: center;
   position: relative;
