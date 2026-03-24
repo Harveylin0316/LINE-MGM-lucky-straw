@@ -1045,7 +1045,7 @@ h1 {
   display: flex;
   justify-content: center;
   align-items: center;
-  padding: 10px 12px;
+  padding: 10px 22px 10px 12px;
   border: 1px solid #dcc58c;
   border-radius: 12px;
   overflow: hidden;
@@ -1060,6 +1060,7 @@ h1 {
   margin: 0 auto;
   object-fit: contain;
   object-position: center center;
+  transform: translateX(10px);
 }
 
 .scratch-zone {
