@@ -1,5 +1,6 @@
 function createViewStateCore({ query, isProduction }) {
-  const availablePrizesCacheTtlMs = isProduction ? 5000 : 0;
+  /** 正式環境拉長 TTL，減少 LIFF 首屏對 prizes 的重複查詢 */
+  const availablePrizesCacheTtlMs = isProduction ? 30000 : 0;
   let availablePrizesCache = {
     value: null,
     expiresAt: 0

@@ -311,10 +311,19 @@ function registerLiffRoutes(app, deps) {
     return null;
   }
 
-  async function ensureInviteCode(userId) {
-    const found = await query('SELECT invite_code FROM users WHERE id = $1', [userId]);
-    if (found.rowCount === 0) return null;
-    let currentCode = String(found.rows[0]?.invite_code || '').trim();
+  /**
+   * @param {number} userId
+   * @param {string|null|undefined} knownInviteCode 若已由其他查詢帶出，可略過開頭 SELECT
+   */
+  async function ensureInviteCode(userId, knownInviteCode) {
+    let currentCode;
+    if (knownInviteCode !== undefined) {
+      currentCode = String(knownInviteCode ?? '').trim();
+    } else {
+      const found = await query('SELECT invite_code FROM users WHERE id = $1', [userId]);
+      if (found.rowCount === 0) return null;
+      currentCode = String(found.rows[0]?.invite_code || '').trim();
+    }
     if (/^[a-z0-9]{4}$/i.test(currentCode)) return currentCode;
 
     for (let i = 0; i < 40; i += 1) {
@@ -370,6 +379,55 @@ function registerLiffRoutes(app, deps) {
       }
       const nextPath = normalizeLiffNextPath(req.originalUrl, '/liff/lottery');
       return res.redirect(`/liff/login?next=${encodeURIComponent(nextPath)}`);
+    } catch (err) {
+      return next(err);
+    }
+  }
+
+  /** 刮刮樂首屏：一次查 users + 邀請統計，取代 requireLiffLogin + 重複 users / line_invites 查詢 */
+  async function requireLiffLotteryPage(req, res, next) {
+    try {
+      if (!isLineMobileClientRequest(req)) {
+        return res.redirect('/liff/login?reason=line_client_only');
+      }
+      if (!req.authUser?.uid) {
+        const nextPath = normalizeLiffNextPath(req.originalUrl, '/liff/lottery');
+        return res.redirect(`/liff/login?next=${encodeURIComponent(nextPath)}`);
+      }
+      const uid = Number(req.authUser.uid);
+      if (!Number.isFinite(uid) || uid <= 0) {
+        clearAuthCookie(res);
+        return res.redirect('/liff/login?reason=line_only');
+      }
+      const rs = await query(
+        `SELECT u.draws_left,
+                u.extra_draws,
+                u.line_user_id,
+                u.line_display_name,
+                u.username,
+                u.invite_code,
+                COALESCE(
+                  (SELECT COUNT(*) FILTER (WHERE li.status = 'rewarded')::int
+                   FROM line_invites li
+                   WHERE li.inviter_user_id = u.id),
+                  0
+                ) AS rewarded_count,
+                COALESCE(
+                  (SELECT COUNT(*) FILTER (WHERE li.status = 'pending')::int
+                   FROM line_invites li
+                   WHERE li.inviter_user_id = u.id),
+                  0
+                ) AS pending_count
+         FROM users u
+         WHERE u.id = $1`,
+        [uid]
+      );
+      if (rs.rowCount === 0 || !rs.rows[0].line_user_id) {
+        clearAuthCookie(res);
+        return res.redirect('/liff/login?reason=line_only');
+      }
+      req.liffLotteryContext = rs.rows[0];
+      return next();
     } catch (err) {
       return next(err);
     }
@@ -459,14 +517,11 @@ function registerLiffRoutes(app, deps) {
     }
   }
 
-  app.get('/liff/lottery', requireLiffLogin, async (req, res, next) => {
+  app.get('/liff/lottery', requireLiffLotteryPage, async (req, res, next) => {
     try {
-      const [userRs, availablePrizes, inviteStats, winsRs] = await Promise.all([
-        query('SELECT draws_left, extra_draws, line_user_id, line_display_name, username FROM users WHERE id = $1', [
-          req.authUser.uid
-        ]),
+      const row = req.liffLotteryContext || {};
+      const [availablePrizes, winsRs] = await Promise.all([
         getAvailablePrizes(),
-        getInviteStats(req.authUser.uid),
         query(
           `SELECT prize_name, message, created_at
            FROM draw_logs
@@ -476,9 +531,8 @@ function registerLiffRoutes(app, deps) {
           [req.authUser.uid]
         )
       ]);
-      const row = userRs.rows[0] || { draws_left: 0, extra_draws: 0 };
       const drawResult = consumeDrawResultCookie(req, res);
-      const inviteCode = await ensureInviteCode(req.authUser.uid);
+      const inviteCode = await ensureInviteCode(req.authUser.uid, row.invite_code);
       const invitePath = inviteCode ? `/liff/${encodeURIComponent(inviteCode)}` : '/liff/lottery';
       const inviteLink = buildLiffPermanentUrl(liffId, invitePath, '/liff/lottery');
       const redemptionNoteRaw =
@@ -497,8 +551,8 @@ function registerLiffRoutes(app, deps) {
         displayName: row.line_display_name || row.username || req.authUser.un,
         availablePrizes,
         inviteLink,
-        rewardedInviteCount: inviteStats.rewarded_count || 0,
-        pendingInviteCount: inviteStats.pending_count || 0,
+        rewardedInviteCount: Number(row.rewarded_count) || 0,
+        pendingInviteCount: Number(row.pending_count) || 0,
         lineOfficialAddFriendUrl: lineOfficialAddFriendUrl || '',
         liffId: liffId || '',
         recentWins,
