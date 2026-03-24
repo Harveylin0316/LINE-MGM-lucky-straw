@@ -3,3 +3,10 @@ data.db
 sessions.db
 npm-debug.log*
 .DS_Store
+.env
+.env.*
+!.env.example
+!.env.migrate.example
+.env.migrate
+supabase_backup.dump
+supabase_restore.log
