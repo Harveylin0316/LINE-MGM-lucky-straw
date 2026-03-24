@@ -35,7 +35,13 @@ command -v pg_dump >/dev/null 2>&1 || {
 }
 
 echo "==> Dump 舊庫..."
-pg_dump --format=custom --no-owner --file="$DUMP" "$OLD_DATABASE_URL"
+if ! pg_dump --format=custom --no-owner --file="$DUMP" "$OLD_DATABASE_URL"; then
+  echo ""
+  echo "若錯誤為 could not translate host name：Direct 連線 (db.*.supabase.co) 常僅支援 IPv6。"
+  echo "請到 Supabase 專案 → Connect → 選「Session pooler」，複製 URI（port 5432，使用者名 postgres.專案REF），"
+  echo "更新 .env.migrate 的 OLD_DATABASE_URL / NEW_DATABASE_URL 後再執行本腳本。"
+  exit 1
+fi
 
 echo "==> Restore 至新庫（部分物件錯誤可忽略，見 $LOG）..."
 set +e
