@@ -586,7 +586,7 @@ function registerLiffRoutes(app, deps) {
       );
       if (prizeRs.rowCount === 0) {
         await client.query('ROLLBACK');
-        setDrawResultCookie(res, '目前沒有可刮獎品，請聯絡管理員補庫存');
+        setDrawResultCookie(res, '系統維護中，請稍後再試或於官方帳號 LINE@ 回報');
         return res.redirect('/liff/lottery');
       }
 
