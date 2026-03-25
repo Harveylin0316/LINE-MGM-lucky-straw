@@ -27,7 +27,39 @@ const DATABASE_URL = process.env.DATABASE_URL;
 const LIFF_ID = process.env.LIFF_ID || '';
 const LINE_CHANNEL_SECRET = process.env.LINE_CHANNEL_SECRET || '';
 const LINE_CHANNEL_ACCESS_TOKEN = process.env.LINE_CHANNEL_ACCESS_TOKEN || '';
-const LINE_OFFICIAL_ADD_FRIEND_URL = process.env.LINE_OFFICIAL_ADD_FRIEND_URL || '';
+const LINE_OFFICIAL_ADD_FRIEND_URL_RAW = process.env.LINE_OFFICIAL_ADD_FRIEND_URL || '';
+
+/**
+ * LINE@ 加好友連結必須為絕對網址。若設成相對路徑（例如 liff/xxx），在 /liff/{邀請碼} 頁面上會變成 /liff/liff/xxx 而 404。
+ */
+function normalizeLineOfficialAddFriendUrl(raw) {
+  const s = typeof raw === 'string' ? raw.trim() : '';
+  if (!s) return '';
+  let candidate = s;
+  if (!/^https?:\/\//i.test(candidate)) {
+    if (/^\/\//.test(candidate)) {
+      candidate = `https:${candidate}`;
+    } else if (/^line\.me\//i.test(candidate)) {
+      candidate = `https://${candidate}`;
+    } else {
+      return '';
+    }
+  }
+  try {
+    const u = new URL(candidate);
+    if (u.protocol !== 'http:' && u.protocol !== 'https:') return '';
+    return u.href;
+  } catch {
+    return '';
+  }
+}
+
+const LINE_OFFICIAL_ADD_FRIEND_URL = normalizeLineOfficialAddFriendUrl(LINE_OFFICIAL_ADD_FRIEND_URL_RAW);
+if (LINE_OFFICIAL_ADD_FRIEND_URL_RAW && !LINE_OFFICIAL_ADD_FRIEND_URL) {
+  console.warn(
+    'LINE_OFFICIAL_ADD_FRIEND_URL is set but invalid (use full https URL, e.g. https://line.me/R/ti/p/@xxx). Ignoring.'
+  );
+}
 const LIFF_INVITE_BONUS_MAX = Number.parseInt(process.env.LIFF_INVITE_BONUS_MAX || '20', 10);
 const LIFF_LINE_USER_BCRYPT_ROUNDS = Number.parseInt(process.env.LIFF_LINE_USER_BCRYPT_ROUNDS || '6', 10);
 /** 自訂 LIFF 兌換說明（可含換行）；未設定則使用預設文案 */
