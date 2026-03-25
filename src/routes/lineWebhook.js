@@ -7,7 +7,7 @@ function safeEqualBase64(a, b) {
   return crypto.timingSafeEqual(left, right);
 }
 
-function createLineWebhookHandler({ pool, channelSecret, inviteBonusMax }) {
+function createLineWebhookHandler({ pool, channelSecret, inviteBonusMax, linePush }) {
   async function appendWebhookEventLog(payload) {
     await pool.query(
       `INSERT INTO line_webhook_events
@@ -81,6 +81,18 @@ function createLineWebhookHandler({ pool, channelSecret, inviteBonusMax }) {
         };
       }
 
+      const [inviteeUserRs, inviterLineRs] = await Promise.all([
+        client.query('SELECT line_display_name, username FROM users WHERE line_user_id = $1', [lineUserId]),
+        client.query('SELECT line_user_id FROM users WHERE id = $1', [invite.inviter_user_id])
+      ]);
+      const inviteeRow = inviteeUserRs.rows[0] || {};
+      const inviterRow = inviterLineRs.rows[0] || {};
+      const inviteeDisplayName =
+        String(inviteeRow.line_display_name || '').trim() ||
+        String(inviteeRow.username || '').trim() ||
+        '您的好友';
+      const inviterLineUserId = inviterRow.line_user_id || null;
+
       await client.query('UPDATE users SET extra_draws = extra_draws + 1, draws_left = draws_left + 1 WHERE id = $1', [
         invite.inviter_user_id
       ]);
@@ -92,7 +104,9 @@ function createLineWebhookHandler({ pool, channelSecret, inviteBonusMax }) {
       return {
         result: 'rewarded',
         inviteId: invite.id,
-        inviterUserId: invite.inviter_user_id
+        inviterUserId: invite.inviter_user_id,
+        inviterLineUserId,
+        inviteeDisplayName
       };
     } catch (err) {
       await client.query('ROLLBACK');
@@ -153,6 +167,28 @@ function createLineWebhookHandler({ pool, channelSecret, inviteBonusMax }) {
           eventTimestamp: event?.timestamp,
           rawEvent: event || {}
         });
+
+        if (
+          rewardResult?.result === 'rewarded' &&
+          rewardResult.inviterLineUserId &&
+          linePush &&
+          typeof linePush.pushLineMessages === 'function'
+        ) {
+          const friendName = String(rewardResult.inviteeDisplayName || '您的好友').slice(0, 80);
+          const pushText = `您的朋友「${friendName}」已成功加入，恭喜您獲得 1 次刮刮樂次數！`;
+          Promise.resolve()
+            .then(() =>
+              linePush.pushLineMessages(rewardResult.inviterLineUserId, [pushText], {
+                userId: rewardResult.inviterUserId,
+                pushType: 'invite_reward_notification',
+                inviteeDisplayName: friendName,
+                inviteId: rewardResult.inviteId
+              })
+            )
+            .catch(err => {
+              console.error('LINE invite reward push failed:', err.message);
+            });
+        }
       }
 
       return res.status(200).json({ ok: true });

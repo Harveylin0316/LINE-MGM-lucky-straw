@@ -14,6 +14,7 @@ const { createAdminLoginThrottle } = require('./core/adminLoginThrottle');
 const { registerWebRoutes } = require('./routes/web');
 const { registerLiffRoutes } = require('./routes/liff');
 const { createLineWebhookHandler } = require('./routes/lineWebhook');
+const { createLinePushService } = require('./core/linePush');
 
 const isProduction = process.env.NODE_ENV === 'production';
 const ADMIN_USERNAME = process.env.ADMIN_USERNAME || 'admin';
@@ -112,6 +113,11 @@ const adminLoginThrottle = createAdminLoginThrottle({
   maxAttempts: ADMIN_LOGIN_MAX_ATTEMPTS
 });
 
+const linePush = createLinePushService({
+  query,
+  lineChannelAccessToken: LINE_CHANNEL_ACCESS_TOKEN
+});
+
 let initError = null;
 const initPromise = initDb({
   query,
@@ -144,7 +150,8 @@ app.post(
   createLineWebhookHandler({
     pool,
     channelSecret: LINE_CHANNEL_SECRET,
-    inviteBonusMax: Number.isFinite(LIFF_INVITE_BONUS_MAX) ? LIFF_INVITE_BONUS_MAX : 20
+    inviteBonusMax: Number.isFinite(LIFF_INVITE_BONUS_MAX) ? LIFF_INVITE_BONUS_MAX : 20,
+    linePush
   })
 );
 app.use(express.json());
@@ -220,7 +227,7 @@ registerLiffRoutes(app, {
   lotteryCore,
   viewStateCore,
   liffId: LIFF_ID,
-  lineChannelAccessToken: LINE_CHANNEL_ACCESS_TOKEN,
+  linePush,
   inviteBonusMax: Number.isFinite(LIFF_INVITE_BONUS_MAX) ? LIFF_INVITE_BONUS_MAX : 20,
   lineOfficialAddFriendUrl: LINE_OFFICIAL_ADD_FRIEND_URL,
   lineUserPasswordHashRounds: Number.isFinite(LIFF_LINE_USER_BCRYPT_ROUNDS) ? LIFF_LINE_USER_BCRYPT_ROUNDS : 6,
