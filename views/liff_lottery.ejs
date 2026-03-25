@@ -169,37 +169,64 @@
         var retryLoadingHint = document.getElementById('retry-loading-hint');
         var liffId = ${JSON.stringify(liffId || '')};
         var liffInitPromise = null;
+        /** true only after liff.init() succeeds — used to call shareTargetPicker without await before it (user-gesture). */
+        var liffInitSucceeded = false;
         if (!btn || !linkEl) return;
 
-        async function ensureLiffReady() {
-          if (!liffId || typeof liff === 'undefined') return false;
+        function ensureLiffReady() {
+          if (!liffId || typeof liff === 'undefined') {
+            return Promise.resolve(false);
+          }
           if (!liffInitPromise) {
             liffInitPromise = liff
               .init({ liffId: liffId })
               .then(function () {
+                liffInitSucceeded = true;
                 return true;
               })
               .catch(function () {
+                liffInitSucceeded = false;
                 return false;
               });
           }
           return liffInitPromise;
         }
 
-        async function shareViaLiff(inviteLink) {
-          var ready = await ensureLiffReady();
-          if (!ready) return false;
-          if (!liff.isLoggedIn()) return false;
-          if (!liff.isInClient()) return false;
-          if (!liff.isApiAvailable('shareTargetPicker')) return false;
-          const text = 'OpenRice 春日野餐祭開跑！訂餐廳能賺現金，現在還有春日刮刮樂，刮開就知道有沒有中，大獎有 2 萬里程數！一起來試試手氣吧 👇\\n' + inviteLink;
-          const result = await liff.shareTargetPicker([{ type: 'text', text: text }]);
-          return result !== null;
-        }
+        // Start init on load so the first tap is not blocked by async init (shareTargetPicker needs user activation).
+        ensureLiffReady();
 
         function openLineShareFallback(inviteLink) {
           var text = 'OpenRice 春日野餐祭開跑！訂餐廳能賺現金，現在還有春日刮刮樂，刮開就知道有沒有中，大獎有 2 萬里程數！一起來試試手氣吧 👇\\n' + inviteLink;
           window.location.href = 'https://line.me/R/msg/text/?' + encodeURIComponent(text);
+        }
+
+        function runShareTargetPicker(inviteLink, releaseBtn) {
+          var text = 'OpenRice 春日野餐祭開跑！訂餐廳能賺現金，現在還有春日刮刮樂，刮開就知道有沒有中，大獎有 2 萬里程數！一起來試試手氣吧 👇\\n' + inviteLink;
+          liff
+            .shareTargetPicker([{ type: 'text', text: text }])
+            .then(
+              function (result) {
+                if (result !== null) {
+                  btn.textContent = '已開啟分享';
+                  setTimeout(function () {
+                    btn.textContent = '分享春日邀請給好友';
+                  }, 1200);
+                } else {
+                  openLineShareFallback(inviteLink);
+                }
+              },
+              function () {
+                openLineShareFallback(inviteLink);
+              }
+            )
+            .then(
+              function () {
+                releaseBtn();
+              },
+              function () {
+                releaseBtn();
+              }
+            );
         }
 
         async function copyInviteLink(inviteLink) {
@@ -211,28 +238,55 @@
           return false;
         }
 
-        btn.addEventListener('click', async function () {
+        btn.addEventListener('click', function () {
+          function releaseBtn() {
+            setTimeout(function () {
+              btn.disabled = false;
+            }, 300);
+          }
           try {
             var inviteLink = (linkEl.textContent || '').trim();
             if (!inviteLink) return;
             btn.disabled = true;
-            var shared = await shareViaLiff(inviteLink);
-            if (!shared) {
-              openLineShareFallback(inviteLink);
+
+            // If LIFF is already inited, open picker synchronously from this tap (avoids losing user gesture).
+            if (
+              liffInitSucceeded &&
+              typeof liff !== 'undefined' &&
+              liff.isLoggedIn() &&
+              liff.isInClient() &&
+              liff.isApiAvailable('shareTargetPicker')
+            ) {
+              runShareTargetPicker(inviteLink, releaseBtn);
               return;
             }
-            btn.textContent = '已開啟分享';
-            setTimeout(function () {
-              btn.textContent = '分享春日邀請給好友';
-            }, 1200);
+
+            ensureLiffReady()
+              .then(function (ready) {
+                if (!ready) {
+                  openLineShareFallback(inviteLink);
+                  releaseBtn();
+                  return;
+                }
+                if (
+                  liff.isLoggedIn() &&
+                  liff.isInClient() &&
+                  liff.isApiAvailable('shareTargetPicker')
+                ) {
+                  runShareTargetPicker(inviteLink, releaseBtn);
+                } else {
+                  openLineShareFallback(inviteLink);
+                  releaseBtn();
+                }
+              })
+              .catch(function () {
+                openLineShareFallback(inviteLink);
+                releaseBtn();
+              });
           } catch (err) {
-            var inviteLink = (linkEl.textContent || '').trim();
-            if (!inviteLink) return;
-            openLineShareFallback(inviteLink);
-          } finally {
-            setTimeout(function () {
-              btn.disabled = false;
-            }, 300);
+            var inviteLinkCatch = (linkEl.textContent || '').trim();
+            if (inviteLinkCatch) openLineShareFallback(inviteLinkCatch);
+            releaseBtn();
           }
         });
 
