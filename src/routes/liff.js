@@ -444,6 +444,15 @@ function registerLiffRoutes(app, deps) {
         });
       } else if (bindResult === 'bound_other') {
         setDrawResultCookie(res, '你已綁定其他邀請，無法重複綁定。');
+      } else if (bindResult === 'already_capped') {
+        setDrawResultCookie(
+          res,
+          '邀請人的好友加碼已達上限，無法再發放次數。若你已加入官方 LINE@，無需重複操作。'
+        );
+      } else if (bindResult === 'missing_line_account') {
+        setDrawResultCookie(res, '無法取得 LINE 帳號，請重新登入後再試。');
+      } else if (bindResult === 'invalid_ref') {
+        setDrawResultCookie(res, '邀請連結無效或已失效。');
       } else {
         setDrawResultCookie(res, '邀請連結無效或無法綁定。');
       }
