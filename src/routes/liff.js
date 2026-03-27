@@ -592,8 +592,7 @@ function registerLiffRoutes(app, deps) {
       if (remainingInviteBonus > 0) {
         let secondMessage;
         if (drawsAfterThis === 0) {
-          secondMessage =
-            '你的春日刮刮樂次數已用完。尚餘好友加碼名額，邀請尚未加入 OpenRice LINE@ 的好友完成任務，即可再獲刮刮樂機會！';
+          secondMessage = `你的春日刮刮樂次數已用完。尚餘 ${remainingInviteBonus} 個好友加碼名額，邀請尚未加入 OpenRice LINE@ 的好友完成任務，即可再獲刮刮樂機會！`;
         } else {
           secondMessage = `你還可透過邀請好友加入 OpenRice LINE@，再獲得 ${remainingInviteBonus} 次刮刮樂機會。`;
         }

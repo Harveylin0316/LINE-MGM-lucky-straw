@@ -22,7 +22,9 @@
           const remainingInviteSlots = Math.max(0, inviteMax - rewardedInv);
           const zeroDrawsInviteHint =
             remainingInviteSlots > 0
-              ? '<p class="muted center-text">目前可刮次數為 0，尚餘好友加碼名額，邀請尚未加入 OpenRice LINE@ 的好友完成任務，即可再獲刮刮樂機會。</p>'
+              ? '<p class="muted center-text">目前可刮次數為 0，尚餘 ' +
+                remainingInviteSlots +
+                ' 個好友加碼名額，邀請尚未加入 OpenRice LINE@ 的好友完成任務，即可再獲刮刮樂機會。</p>'
               : '<p class="muted center-text">目前可刮次數為 0，好友加碼名額也已用罄。您已完成春日野餐祭刮刮樂與好友任務，感謝您的參與！</p>';
 
           if (hasResult) {
@@ -72,7 +74,9 @@
               </div>
               ${
                 remainingInviteSlots > 0
-                  ? '<p class="muted center-text">尚餘好友加碼名額，邀請尚未加入 OpenRice LINE@ 的好友完成任務，即可再獲刮刮樂機會。</p>'
+                  ? '<p class="muted center-text">尚餘 ' +
+                    remainingInviteSlots +
+                    ' 個好友加碼名額，邀請尚未加入 OpenRice LINE@ 的好友完成任務，即可再獲刮刮樂機會。</p>'
                   : '<p class="muted center-text">好友加碼名額已用罄。您已完成春日野餐祭刮刮樂與好友任務，感謝您的參與！</p>'
               }
             </section>`;
