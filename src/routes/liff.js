@@ -497,6 +497,7 @@ function registerLiffRoutes(app, deps) {
         inviteLink,
         rewardedInviteCount: Number(row.rewarded_count) || 0,
         pendingInviteCount: Number(row.pending_count) || 0,
+        inviteBonusMax: inviteLimit,
         lineOfficialAddFriendUrl: lineOfficialAddFriendUrl || '',
         liffId: liffId || '',
         recentWins,
@@ -563,9 +564,22 @@ function registerLiffRoutes(app, deps) {
       const inviteLink = buildLiffPermanentUrl(liffId, invitePath, '/liff/lottery');
 
       const firstMessage = `🌸 春日野餐祭中獎通知\n恭喜你刮中：${picked.name}`;
-      let secondMessage = `你還可透過邀請好友加入 OpenRice LINE@，再獲得 ${remainingInviteBonus} 次刮刮樂機會。`;
-      if (inviteLink) {
-        secondMessage += `\n\n分享你的專屬邀請連結：\n${inviteLink}`;
+      const drawsAfterThis = currentLeft - 1;
+      let secondMessage;
+      if (remainingInviteBonus > 0) {
+        if (drawsAfterThis === 0) {
+          secondMessage =
+            '你的春日刮刮樂次數已用完。尚餘好友加碼名額，邀請尚未加入 OpenRice LINE@ 的好友完成任務，即可再獲刮刮樂機會！';
+        } else {
+          secondMessage = `你還可透過邀請好友加入 OpenRice LINE@，再獲得 ${remainingInviteBonus} 次刮刮樂機會。`;
+        }
+        if (inviteLink) {
+          secondMessage += `\n\n分享你的專屬邀請連結：\n${inviteLink}`;
+        }
+      } else if (drawsAfterThis === 0) {
+        secondMessage = '你的春日刮刮樂次數已用完，好友加碼名額也已用罄。感謝參與春日野餐祭！';
+      } else {
+        secondMessage = '好友加碼名額已用罄，請把握剩餘刮刮樂次數。';
       }
       // Keep scratch-card UX responsive: send LINE push in background.
       Promise.resolve()
@@ -575,6 +589,7 @@ function registerLiffRoutes(app, deps) {
             pushType: 'winner_notification',
             prizeName: picked.name,
             remainingInviteBonus,
+            drawsAfterThis,
             inviteLink
           })
         )

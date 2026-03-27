@@ -14,6 +14,16 @@
           const canScratch = (typeof drawsLeft !== 'undefined' ? drawsLeft : 0) > 0;
           const hasResult = !!result;
           const isWin = hasResult && String(result).includes('恭喜中獎');
+          const inviteMax =
+            typeof inviteBonusMax !== 'undefined' && Number.isFinite(Number(inviteBonusMax))
+              ? Math.max(0, Number(inviteBonusMax))
+              : 2;
+          const rewardedInv = typeof rewardedInviteCount !== 'undefined' ? Number(rewardedInviteCount) || 0 : 0;
+          const remainingInviteSlots = Math.max(0, inviteMax - rewardedInv);
+          const zeroDrawsInviteHint =
+            remainingInviteSlots > 0
+              ? '<p class="muted center-text">目前可刮次數為 0，尚餘好友加碼名額，邀請尚未加入 OpenRice LINE@ 的好友完成任務，即可再獲刮刮樂機會。</p>'
+              : '<p class="muted center-text">目前可刮次數為 0，好友加碼名額也已用罄。您已完成春日野餐祭刮刮樂與好友任務，感謝您的參與！</p>';
 
           if (hasResult) {
             return `<section class="scratch-zone">
@@ -30,7 +40,7 @@
                       <a class="btn primary" href="/liff/lottery" id="retry-scratch-btn">再刮一次（剩餘${typeof drawsLeft !== 'undefined' ? drawsLeft : 0}次）</a>
                     </div>
                     <p id="retry-loading-hint" class="muted center-text retry-loading-hint" style="display:none;">讀取中，請勿關閉視窗</p>`
-                  : '<p class="muted center-text">目前可刮次數為 0，快邀請 1 位好友完成任務，再獲得 1 次春日刮刮樂機會。</p>'
+                  : zeroDrawsInviteHint
               }
             </section>`;
           }
@@ -54,11 +64,17 @@
           }
 
           if (!canScratch) {
+            const underlay =
+              remainingInviteSlots > 0 ? '🎁 目前可刮次數為 0' : '🌸 春日野餐祭已完成';
             return `<section class="scratch-zone">
               <div class="scratch-card scratch-disabled">
-                <div class="scratch-underlay">🎁 目前可刮次數為 0</div>
+                <div class="scratch-underlay">${underlay}</div>
               </div>
-              <p class="muted center-text">邀請 1 位好友完成任務可再獲得 1 次春日刮刮樂機會。</p>
+              ${
+                remainingInviteSlots > 0
+                  ? '<p class="muted center-text">尚餘好友加碼名額，邀請尚未加入 OpenRice LINE@ 的好友完成任務，即可再獲刮刮樂機會。</p>'
+                  : '<p class="muted center-text">好友加碼名額已用罄。您已完成春日野餐祭刮刮樂與好友任務，感謝您的參與！</p>'
+              }
             </section>`;
           }
 
@@ -88,7 +104,12 @@
         </div>
         <div class="liff-metric-item">
           <span class="label">剩餘好友加碼名額</span>
-          <strong>${Math.max(0, 2 - (typeof rewardedInviteCount !== 'undefined' ? rewardedInviteCount : 0))}</strong>
+          <strong>${Math.max(
+            0,
+            (typeof inviteBonusMax !== 'undefined' && Number.isFinite(Number(inviteBonusMax))
+              ? Math.max(0, Number(inviteBonusMax))
+              : 2) - (typeof rewardedInviteCount !== 'undefined' ? Number(rewardedInviteCount) || 0 : 0)
+          )}</strong>
         </div>
       </div>
 
@@ -124,7 +145,12 @@
 
       <div class="liff-invite-box">
       <h2 class="liff-title">揪好友同行春日野餐祭</h2>
-      <p class="muted">每位<strong>尚未加入</strong> OpenRice LINE@ 的好友完成加好友任務可加碼 1 次，最多 2 次，剩餘可加碼 <strong>${Math.max(0, 2 - (typeof rewardedInviteCount !== 'undefined' ? rewardedInviteCount : 0))}</strong> 次。</p>
+      <p class="muted">每位<strong>尚未加入</strong> OpenRice LINE@ 的好友完成加好友任務可加碼 1 次，最多 <strong>${typeof inviteBonusMax !== 'undefined' && Number.isFinite(Number(inviteBonusMax)) ? Math.max(0, Number(inviteBonusMax)) : 2}</strong> 次，剩餘可加碼 <strong>${Math.max(
+        0,
+        (typeof inviteBonusMax !== 'undefined' && Number.isFinite(Number(inviteBonusMax))
+          ? Math.max(0, Number(inviteBonusMax))
+          : 2) - (typeof rewardedInviteCount !== 'undefined' ? Number(rewardedInviteCount) || 0 : 0)
+      )}</strong> 次。</p>
       <code class="invite-link invite-link-compact" id="liff-invite-link" title="${inviteLink || ''}">${inviteLink || ''}</code>
       <div class="actions">
         <button type="button" class="btn primary" id="share-invite-btn">分享春日邀請給好友</button>
