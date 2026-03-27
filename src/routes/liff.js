@@ -430,7 +430,7 @@ function registerLiffRoutes(app, deps) {
         return res.render('liff_invite_confirm', {
           user: req.authUser.un,
           lineOfficialAddFriendUrl: lineOfficialAddFriendUrl || '',
-          statusText: '綁定成功！下一步請手動點擊按鈕加入官方 LINE@ 完成任務。'
+          statusText: '綁定成功！若您尚未加入 OpenRice LINE@，請點下方按鈕加好友以完成任務（僅限尚未加入者）。'
         });
       } else if (bindResult === 'self_ref') {
         setDrawResultCookie(res, '不能邀請自己。');
@@ -440,15 +440,12 @@ function registerLiffRoutes(app, deps) {
         return res.render('liff_invite_confirm', {
           user: req.authUser.un,
           lineOfficialAddFriendUrl: lineOfficialAddFriendUrl || '',
-          statusText: '你已綁定過此邀請關係。請手動點擊按鈕前往加入官方 LINE@。'
+          statusText: '你已綁定過此邀請關係。若尚未加入 OpenRice LINE@，可點下方按鈕加好友（僅限尚未加入者才能完成邀請任務）。'
         });
       } else if (bindResult === 'bound_other') {
         setDrawResultCookie(res, '你已綁定其他邀請，無法重複綁定。');
       } else if (bindResult === 'already_capped') {
-        setDrawResultCookie(
-          res,
-          '邀請人的好友加碼已達上限，無法再發放次數。若你已加入官方 LINE@，無需重複操作。'
-        );
+        setDrawResultCookie(res, '邀請人的好友加碼已達上限，無法再發放次數。');
       } else if (bindResult === 'missing_line_account') {
         setDrawResultCookie(res, '無法取得 LINE 帳號，請重新登入後再試。');
       } else if (bindResult === 'invalid_ref') {
