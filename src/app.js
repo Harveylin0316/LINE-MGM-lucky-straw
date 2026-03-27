@@ -82,9 +82,19 @@ function normalizeLinePushPublicBaseUrl(raw) {
   }
 }
 
+/** Netlify 會注入 URL（https 主網域）；未手動設 LINE_PUSH_PUBLIC_BASE_URL 時用此組圖片給 LINE 抓取 */
 const LINE_PUSH_PUBLIC_BASE_URL = normalizeLinePushPublicBaseUrl(
-  process.env.LINE_PUSH_PUBLIC_BASE_URL || process.env.PUBLIC_SITE_URL || ''
+  process.env.LINE_PUSH_PUBLIC_BASE_URL ||
+    process.env.PUBLIC_SITE_URL ||
+    process.env.URL ||
+    process.env.DEPLOY_PRIME_URL ||
+    ''
 );
+if (isProduction && LINE_CHANNEL_ACCESS_TOKEN && !LINE_PUSH_PUBLIC_BASE_URL) {
+  console.warn(
+    'LINE_PUSH_PUBLIC_BASE_URL 未解析成功：中獎推播將不含餐籃圖。請設定 LINE_PUSH_PUBLIC_BASE_URL 或 PUBLIC_SITE_URL，或確認託管平台有注入 URL。'
+  );
+}
 
 function normalizeAdminLoginPath(rawPath) {
   const fallback = '/admin/login';
