@@ -62,7 +62,8 @@ function registerLiffRoutes(app, deps) {
     lineUserPasswordHashRounds,
     liffRedemptionNote,
     liffCampaignPageUrl,
-    linePush
+    linePush,
+    linePushPublicBaseUrl = ''
   } = deps;
 
   function safeHttpUrl(raw) {
@@ -554,6 +555,11 @@ function registerLiffRoutes(app, deps) {
         'INSERT INTO draw_logs (user_id, is_win, prize_name, message) VALUES ($1, true, $2, $3)',
         [req.authUser.uid, picked.name, message]
       );
+      const drawCountRs = await client.query(
+        'SELECT COUNT(*)::int AS c FROM draw_logs WHERE user_id = $1',
+        [req.authUser.uid]
+      );
+      const totalDrawsSoFar = Number(drawCountRs.rows[0]?.c || 0);
       await client.query('COMMIT');
 
       const inviteStats = await getInviteStats(req.authUser.uid);
@@ -566,6 +572,23 @@ function registerLiffRoutes(app, deps) {
       const firstMessage = `🌸 春日野餐祭中獎通知\n恭喜你刮中：${picked.name}`;
       const drawsAfterThis = currentLeft - 1;
       const pushMessages = [firstMessage];
+      const picnicImagePathByDraw = {
+        1: '/images/picnic-basket-001.png',
+        2: '/images/picnic-basket-002.png',
+        3: '/images/picnic-basket-003.png'
+      };
+      const picnicPath =
+        typeof linePushPublicBaseUrl === 'string' && linePushPublicBaseUrl.trim()
+          ? picnicImagePathByDraw[totalDrawsSoFar]
+          : '';
+      if (picnicPath) {
+        const imageUrl = `${linePushPublicBaseUrl.trim().replace(/\/+$/, '')}${picnicPath}`;
+        pushMessages.push({
+          type: 'image',
+          originalContentUrl: imageUrl,
+          previewImageUrl: imageUrl
+        });
+      }
       if (remainingInviteBonus > 0) {
         let secondMessage;
         if (drawsAfterThis === 0) {

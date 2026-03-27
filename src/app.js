@@ -68,6 +68,24 @@ const LIFF_REDEMPTION_NOTE = process.env.LIFF_REDEMPTION_NOTE || '';
 const LIFF_CAMPAIGN_PAGE_URL =
   process.env.LIFF_CAMPAIGN_PAGE_URL || 'https://tinyurl.com/mv3f9wfv';
 
+/** LINE push 圖片訊息需公開 HTTPS URL；未設定則中獎推播不含餐籃圖 */
+function normalizeLinePushPublicBaseUrl(raw) {
+  const trimmed = typeof raw === 'string' ? raw.trim().replace(/\/+$/, '') : '';
+  if (!trimmed) return '';
+  const withScheme = /^https?:\/\//i.test(trimmed) ? trimmed : `https://${trimmed}`;
+  try {
+    const u = new URL(withScheme);
+    if (u.protocol !== 'https:') return '';
+    return u.origin;
+  } catch {
+    return '';
+  }
+}
+
+const LINE_PUSH_PUBLIC_BASE_URL = normalizeLinePushPublicBaseUrl(
+  process.env.LINE_PUSH_PUBLIC_BASE_URL || process.env.PUBLIC_SITE_URL || ''
+);
+
 function normalizeAdminLoginPath(rawPath) {
   const fallback = '/admin/login';
   if (typeof rawPath !== 'string') return fallback;
@@ -260,6 +278,7 @@ registerLiffRoutes(app, {
   viewStateCore,
   liffId: LIFF_ID,
   linePush,
+  linePushPublicBaseUrl: LINE_PUSH_PUBLIC_BASE_URL,
   inviteBonusMax: Number.isFinite(LIFF_INVITE_BONUS_MAX) ? LIFF_INVITE_BONUS_MAX : 20,
   lineOfficialAddFriendUrl: LINE_OFFICIAL_ADD_FRIEND_URL,
   lineUserPasswordHashRounds: Number.isFinite(LIFF_LINE_USER_BCRYPT_ROUNDS) ? LIFF_LINE_USER_BCRYPT_ROUNDS : 6,

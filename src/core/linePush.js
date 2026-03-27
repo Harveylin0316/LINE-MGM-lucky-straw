@@ -1,6 +1,21 @@
 /**
  * LINE Messaging API：push 訊息與寫入 line_push_logs（供 LIFF、Webhook 共用）
+ * messages 可為字串（text）或 { type: 'image', originalContentUrl, previewImageUrl? }
  */
+function normalizeLinePushMessageItem(item) {
+  if (typeof item === 'string') {
+    const text = item.trim();
+    return text ? { type: 'text', text } : null;
+  }
+  if (item && typeof item === 'object' && item.type === 'image') {
+    const originalContentUrl = String(item.originalContentUrl || '').trim();
+    const previewImageUrl = String(item.previewImageUrl || item.originalContentUrl || '').trim();
+    if (!originalContentUrl || !previewImageUrl) return null;
+    return { type: 'image', originalContentUrl, previewImageUrl };
+  }
+  return null;
+}
+
 function createLinePushService({ query, lineChannelAccessToken }) {
   async function logLinePush(payload) {
     try {
@@ -25,10 +40,7 @@ function createLinePushService({ query, lineChannelAccessToken }) {
 
   async function pushLineMessages(lineUserId, messages, extra = {}) {
     const normalizedMessages = Array.isArray(messages)
-      ? messages
-          .map(item => (typeof item === 'string' ? item.trim() : ''))
-          .filter(Boolean)
-          .map(text => ({ type: 'text', text }))
+      ? messages.map(normalizeLinePushMessageItem).filter(Boolean)
       : [];
     const pushType = typeof extra.pushType === 'string' && extra.pushType.trim() ? extra.pushType.trim() : 'winner_notification';
     const { pushType: _pt, ...extraForBody } = extra;
