@@ -79,7 +79,8 @@ async function main() {
   const liffBuilt = buildLiffPermanentUrl(process.env.LIFF_ID || '', '/liff/lottery', '/liff/lottery');
   const liffLine =
     /^https:\/\/liff\.line\.me\//i.test(liffBuilt) ? `\n\n立即玩春日刮刮樂：\n${liffBuilt}` : '';
-  const text = `您的朋友「${inviteeInMessage}」已成功加入 OpenRice LINE@！已累計 2 位好友完成任務，恭喜您獲得 1 次加碼刮刮樂次數！${liffLine}`;
+  const friendsPer = Math.max(1, Number.parseInt(process.env.LIFF_INVITE_FRIENDS_PER_DRAW || '2', 10) || 2);
+  const text = `您的朋友「${inviteeInMessage}」已成功加入 OpenRice LINE@！已累計 ${friendsPer} 位好友完成任務，恭喜您獲得 1 次加碼刮刮樂次數！${liffLine}`;
 
   const messages = [{ type: 'text', text }];
   if (baseUrl) {

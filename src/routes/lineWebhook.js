@@ -222,14 +222,14 @@ function createLineWebhookHandler({
                 ? `\n\n立即玩春日刮刮樂：\n${liffLotteryPushUrl.trim()}`
                 : '';
             messages.push(
-              `您的朋友「${friendName}」已成功加入 OpenRice LINE@！已累計 2 位好友完成任務，恭喜您獲得 1 次加碼刮刮樂次數！${liffLine}`
+              `您的朋友「${friendName}」已成功加入 OpenRice LINE@！已累計 ${friendsPerDraw} 位好友完成任務，恭喜您獲得 1 次加碼刮刮樂次數！${liffLine}`
             );
             const img3 = picnicPushImageMessage(linePushPublicBaseUrl, 'picnic-basket-003.png');
             if (img3) messages.push(img3);
           } else if (rewardResult.isFirstRewardedFriend) {
             pushType = 'invite_progress_notification';
             messages.push(
-              `您的朋友「${friendName}」已成功加入 OpenRice LINE@！再邀請 1 位尚未加入的好友完成加好友，即可獲得 1 次加碼刮刮樂次數。`
+              `您的朋友「${friendName}」已成功加入 OpenRice LINE@！再邀請 ${Math.max(1, friendsPerDraw - 1)} 位尚未加入的好友完成加好友，即可獲得 1 次加碼刮刮樂次數。`
             );
             const img2 = picnicPushImageMessage(linePushPublicBaseUrl, 'picnic-basket-002.png');
             if (img2) messages.push(img2);
