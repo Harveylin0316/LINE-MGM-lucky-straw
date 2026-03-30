@@ -14,6 +14,7 @@ const { createAdminLoginThrottle } = require('./core/adminLoginThrottle');
 const { registerWebRoutes } = require('./routes/web');
 const { registerLiffRoutes } = require('./routes/liff');
 const { buildLiffPermanentUrl } = require('./core/liffPermalink');
+const { buildPushImageBaseCandidates } = require('./core/linePushImageResolve');
 const { createLineWebhookHandler } = require('./routes/lineWebhook');
 const { createLinePushService } = require('./core/linePush');
 
@@ -98,9 +99,23 @@ const LINE_PUSH_PUBLIC_BASE_URL = normalizeLinePushPublicBaseUrl(
     process.env.DEPLOY_PRIME_URL ||
     ''
 );
-if (isProduction && LINE_CHANNEL_ACCESS_TOKEN && !LINE_PUSH_PUBLIC_BASE_URL) {
+/** 給 LINE 抓圖用，多來源去重；順序：已解析主網域 → 其餘環境變數 */
+const LINE_PUSH_IMAGE_BASE_CANDIDATES = (() => {
+  const extra = buildPushImageBaseCandidates();
+  const first = LINE_PUSH_PUBLIC_BASE_URL ? [LINE_PUSH_PUBLIC_BASE_URL] : [];
+  const seen = new Set();
+  const out = [];
+  for (const o of [...first, ...extra]) {
+    if (o && !seen.has(o)) {
+      seen.add(o);
+      out.push(o);
+    }
+  }
+  return out;
+})();
+if (isProduction && LINE_CHANNEL_ACCESS_TOKEN && LINE_PUSH_IMAGE_BASE_CANDIDATES.length === 0) {
   console.warn(
-    'LINE_PUSH_PUBLIC_BASE_URL 未解析成功：中獎推播將不含餐籃圖。請設定 LINE_PUSH_PUBLIC_BASE_URL 或 PUBLIC_SITE_URL，或確認託管平台有注入 URL。'
+    'LINE 推播圖片無 HTTPS 來源：請設定 LINE_PUSH_IMAGE_BASE_URL、LINE_PUSH_PUBLIC_BASE_URL、PUBLIC_SITE_URL，或確認託管平台有注入 URL（例如 Netlify 的 URL）。'
   );
 }
 
@@ -220,7 +235,7 @@ app.post(
     channelSecret: LINE_CHANNEL_SECRET,
     inviteBonusMax: Number.isFinite(LIFF_INVITE_BONUS_MAX) ? LIFF_INVITE_BONUS_MAX : 20,
     inviteFriendsPerDraw: LIFF_INVITE_FRIENDS_PER_DRAW,
-    linePushPublicBaseUrl: LINE_PUSH_PUBLIC_BASE_URL,
+    linePushImageBaseCandidates: LINE_PUSH_IMAGE_BASE_CANDIDATES,
     liffLotteryPushUrl: LIFF_LOTTERY_PUSH_URL,
     linePush
   })
@@ -299,7 +314,7 @@ registerLiffRoutes(app, {
   viewStateCore,
   liffId: LIFF_ID,
   linePush,
-  linePushPublicBaseUrl: LINE_PUSH_PUBLIC_BASE_URL,
+  linePushImageBaseCandidates: LINE_PUSH_IMAGE_BASE_CANDIDATES,
   inviteBonusMax: Number.isFinite(LIFF_INVITE_BONUS_MAX) ? LIFF_INVITE_BONUS_MAX : 20,
   inviteFriendsPerDraw: LIFF_INVITE_FRIENDS_PER_DRAW,
   lineOfficialAddFriendUrl: LINE_OFFICIAL_ADD_FRIEND_URL,

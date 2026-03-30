@@ -2,6 +2,7 @@ const bcrypt = require('bcryptjs');
 const crypto = require('crypto');
 const { getCampaignPhase } = require('../core/campaignWindow');
 const { buildLiffPermanentUrl } = require('../core/liffPermalink');
+const { resolvePushImageUrl } = require('../core/linePushImageResolve');
 
 function normalizeLiffNextPath(rawNextPath, fallbackPath = '/liff/lottery') {
   if (typeof rawNextPath !== 'string') return fallbackPath;
@@ -37,7 +38,7 @@ function registerLiffRoutes(app, deps) {
     liffRedemptionNote,
     liffCampaignPageUrl,
     linePush,
-    linePushPublicBaseUrl = ''
+    linePushImageBaseCandidates = []
   } = deps;
 
   function safeHttpUrl(raw) {
@@ -557,20 +558,7 @@ function registerLiffRoutes(app, deps) {
       const firstMessage = `🌸 春日野餐祭中獎通知\n恭喜你刮中：${picked.name}`;
       const drawsAfterThis = currentLeft - 1;
       const pushMessages = [firstMessage];
-      const picnicPath =
-        totalDrawsSoFar === 1 &&
-        typeof linePushPublicBaseUrl === 'string' &&
-        linePushPublicBaseUrl.trim()
-          ? '/images/picnic-basket-001.png'
-          : '';
-      if (picnicPath) {
-        const imageUrl = `${linePushPublicBaseUrl.trim().replace(/\/+$/, '')}${picnicPath}`;
-        pushMessages.push({
-          type: 'image',
-          originalContentUrl: imageUrl,
-          previewImageUrl: imageUrl
-        });
-      }
+      const includePicnic001 = totalDrawsSoFar === 1;
       if (remainingInviteBonus > 0) {
         let secondMessage;
         if (drawsAfterThis === 0) {
@@ -588,16 +576,27 @@ function registerLiffRoutes(app, deps) {
       // 加碼用罄且仍有刮次：僅推播中獎（刮次優先，不另述加碼狀態）。
       // Keep scratch-card UX responsive: send LINE push in background.
       Promise.resolve()
-        .then(() =>
-          linePush.pushLineMessages(lineUserId, pushMessages, {
+        .then(async () => {
+          const toSend = [...pushMessages];
+          if (includePicnic001) {
+            const picnicUrl = await resolvePushImageUrl(linePushImageBaseCandidates, 'picnic-basket-001.png');
+            if (picnicUrl) {
+              toSend.push({
+                type: 'image',
+                originalContentUrl: picnicUrl,
+                previewImageUrl: picnicUrl
+              });
+            }
+          }
+          return linePush.pushLineMessages(lineUserId, toSend, {
             userId: req.authUser.uid,
             pushType: 'winner_notification',
             prizeName: picked.name,
             remainingInviteBonus,
             drawsAfterThis,
             inviteLink
-          })
-        )
+          });
+        })
         .catch(err => {
           console.error('LINE push async task failed:', err.message);
         });

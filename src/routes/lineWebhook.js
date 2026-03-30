@@ -1,17 +1,11 @@
 const crypto = require('crypto');
+const { resolvePushImageUrl } = require('../core/linePushImageResolve');
 
 function safeEqualBase64(a, b) {
   const left = Buffer.from(a || '', 'utf8');
   const right = Buffer.from(b || '', 'utf8');
   if (left.length !== right.length) return false;
   return crypto.timingSafeEqual(left, right);
-}
-
-function picnicPushImageMessage(baseUrl, fileName) {
-  const b = typeof baseUrl === 'string' ? baseUrl.trim().replace(/\/+$/, '') : '';
-  if (!b || !fileName) return null;
-  const url = `${b}/images/${fileName}`;
-  return { type: 'image', originalContentUrl: url, previewImageUrl: url };
 }
 
 /** 好友加碼刮次每人最多領取次數（與活動規則一致，固定為 1） */
@@ -25,7 +19,7 @@ function createLineWebhookHandler({
   channelSecret,
   inviteBonusMax,
   inviteFriendsPerDraw,
-  linePushPublicBaseUrl = '',
+  linePushImageBaseCandidates = [],
   liffLotteryPushUrl = '',
   linePush
 }) {
@@ -224,28 +218,41 @@ function createLineWebhookHandler({
             messages.push(
               `您的朋友「${friendName}」已成功加入 OpenRice LINE@！已累計 ${friendsPerDraw} 位好友完成任務，恭喜您獲得 1 次加碼刮刮樂次數！${liffLine}`
             );
-            const img3 = picnicPushImageMessage(linePushPublicBaseUrl, 'invite-bonus-granted.png');
-            if (img3) messages.push(img3);
+            messages.push({ type: 'image', _pushAssetFile: 'invite-bonus-granted.png' });
           } else if (rewardResult.isFirstRewardedFriend) {
             pushType = 'invite_progress_notification';
             messages.push(
               `您的朋友「${friendName}」已成功加入 OpenRice LINE@！再邀請 ${Math.max(1, friendsPerDraw - 1)} 位尚未加入的好友完成加好友，即可獲得 1 次加碼刮刮樂次數。`
             );
-            const img2 = picnicPushImageMessage(linePushPublicBaseUrl, 'picnic-basket-002.png');
-            if (img2) messages.push(img2);
+            messages.push({ type: 'image', _pushAssetFile: 'picnic-basket-002.png' });
           }
           if (messages.length > 0) {
             Promise.resolve()
-              .then(() =>
-                linePush.pushLineMessages(rewardResult.inviterLineUserId, messages, {
+              .then(async () => {
+                const built = [];
+                for (const m of messages) {
+                  if (typeof m === 'string') {
+                    built.push(m);
+                    continue;
+                  }
+                  if (m && m.type === 'image' && m._pushAssetFile) {
+                    const u = await resolvePushImageUrl(linePushImageBaseCandidates, m._pushAssetFile);
+                    if (u) built.push({ type: 'image', originalContentUrl: u, previewImageUrl: u });
+                    continue;
+                  }
+                  if (m && m.type === 'image') {
+                    built.push(m);
+                  }
+                }
+                return linePush.pushLineMessages(rewardResult.inviterLineUserId, built, {
                   userId: rewardResult.inviterUserId,
                   pushType,
                   inviteeDisplayName: friendName,
                   inviteId: rewardResult.inviteId,
                   grantDraws,
                   liffLotteryPushUrl: liffLotteryPushUrl || null
-                })
-              )
+                });
+              })
               .catch(err => {
                 console.error('LINE invite reward push failed:', err.message);
               });
