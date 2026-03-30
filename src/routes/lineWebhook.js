@@ -224,7 +224,7 @@ function createLineWebhookHandler({
             messages.push(
               `您的朋友「${friendName}」已成功加入 OpenRice LINE@！已累計 ${friendsPerDraw} 位好友完成任務，恭喜您獲得 1 次加碼刮刮樂次數！${liffLine}`
             );
-            const img3 = picnicPushImageMessage(linePushPublicBaseUrl, 'picnic-basket-003.png');
+            const img3 = picnicPushImageMessage(linePushPublicBaseUrl, 'invite-bonus-granted.png');
             if (img3) messages.push(img3);
           } else if (rewardResult.isFirstRewardedFriend) {
             pushType = 'invite_progress_notification';

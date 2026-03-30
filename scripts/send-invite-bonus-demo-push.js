@@ -5,7 +5,7 @@
  * 用法（先 export 環境變數）：
  *   export DATABASE_URL="postgresql://..."
  *   export LINE_CHANNEL_ACCESS_TOKEN="..."
- *   export LINE_PUSH_PUBLIC_BASE_URL="https://你的正式網域"   # 選填，有則附 picnic-basket-003.png
+ *   export LINE_PUSH_PUBLIC_BASE_URL="https://你的正式網域"   # 選填，有則附 invite-bonus-granted.png
  *   export LIFF_ID="你的-LIFF-ID"   # 選填，有則文案附上刮刮樂永久連結（與正式 webhook 一致）
  *
  *   node scripts/send-invite-bonus-demo-push.js "Ice Chen" "某位好友"
@@ -84,7 +84,7 @@ async function main() {
 
   const messages = [{ type: 'text', text }];
   if (baseUrl) {
-    const url = `${baseUrl}/images/picnic-basket-003.png`;
+    const url = `${baseUrl}/images/invite-bonus-granted.png`;
     messages.push({ type: 'image', originalContentUrl: url, previewImageUrl: url });
   } else {
     console.warn('未設定 LINE_PUSH_PUBLIC_BASE_URL / PUBLIC_SITE_URL / URL，僅送文字');
