@@ -5,7 +5,7 @@
       <h1>春日邀請任務綁定完成</h1>
       <p class="muted">目前使用者：<strong>${user || '-'}</strong></p>
       <p class="muted">${statusText || '已完成春日邀請綁定。'}</p>
-      <p class="muted">本邀請任務<strong>僅限尚未加入</strong> OpenRice LINE@ 的好友：請點下方按鈕完成加好友。邀請人需累計每 <strong>${typeof inviteFriendsPerDraw !== 'undefined' && Number.isFinite(Number(inviteFriendsPerDraw)) ? Math.max(1, Number(inviteFriendsPerDraw)) : 2}</strong> 位好友完成任務，可獲得 <strong>1</strong> 次刮刮樂加碼。若您<strong>早已加入</strong>官方帳號，恕無法透過本任務計入加碼。</p>
+      <p class="muted">本邀請任務<strong>僅限尚未加入</strong> OpenRice LINE@ 的好友：請點下方按鈕完成加好友。邀請人需<strong>累計</strong> <strong>${typeof inviteFriendsPerDraw !== 'undefined' && Number.isFinite(Number(inviteFriendsPerDraw)) ? Math.max(1, Number(inviteFriendsPerDraw)) : 2}</strong> 位好友完成任務，可獲得 <strong>1</strong> 次刮刮樂加碼；<strong>每位邀請人最多僅能獲得 1 次加碼</strong>。若您<strong>早已加入</strong>官方帳號，恕無法透過本任務計入加碼。</p>
       ${
         lineOfficialAddFriendUrl
           ? `<div class="actions">

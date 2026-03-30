@@ -17,20 +17,31 @@
           const inviteMax =
             typeof inviteBonusMax !== 'undefined' && Number.isFinite(Number(inviteBonusMax))
               ? Math.max(0, Number(inviteBonusMax))
-              : 2;
+              : 1;
           const friendsPer =
             typeof inviteFriendsPerDraw !== 'undefined' && Number.isFinite(Number(inviteFriendsPerDraw))
               ? Math.max(1, Number(inviteFriendsPerDraw))
               : 2;
           const extraFromInv = typeof extraDraws !== 'undefined' ? Number(extraDraws) || 0 : 0;
+          const rewardedInv = typeof rewardedInviteCount !== 'undefined' ? Number(rewardedInviteCount) || 0 : 0;
           const remainingBonusDraws = Math.max(0, inviteMax - extraFromInv);
+          const zeroDrawHintBody =
+            remainingBonusDraws > 0
+              ? rewardedInv === 0
+                ? '目前可刮次數為 0，尚可再獲得 1 次加碼刮次（請邀請 ' +
+                  friendsPer +
+                  ' 位尚未加入 OpenRice LINE@ 的好友完成加好友任務；每位邀請人最多僅 1 次加碼）。'
+                : rewardedInv === 1
+                  ? '目前可刮次數為 0，尚可再獲得 1 次加碼刮次（尚欠 1 位尚未加入的好友完成加好友任務即可發放）。'
+                  : '目前可刮次數為 0，尚可再獲得 ' +
+                    remainingBonusDraws +
+                    ' 次加碼刮次（每 ' +
+                    friendsPer +
+                    ' 位好友完成任務可獲 1 次；每位邀請人最多僅 1 次加碼）。'
+              : '';
           const zeroDrawsInviteHint =
             remainingBonusDraws > 0
-              ? '<p class="muted center-text">目前可刮次數為 0，尚可再獲得 ' +
-                remainingBonusDraws +
-                ' 次加碼刮次（每 ' +
-                friendsPer +
-                ' 位尚未加入 OpenRice LINE@ 的好友完成任務可獲 1 次）。</p>'
+              ? '<p class="muted center-text">' + zeroDrawHintBody + '</p>'
               : '<p class="muted center-text">目前可刮次數為 0，加碼刮次已無法再領取。您已完成春日野餐祭刮刮樂與好友任務，感謝您的參與！</p>';
 
           if (hasResult) {
@@ -80,11 +91,7 @@
               </div>
               ${
                 remainingBonusDraws > 0
-                  ? '<p class="muted center-text">尚可再獲得 ' +
-                    remainingBonusDraws +
-                    ' 次加碼刮次（每 ' +
-                    friendsPer +
-                    ' 位尚未加入的好友完成任務可獲 1 次）。</p>'
+                  ? '<p class="muted center-text">' + zeroDrawHintBody + '</p>'
                   : '<p class="muted center-text">加碼刮次已無法再領取。您已完成春日野餐祭刮刮樂與好友任務，感謝您的參與！</p>'
               }
             </section>`;
@@ -120,7 +127,7 @@
             0,
             (typeof inviteBonusMax !== 'undefined' && Number.isFinite(Number(inviteBonusMax))
               ? Math.max(0, Number(inviteBonusMax))
-              : 2) - (typeof extraDraws !== 'undefined' ? Number(extraDraws) || 0 : 0)
+              : 1) - (typeof extraDraws !== 'undefined' ? Number(extraDraws) || 0 : 0)
           )}</strong>
         </div>
       </div>
@@ -157,12 +164,12 @@
 
       <div class="liff-invite-box">
       <h2 class="liff-title">揪好友同行春日野餐祭</h2>
-      <p class="muted">每邀請 <strong>${typeof inviteFriendsPerDraw !== 'undefined' && Number.isFinite(Number(inviteFriendsPerDraw)) ? Math.max(1, Number(inviteFriendsPerDraw)) : 2}</strong> 位<strong>尚未加入</strong> OpenRice LINE@ 的好友完成加好友任務，可獲得 <strong>1</strong> 次刮刮樂加碼；每人最多可領 <strong>${typeof inviteBonusMax !== 'undefined' && Number.isFinite(Number(inviteBonusMax)) ? Math.max(0, Number(inviteBonusMax)) : 2}</strong> 次加碼，您尚可領取 <strong>${Math.max(
+      <p class="muted">每累計 <strong>${typeof inviteFriendsPerDraw !== 'undefined' && Number.isFinite(Number(inviteFriendsPerDraw)) ? Math.max(1, Number(inviteFriendsPerDraw)) : 2}</strong> 位<strong>尚未加入</strong> OpenRice LINE@ 的好友完成加好友任務，可獲得 <strong>1</strong> 次刮刮樂加碼。<strong>每位邀請人透過本活動最多僅能獲得 1 次加碼。</strong>您尚可領取 <strong>${Math.max(
         0,
         (typeof inviteBonusMax !== 'undefined' && Number.isFinite(Number(inviteBonusMax))
           ? Math.max(0, Number(inviteBonusMax))
-          : 2) - (typeof extraDraws !== 'undefined' ? Number(extraDraws) || 0 : 0)
-      )}</strong> 次。</p>
+          : 1) - (typeof extraDraws !== 'undefined' ? Number(extraDraws) || 0 : 0)
+      )}</strong> 次加碼刮次。</p>
       <code class="invite-link invite-link-compact" id="liff-invite-link" title="${inviteLink || ''}">${inviteLink || ''}</code>
       <div class="actions">
         <button type="button" class="btn primary" id="share-invite-btn">分享春日邀請給好友</button>
