@@ -105,6 +105,24 @@ async function initDb({ query, adminUsername, adminPassword, skipDdl = false }) 
     created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
   )`);
 
+  await query(`CREATE TABLE IF NOT EXISTS line_push_media (
+    id UUID PRIMARY KEY,
+    mime_type TEXT NOT NULL,
+    body BYTEA NOT NULL,
+    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    CONSTRAINT line_push_media_mime_chk CHECK (mime_type IN ('image/png', 'image/jpeg'))
+  )`);
+
+  await query(`CREATE TABLE IF NOT EXISTS admin_push_settings (
+    slug TEXT PRIMARY KEY,
+    message_text TEXT NOT NULL DEFAULT '',
+    image_media_id UUID REFERENCES line_push_media(id) ON DELETE SET NULL,
+    updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+  )`);
+  await query(
+    `INSERT INTO admin_push_settings (slug, message_text) VALUES ('invite_reminder', '') ON CONFLICT (slug) DO NOTHING`
+  );
+
   // Supabase exposes public schema via PostgREST by default.
   // Enable RLS on app tables to prevent direct external reads/writes.
   await query('ALTER TABLE users ENABLE ROW LEVEL SECURITY');
@@ -116,6 +134,8 @@ async function initDb({ query, adminUsername, adminPassword, skipDdl = false }) 
   await query('ALTER TABLE line_push_logs ENABLE ROW LEVEL SECURITY');
   await query('ALTER TABLE campaign_settings ENABLE ROW LEVEL SECURITY');
   await query('ALTER TABLE admin_login_throttle ENABLE ROW LEVEL SECURITY');
+  await query('ALTER TABLE line_push_media ENABLE ROW LEVEL SECURITY');
+  await query('ALTER TABLE admin_push_settings ENABLE ROW LEVEL SECURITY');
 
   await query(
     'CREATE INDEX IF NOT EXISTS admin_login_throttle_ip_created_idx ON admin_login_throttle (ip_key, created_at DESC)'

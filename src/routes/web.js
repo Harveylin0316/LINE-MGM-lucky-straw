@@ -1,4 +1,6 @@
+const crypto = require('crypto');
 const bcrypt = require('bcryptjs');
+const multer = require('multer');
 const { parseTaipeiDatetimeLocal, toTaipeiDatetimeLocalInput } = require('../core/campaignWindow');
 const { computeInviteLimit } = require('../core/inviteBonusConfig');
 
@@ -39,6 +41,10 @@ function escapeHtmlForTextareaContent(s) {
     .replace(/>/g, '&gt;');
 }
 
+function isUuidParam(id) {
+  return /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(String(id || ''));
+}
+
 function registerWebRoutes(app, deps) {
   const {
     query,
@@ -52,7 +58,8 @@ function registerWebRoutes(app, deps) {
     lineChannelAccessToken,
     inviteBonusMax,
     inviteFriendsPerDraw,
-    liffLotteryPushUrl
+    liffLotteryPushUrl,
+    resolvePublicSiteOrigin = () => ''
   } = deps;
 
   const { requireAdmin, signAuthToken, setAuthCookie, clearAuthCookie } = authCore;
@@ -63,6 +70,56 @@ function registerWebRoutes(app, deps) {
   } = viewStateCore;
 
   const hiddenAdminLoginPath = typeof adminLoginPath === 'string' && adminLoginPath.startsWith('/') ? adminLoginPath : '/admin/login';
+
+  const uploadPushImage = multer({
+    storage: multer.memoryStorage(),
+    limits: { fileSize: 2 * 1024 * 1024 },
+    fileFilter: (_req, file, cb) => {
+      if (file.mimetype === 'image/png' || file.mimetype === 'image/jpeg') {
+        cb(null, true);
+      } else {
+        cb(new Error('INVALID_PUSH_IMAGE_TYPE'));
+      }
+    }
+  });
+
+  async function loadInvitePushSettings() {
+    const rs = await query(
+      `SELECT message_text, image_media_id FROM admin_push_settings WHERE slug = 'invite_reminder'`
+    );
+    if (rs.rowCount === 0) {
+      await query(
+        `INSERT INTO admin_push_settings (slug, message_text) VALUES ('invite_reminder', '') ON CONFLICT (slug) DO NOTHING`
+      );
+      return { messageText: '', imageMediaId: null };
+    }
+    return {
+      messageText: String(rs.rows[0].message_text || ''),
+      imageMediaId: rs.rows[0].image_media_id || null
+    };
+  }
+
+  app.get('/p/line-media/:id', async (req, res, next) => {
+    try {
+      const { id } = req.params;
+      if (!isUuidParam(id)) {
+        return res.status(404).type('text/plain').send('Not found');
+      }
+      const rs = await query('SELECT mime_type, body FROM line_push_media WHERE id = $1', [id]);
+      if (rs.rowCount === 0) {
+        return res.status(404).type('text/plain').send('Not found');
+      }
+      const row = rs.rows[0];
+      const buf = Buffer.isBuffer(row.body) ? row.body : Buffer.from(row.body);
+      res.setHeader('Content-Type', row.mime_type);
+      res.setHeader('Cross-Origin-Resource-Policy', 'cross-origin');
+      res.setHeader('Cache-Control', 'public, max-age=300');
+      res.setHeader('Content-Length', String(buf.length));
+      return res.send(buf);
+    } catch (e) {
+      return next(e);
+    }
+  });
 
   function renderAdminLogin(res, error = null, nextPath = '/admin/prizes') {
     return res.render('login', {
@@ -369,6 +426,18 @@ function registerWebRoutes(app, deps) {
         return res.end();
       }
 
+      const inviteSettings = await loadInvitePushSettings();
+      const publicOrigin = String(resolvePublicSiteOrigin(req) || '').replace(/\/+$/, '');
+      const imageHttpsOk = /^https:\/\//i.test(publicOrigin);
+      const imagePreviewUrl =
+        inviteSettings.imageMediaId && publicOrigin
+          ? `${publicOrigin}/p/line-media/${inviteSettings.imageMediaId}`
+          : '';
+      const savedMessageEscaped = escapeHtmlForTextareaContent(inviteSettings.messageText);
+      const pushDraftMessage = inviteSettings.messageText.trim() ? inviteSettings.messageText : defaultReminderText;
+      const pushMessageEscaped = escapeHtmlForTextareaContent(pushDraftMessage);
+      const settingsSaved = req.query.settings_saved === '1';
+
       if (inviteLimitForAdmin <= 0) {
         return res.render('admin_invite_reminders', {
           user: req.authUser.un,
@@ -384,6 +453,12 @@ function registerWebRoutes(app, deps) {
           liffLotteryPushUrl: liffUrlStr,
           defaultReminderText,
           defaultReminderTextEscaped,
+          savedMessageEscaped,
+          pushMessageEscaped,
+          imageMediaId: inviteSettings.imageMediaId,
+          imagePreviewUrl,
+          imageHttpsOk,
+          settingsSaved,
           hasLineToken: Boolean(linePush && lineChannelAccessToken),
           pushOk,
           pushFail,
@@ -449,6 +524,12 @@ function registerWebRoutes(app, deps) {
         liffLotteryPushUrl: liffUrlStr,
         defaultReminderText,
         defaultReminderTextEscaped,
+        savedMessageEscaped,
+        pushMessageEscaped,
+        imageMediaId: inviteSettings.imageMediaId,
+        imagePreviewUrl,
+        imageHttpsOk,
+        settingsSaved,
         hasLineToken: Boolean(linePush && lineChannelAccessToken),
         pushOk,
         pushFail,
@@ -460,6 +541,76 @@ function registerWebRoutes(app, deps) {
       next(handlerErr);
     }
   });
+
+  app.post(
+    '/admin/invite-reminders/settings',
+    requireAdmin,
+    (req, res, next) => {
+      uploadPushImage.single('push_image')(req, res, (err) => {
+        if (!err) return next();
+        if (err.code === 'LIMIT_FILE_SIZE') {
+          return res.redirect('/admin/invite-reminders?err=upload_too_large');
+        }
+        return res.redirect('/admin/invite-reminders?err=upload_invalid');
+      });
+    },
+    async (req, res, next) => {
+      try {
+        const pendingQs = req.body.only_pending_echo === '1' ? '&only_pending=1' : '';
+        const msg = typeof req.body.message_text === 'string' ? req.body.message_text.trim().slice(0, 5000) : '';
+        const removeImage = req.body.remove_image === '1' || req.body.remove_image === 'on';
+        const file = req.file;
+        const client = await pool.connect();
+        try {
+          await client.query('BEGIN');
+          await client.query(
+            `INSERT INTO admin_push_settings (slug, message_text) VALUES ('invite_reminder', $1)
+             ON CONFLICT (slug) DO UPDATE SET message_text = EXCLUDED.message_text, updated_at = NOW()`,
+            [msg]
+          );
+          const cur = await client.query(
+            `SELECT image_media_id FROM admin_push_settings WHERE slug = 'invite_reminder' FOR UPDATE`
+          );
+          let mediaId = cur.rows[0]?.image_media_id || null;
+          if (removeImage && mediaId) {
+            await client.query('DELETE FROM line_push_media WHERE id = $1', [mediaId]);
+            await client.query(
+              `UPDATE admin_push_settings SET image_media_id = NULL, updated_at = NOW() WHERE slug = 'invite_reminder'`
+            );
+            mediaId = null;
+          }
+          if (file && file.buffer && file.mimetype) {
+            const newId = crypto.randomUUID();
+            await client.query(`INSERT INTO line_push_media (id, mime_type, body) VALUES ($1, $2, $3)`, [
+              newId,
+              file.mimetype,
+              file.buffer
+            ]);
+            if (mediaId) {
+              await client.query('DELETE FROM line_push_media WHERE id = $1', [mediaId]);
+            }
+            await client.query(
+              `UPDATE admin_push_settings SET image_media_id = $1, updated_at = NOW() WHERE slug = 'invite_reminder'`,
+              [newId]
+            );
+          }
+          await client.query('COMMIT');
+        } catch (e) {
+          try {
+            await client.query('ROLLBACK');
+          } catch (_rb) {
+            /* ignore */
+          }
+          throw e;
+        } finally {
+          client.release();
+        }
+        return res.redirect(`/admin/invite-reminders?settings_saved=1${pendingQs}`);
+      } catch (e) {
+        next(e);
+      }
+    }
+  );
 
   app.post('/admin/invite-reminders/push', requireAdmin, async (req, res, next) => {
     try {
@@ -476,15 +627,43 @@ function registerWebRoutes(app, deps) {
       const uniqueIds = [...new Set(ids)].slice(0, 50);
 
       const message = typeof req.body.message === 'string' ? req.body.message.trim() : '';
-      if (!message || message.length > 5000) {
+      if (message.length > 5000) {
         return res.redirect(`/admin/invite-reminders?err=bad_message${pendingQs}`);
       }
+
+      const inviteSettings = await loadInvitePushSettings();
+      const publicOrigin = String(resolvePublicSiteOrigin(req) || '').replace(/\/+$/, '');
+      const attachSavedImage = req.body.attach_saved_image === '1';
+      let imagePushUrl = '';
+      if (
+        attachSavedImage &&
+        inviteSettings.imageMediaId &&
+        /^https:\/\//i.test(publicOrigin)
+      ) {
+        imagePushUrl = `${publicOrigin}/p/line-media/${inviteSettings.imageMediaId}`;
+      }
+      if (!message && !imagePushUrl) {
+        return res.redirect(`/admin/invite-reminders?err=bad_message${pendingQs}`);
+      }
+
       if (uniqueIds.length === 0) {
         return res.redirect(`/admin/invite-reminders?err=no_selection${pendingQs}`);
       }
 
       if (inviteLimitForAdmin <= 0) {
         return res.redirect('/admin/invite-reminders');
+      }
+
+      const messages = [];
+      if (imagePushUrl) {
+        messages.push({
+          type: 'image',
+          originalContentUrl: imagePushUrl,
+          previewImageUrl: imagePushUrl
+        });
+      }
+      if (message) {
+        messages.push(message);
       }
 
       let ok = 0;
@@ -512,7 +691,7 @@ function registerWebRoutes(app, deps) {
           continue;
         }
 
-        const pushed = await linePush.pushLineMessages(lineUid, [message], {
+        const pushed = await linePush.pushLineMessages(lineUid, messages, {
           userId: u.id,
           pushType: 'admin_invite_reminder'
         });

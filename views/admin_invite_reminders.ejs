@@ -7,8 +7,8 @@
       <h1>邀請任務提醒名單</h1>
       <p class="muted">
         列出已透過 LINE 參與（有綁定 <code>line_user_id</code>）、且<strong>尚未領滿邀請加碼</strong>
-        （<code>extra_draws &lt; ${inviteLimit}</code>，與前台／Webhook 規則一致）的用戶。
-        每頁最多顯示 100 人；單次推播最多 50 人，請分批操作並留意 LINE 官方 API 用量。
+        （<code>extra_draws &lt; ${inviteLimit}</code>）的用戶。可在此<strong>儲存推播文字與圖片</strong>，再勾選名單批次推播。
+        單次推播最多 50 人；圖檔單張最大 2MB（PNG／JPEG）。LINE 僅能抓取<strong>公開 HTTPS</strong> 圖片網址，正式環境請設定 <code>LINE_PUSH_PUBLIC_BASE_URL</code> 或 Netlify 的 <code>URL</code>。
       </p>
       <p>
         <a class="btn" href="/admin/prizes">獎品設定</a>
@@ -16,13 +16,18 @@
       </p>
 
       ${
+        settingsSaved
+          ? '<p class="ok-banner">已儲存推播內容（文字與圖片設定）。</p>'
+          : ''
+      }
+      ${
         err === 'no_line_token'
           ? '<p class="error-banner">未設定 LINE_CHANNEL_ACCESS_TOKEN，無法推播。請於環境變數設定後重試。</p>'
           : ''
       }
       ${
         err === 'bad_message'
-          ? '<p class="error-banner">推播文字不可為空，且不可超過 5000 字（LINE 限制）。</p>'
+          ? '<p class="error-banner">推播需至少包含「文字」或「已儲存且可公開的圖片」其一；文字不可超過 5000 字。</p>'
           : ''
       }
       ${
@@ -31,8 +36,18 @@
           : ''
       }
       ${
+        err === 'upload_too_large'
+          ? '<p class="error-banner">上傳失敗：檔案超過 2MB。</p>'
+          : ''
+      }
+      ${
+        err === 'upload_invalid'
+          ? '<p class="error-banner">上傳失敗：僅支援 PNG、JPEG。</p>'
+          : ''
+      }
+      ${
         pushOk !== '' || pushFail !== '' || pushSkip !== ''
-          ? `<p class="ok-banner">推播結果：成功 ${pushOk} 筆、失敗 ${pushFail} 筆、略過 ${pushSkip} 筆（不符合條件或查無用戶）。紀錄可於「活動成效報表」查看 LINE 推播紀錄。</p>`
+          ? `<p class="ok-banner">推播結果：成功 ${pushOk} 筆、失敗 ${pushFail} 筆、略過 ${pushSkip} 筆。紀錄可於「活動成效報表」查看。</p>`
           : ''
       }
       ${
@@ -42,11 +57,54 @@
       }
       ${
         !hasLineToken && !disabledReason
-          ? '<p class="error-banner">目前未設定 LINE Channel Access Token，介面仍可匯出名單，但無法發送推播。</p>'
+          ? '<p class="error-banner">目前未設定 LINE Channel Access Token，無法發送推播；仍可儲存文案／圖片與匯出名單。</p>'
           : ''
       }
+    </section>
 
-      <form method="get" action="/admin/invite-reminders" class="form report-filter-form" style="margin-bottom: 16px;">
+    <section class="card" style="margin-top: 20px;">
+      <h2>LINE 推播內容設定</h2>
+      <p class="muted">儲存後，下方「發送推播」表單會帶入文字預設值；發送前仍可修改。圖片會以公開網址 <code>/p/line-media/…</code> 供 LINE 伺服器抓取。</p>
+      ${
+        imageMediaId && !imageHttpsOk
+          ? '<p class="error-banner">目前網站對外網址不是 HTTPS（或無法判定公開網域），LINE 無法顯示推播圖片。請設定環境變數 <code>LINE_PUSH_PUBLIC_BASE_URL</code>（或 Netlify 自動注入的 <code>URL</code>）為正式 https 網域。</p>'
+          : ''
+      }
+      <form method="post" action="/admin/invite-reminders/settings" enctype="multipart/form-data" class="form">
+        <input type="hidden" name="only_pending_echo" value="${onlyPending ? '1' : '0'}" />
+        <label>
+          預設推播文字（可留空若僅發圖）
+          <textarea name="message_text" rows="6" style="width:100%;max-width:640px;">${savedMessageEscaped}</textarea>
+        </label>
+        <label style="display:block;margin-top:12px;">
+          上傳推播圖片（PNG 或 JPEG，選填）
+          <input type="file" name="push_image" accept="image/png,image/jpeg" />
+        </label>
+        ${
+          imageMediaId
+            ? `<div style="margin-top:12px;">
+            <p class="muted">目前圖片：</p>
+            ${
+              imagePreviewUrl
+                ? `<p><img src="${imagePreviewUrl}" alt="推播圖預覽" style="max-width:280px;border:1px solid #e5e7eb;border-radius:8px;" /></p>`
+                : '<p class="muted">（無法預覽：請確認公開網域為 HTTPS）</p>'
+            }
+            <label class="checkbox-label">
+              <input type="checkbox" name="remove_image" value="1" />
+              移除已儲存的圖片
+            </label>
+          </div>`
+            : ''
+        }
+        <p style="margin-top:12px;">
+          <button type="submit" class="btn primary">儲存推播內容</button>
+        </p>
+      </form>
+    </section>
+
+    <section class="card" style="margin-top: 20px;">
+      <h2>名單與篩選</h2>
+      <form method="get" action="/admin/invite-reminders" class="form report-filter-form">
         <label class="checkbox-label">
           <input type="checkbox" name="only_pending" value="1" ${onlyPending ? 'checked' : ''} />
           僅顯示「已有待完成邀請紀錄」（<code>line_invites.status = pending</code>）的邀請人
@@ -54,22 +112,34 @@
         <button type="submit" class="btn primary">套用篩選</button>
         <a class="btn" href="/admin/invite-reminders?export=csv${onlyPending ? '&only_pending=1' : ''}">下載 CSV（最多 5000 筆）</a>
       </form>
-
       ${
         !disabledReason
           ? `<p class="muted">符合條件人數：<strong>${totalCount}</strong>。需累計 <strong>${friendsPerDraw}</strong> 位好友完成加好友，邀請人可獲 1 次加碼（每人最多 <strong>${inviteLimit}</strong> 次加碼）。</p>`
           : ''
       }
+    </section>
 
-      ${
-        !disabledReason && Array.isArray(rows) && rows.length > 0
-          ? `<form id="invite-reminder-push-form" method="post" action="/admin/invite-reminders/push">
+    ${
+      !disabledReason && Array.isArray(rows) && rows.length > 0
+        ? `<section class="card" style="margin-top: 20px;">
+      <h2>發送推播</h2>
+      <form id="invite-reminder-push-form" method="post" action="/admin/invite-reminders/push">
         <input type="hidden" name="only_pending_filter" value="${onlyPending ? '1' : '0'}" />
         <input type="hidden" name="userIds" id="invite-reminder-user-ids" value="" />
         <label>
-          推播文字（將以 LINE Push 文字訊息發送）
-          <textarea name="message" rows="8" style="width:100%;max-width:640px;">${defaultReminderTextEscaped}</textarea>
+          推播文字（與圖片一併送出時，順序為圖片 → 文字）
+          <textarea name="message" rows="8" style="width:100%;max-width:640px;">${pushMessageEscaped}</textarea>
         </label>
+        ${
+          imageMediaId && imageHttpsOk
+            ? `<p class="muted" style="margin-top:8px;">
+            <label class="checkbox-label">
+              <input type="checkbox" name="attach_saved_image" value="1" checked />
+              一併附上已儲存的圖片
+            </label>
+          </p>`
+            : ''
+        }
         <p class="muted" style="margin-top:8px;">
           <button type="button" class="btn" id="invite-reminder-select-page">全選本頁</button>
           <button type="button" class="btn" id="invite-reminder-clear-page">取消本頁勾選</button>
@@ -128,12 +198,12 @@
             hidden.value = ids.join(',');
           });
         })();
-      </script>`
-          : !disabledReason
-            ? '<p class="muted">目前沒有符合條件的用戶。</p>'
-            : ''
-      }
-    </section>
+      </script>
+    </section>`
+        : !disabledReason
+          ? '<section class="card" style="margin-top: 20px;"><p class="muted">目前沒有符合篩選條件的用戶，無法發送推播。</p></section>'
+          : ''
+    }
     `
   })
 %>

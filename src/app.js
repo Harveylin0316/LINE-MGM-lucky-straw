@@ -99,6 +99,21 @@ const LINE_PUSH_PUBLIC_BASE_URL = normalizeLinePushPublicBaseUrl(
     process.env.DEPLOY_PRIME_URL ||
     ''
 );
+
+/** 後台上傳圖推播、/p/line-media 公開網址組裝（LINE 僅接受 https 圖片網址） */
+function resolvePublicSiteOrigin(req) {
+  if (LINE_PUSH_PUBLIC_BASE_URL) return LINE_PUSH_PUBLIC_BASE_URL;
+  if (!req || typeof req.get !== 'function') return '';
+  const proto = String(req.get('x-forwarded-proto') || req.protocol || 'https')
+    .split(',')[0]
+    .trim();
+  const host = String(req.get('x-forwarded-host') || req.get('host') || '')
+    .split(',')[0]
+    .trim();
+  if (!host) return '';
+  return `${proto === 'http' ? 'http' : 'https'}://${host}`;
+}
+
 /** 給 LINE 抓圖用，多來源去重；順序：已解析主網域 → 其餘環境變數 */
 const LINE_PUSH_IMAGE_BASE_CANDIDATES = (() => {
   const extra = buildPushImageBaseCandidates();
@@ -308,7 +323,8 @@ registerWebRoutes(app, {
   lineChannelAccessToken: LINE_CHANNEL_ACCESS_TOKEN,
   inviteBonusMax: Number.isFinite(LIFF_INVITE_BONUS_MAX) ? LIFF_INVITE_BONUS_MAX : 20,
   inviteFriendsPerDraw: LIFF_INVITE_FRIENDS_PER_DRAW,
-  liffLotteryPushUrl: LIFF_LOTTERY_PUSH_URL
+  liffLotteryPushUrl: LIFF_LOTTERY_PUSH_URL,
+  resolvePublicSiteOrigin
 });
 
 registerLiffRoutes(app, {
