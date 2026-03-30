@@ -217,6 +217,7 @@ app.post(
     channelSecret: LINE_CHANNEL_SECRET,
     inviteBonusMax: Number.isFinite(LIFF_INVITE_BONUS_MAX) ? LIFF_INVITE_BONUS_MAX : 20,
     inviteFriendsPerDraw: LIFF_INVITE_FRIENDS_PER_DRAW,
+    linePushPublicBaseUrl: LINE_PUSH_PUBLIC_BASE_URL,
     linePush
   })
 );

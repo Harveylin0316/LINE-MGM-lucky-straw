@@ -7,9 +7,29 @@ function safeEqualBase64(a, b) {
   return crypto.timingSafeEqual(left, right);
 }
 
-function createLineWebhookHandler({ pool, channelSecret, inviteBonusMax, inviteFriendsPerDraw, linePush }) {
+function picnicPushImageMessage(baseUrl, fileName) {
+  const b = typeof baseUrl === 'string' ? baseUrl.trim().replace(/\/+$/, '') : '';
+  if (!b || !fileName) return null;
+  const url = `${b}/images/${fileName}`;
+  return { type: 'image', originalContentUrl: url, previewImageUrl: url };
+}
+
+/** 好友加碼刮次每人最多領取次數（與活動規則一致，固定為 1） */
+function effectiveInviteBonusCap(inviteBonusMax) {
+  const raw = Number.isFinite(Number(inviteBonusMax)) ? Number(inviteBonusMax) : 2;
+  return Math.min(Math.max(0, raw), 1);
+}
+
+function createLineWebhookHandler({
+  pool,
+  channelSecret,
+  inviteBonusMax,
+  inviteFriendsPerDraw,
+  linePushPublicBaseUrl = '',
+  linePush
+}) {
   const friendsPerDraw = Math.max(1, Number.isFinite(Number(inviteFriendsPerDraw)) ? Number(inviteFriendsPerDraw) : 2);
-  const bonusCap = Math.max(0, Number.isFinite(Number(inviteBonusMax)) ? Number(inviteBonusMax) : 2);
+  const bonusCap = effectiveInviteBonusCap(inviteBonusMax);
   async function appendWebhookEventLog(payload) {
     await pool.query(
       `INSERT INTO line_webhook_events
@@ -70,7 +90,7 @@ function createLineWebhookHandler({ pool, channelSecret, inviteBonusMax, inviteF
 
       const oldExtraDraws = Number(inviterRs.rows[0].extra_draws || 0);
       const followedAtMs = eventTimestamp || Date.now();
-      if (oldExtraDraws >= bonusCap) {
+      if (bonusCap <= 0 || oldExtraDraws >= bonusCap) {
         await client.query(
           "UPDATE line_invites SET status = 'capped', updated_at = NOW(), followed_at = TO_TIMESTAMP($2::double precision / 1000.0) WHERE id = $1",
           [invite.id, followedAtMs]
@@ -121,7 +141,8 @@ function createLineWebhookHandler({ pool, channelSecret, inviteBonusMax, inviteF
         inviterUserId: invite.inviter_user_id,
         inviterLineUserId,
         inviteeDisplayName,
-        grantDraws
+        grantDraws,
+        isFirstRewardedFriend: nRewardedBefore === 0
       };
     } catch (err) {
       await client.query('ROLLBACK');
@@ -186,24 +207,43 @@ function createLineWebhookHandler({ pool, channelSecret, inviteBonusMax, inviteF
         if (
           rewardResult?.result === 'rewarded' &&
           rewardResult.inviterLineUserId &&
-          Number(rewardResult.grantDraws || 0) > 0 &&
           linePush &&
           typeof linePush.pushLineMessages === 'function'
         ) {
           const friendName = String(rewardResult.inviteeDisplayName || '您的好友').slice(0, 80);
-          const pushText = `您的朋友「${friendName}」已成功加入，恭喜您獲得 1 次刮刮樂次數！`;
-          Promise.resolve()
-            .then(() =>
-              linePush.pushLineMessages(rewardResult.inviterLineUserId, [pushText], {
-                userId: rewardResult.inviterUserId,
-                pushType: 'invite_reward_notification',
-                inviteeDisplayName: friendName,
-                inviteId: rewardResult.inviteId
-              })
-            )
-            .catch(err => {
-              console.error('LINE invite reward push failed:', err.message);
-            });
+          const grantDraws = Number(rewardResult.grantDraws || 0);
+          const messages = [];
+          let pushType = 'invite_reward_notification';
+          if (grantDraws > 0) {
+            pushType = 'invite_bonus_granted_notification';
+            messages.push(
+              `您的朋友「${friendName}」已成功加入 OpenRice LINE@！已累計 2 位好友完成任務，恭喜您獲得 1 次加碼刮刮樂次數！`
+            );
+            const img3 = picnicPushImageMessage(linePushPublicBaseUrl, 'picnic-basket-003.png');
+            if (img3) messages.push(img3);
+          } else if (rewardResult.isFirstRewardedFriend) {
+            pushType = 'invite_progress_notification';
+            messages.push(
+              `您的朋友「${friendName}」已成功加入 OpenRice LINE@！再邀請 1 位尚未加入的好友完成加好友，即可獲得 1 次加碼刮刮樂次數。`
+            );
+            const img2 = picnicPushImageMessage(linePushPublicBaseUrl, 'picnic-basket-002.png');
+            if (img2) messages.push(img2);
+          }
+          if (messages.length > 0) {
+            Promise.resolve()
+              .then(() =>
+                linePush.pushLineMessages(rewardResult.inviterLineUserId, messages, {
+                  userId: rewardResult.inviterUserId,
+                  pushType,
+                  inviteeDisplayName: friendName,
+                  inviteId: rewardResult.inviteId,
+                  grantDraws
+                })
+              )
+              .catch(err => {
+                console.error('LINE invite reward push failed:', err.message);
+              });
+          }
         }
       }
 

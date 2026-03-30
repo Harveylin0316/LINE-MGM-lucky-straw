@@ -83,7 +83,11 @@ function registerLiffRoutes(app, deps) {
   const { pickPrizeByQuantity } = lotteryCore;
   const { signAuthToken, setAuthCookie, clearAuthCookie } = authCore;
   const hashRounds = Math.min(12, Math.max(4, Number(lineUserPasswordHashRounds || 6)));
-  const inviteLimit = Math.max(0, Number.isFinite(Number(inviteBonusMax)) ? Number(inviteBonusMax) : 2);
+  /** 好友加碼刮次每人最多領 1 次（與 webhook 一致） */
+  const inviteLimit = Math.min(
+    Math.max(0, Number.isFinite(Number(inviteBonusMax)) ? Number(inviteBonusMax) : 2),
+    1
+  );
   const friendsPerBonusDraw = Math.max(
     1,
     Number.isFinite(Number(inviteFriendsPerDrawRaw)) ? Number(inviteFriendsPerDrawRaw) : 2
@@ -580,14 +584,11 @@ function registerLiffRoutes(app, deps) {
       const firstMessage = `🌸 春日野餐祭中獎通知\n恭喜你刮中：${picked.name}`;
       const drawsAfterThis = currentLeft - 1;
       const pushMessages = [firstMessage];
-      const picnicImagePathByDraw = {
-        1: '/images/picnic-basket-001.png',
-        2: '/images/picnic-basket-002.png',
-        3: '/images/picnic-basket-003.png'
-      };
       const picnicPath =
-        typeof linePushPublicBaseUrl === 'string' && linePushPublicBaseUrl.trim()
-          ? picnicImagePathByDraw[totalDrawsSoFar]
+        totalDrawsSoFar === 1 &&
+        typeof linePushPublicBaseUrl === 'string' &&
+        linePushPublicBaseUrl.trim()
+          ? '/images/picnic-basket-001.png'
           : '';
       if (picnicPath) {
         const imageUrl = `${linePushPublicBaseUrl.trim().replace(/\/+$/, '')}${picnicPath}`;
