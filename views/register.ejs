@@ -6,7 +6,7 @@
       <h1>註冊新會員</h1>
       ${
         typeof referrerId !== 'undefined' && referrerId
-          ? '<p class="muted">您是透過好友邀請註冊，完成後好友可額外獲得 1 次抽獎機會（最多加 2 次）。</p>'
+          ? '<p class="muted">您是透過好友邀請註冊，完成後與其他好友任務一併計算：每 2 位好友完成任務，邀請人可獲 1 次抽獎機會（最多加 2 次）。</p>'
           : ''
       }
       ${error ? `<p class="error">${error}</p>` : ''}

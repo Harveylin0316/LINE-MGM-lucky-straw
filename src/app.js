@@ -61,6 +61,11 @@ if (LINE_OFFICIAL_ADD_FRIEND_URL_RAW && !LINE_OFFICIAL_ADD_FRIEND_URL) {
   );
 }
 const LIFF_INVITE_BONUS_MAX = Number.parseInt(process.env.LIFF_INVITE_BONUS_MAX || '20', 10);
+/** 每累計幾位好友完成加好友任務，邀請人可獲 1 次加碼刮次（預設 2） */
+const LIFF_INVITE_FRIENDS_PER_DRAW = Math.max(
+  1,
+  Number.parseInt(process.env.LIFF_INVITE_FRIENDS_PER_DRAW || '2', 10) || 2
+);
 const LIFF_LINE_USER_BCRYPT_ROUNDS = Number.parseInt(process.env.LIFF_LINE_USER_BCRYPT_ROUNDS || '6', 10);
 /** 自訂 LIFF 兌換說明（可含換行）；未設定則使用預設文案 */
 const LIFF_REDEMPTION_NOTE = process.env.LIFF_REDEMPTION_NOTE || '';
@@ -211,6 +216,7 @@ app.post(
     pool,
     channelSecret: LINE_CHANNEL_SECRET,
     inviteBonusMax: Number.isFinite(LIFF_INVITE_BONUS_MAX) ? LIFF_INVITE_BONUS_MAX : 20,
+    inviteFriendsPerDraw: LIFF_INVITE_FRIENDS_PER_DRAW,
     linePush
   })
 );
@@ -290,6 +296,7 @@ registerLiffRoutes(app, {
   linePush,
   linePushPublicBaseUrl: LINE_PUSH_PUBLIC_BASE_URL,
   inviteBonusMax: Number.isFinite(LIFF_INVITE_BONUS_MAX) ? LIFF_INVITE_BONUS_MAX : 20,
+  inviteFriendsPerDraw: LIFF_INVITE_FRIENDS_PER_DRAW,
   lineOfficialAddFriendUrl: LINE_OFFICIAL_ADD_FRIEND_URL,
   lineUserPasswordHashRounds: Number.isFinite(LIFF_LINE_USER_BCRYPT_ROUNDS) ? LIFF_LINE_USER_BCRYPT_ROUNDS : 6,
   liffRedemptionNote: LIFF_REDEMPTION_NOTE,

@@ -58,6 +58,7 @@ function registerLiffRoutes(app, deps) {
     viewStateCore,
     liffId,
     inviteBonusMax,
+    inviteFriendsPerDraw: inviteFriendsPerDrawRaw,
     lineOfficialAddFriendUrl,
     lineUserPasswordHashRounds,
     liffRedemptionNote,
@@ -83,6 +84,10 @@ function registerLiffRoutes(app, deps) {
   const { signAuthToken, setAuthCookie, clearAuthCookie } = authCore;
   const hashRounds = Math.min(12, Math.max(4, Number(lineUserPasswordHashRounds || 6)));
   const inviteLimit = Math.max(0, Number.isFinite(Number(inviteBonusMax)) ? Number(inviteBonusMax) : 2);
+  const friendsPerBonusDraw = Math.max(
+    1,
+    Number.isFinite(Number(inviteFriendsPerDrawRaw)) ? Number(inviteFriendsPerDrawRaw) : 2
+  );
   const defaultRedemptionNote =
     '1. 請開啟「OpenRice LINE@」對話視窗聯繫客服。\n' +
     '2. 提供本頁「我的中獎紀錄」截圖或中獎畫面截圖，並說明欲兌換的獎項。\n' +
@@ -431,6 +436,7 @@ function registerLiffRoutes(app, deps) {
         return res.render('liff_invite_confirm', {
           user: req.authUser.un,
           lineOfficialAddFriendUrl: lineOfficialAddFriendUrl || '',
+          inviteFriendsPerDraw: friendsPerBonusDraw,
           statusText: '綁定成功！若您尚未加入 OpenRice LINE@，請點下方按鈕加好友以完成任務（僅限尚未加入者）。'
         });
       } else if (bindResult === 'self_ref') {
@@ -441,6 +447,7 @@ function registerLiffRoutes(app, deps) {
         return res.render('liff_invite_confirm', {
           user: req.authUser.un,
           lineOfficialAddFriendUrl: lineOfficialAddFriendUrl || '',
+          inviteFriendsPerDraw: friendsPerBonusDraw,
           statusText: '你已綁定過此邀請關係。若尚未加入 OpenRice LINE@，可點下方按鈕加好友（僅限尚未加入者才能完成邀請任務）。'
         });
       } else if (bindResult === 'bound_other') {
@@ -499,6 +506,7 @@ function registerLiffRoutes(app, deps) {
         rewardedInviteCount: Number(row.rewarded_count) || 0,
         pendingInviteCount: Number(row.pending_count) || 0,
         inviteBonusMax: inviteLimit,
+        inviteFriendsPerDraw: friendsPerBonusDraw,
         lineOfficialAddFriendUrl: lineOfficialAddFriendUrl || '',
         liffId: liffId || '',
         recentWins,
@@ -562,9 +570,9 @@ function registerLiffRoutes(app, deps) {
       const totalDrawsSoFar = Number(drawCountRs.rows[0]?.c || 0);
       await client.query('COMMIT');
 
-      const inviteStats = await getInviteStats(req.authUser.uid);
-      const rewardedCount = Number(inviteStats?.rewarded_count || 0);
-      const remainingInviteBonus = Math.max(0, inviteLimit - rewardedCount);
+      const extraDrawsRs = await query('SELECT extra_draws FROM users WHERE id = $1', [req.authUser.uid]);
+      const extraDrawsNow = Number(extraDrawsRs.rows[0]?.extra_draws || 0);
+      const remainingInviteBonus = Math.max(0, inviteLimit - extraDrawsNow);
       const inviteCode = await ensureInviteCode(req.authUser.uid);
       const invitePath = inviteCode ? `/liff/${encodeURIComponent(inviteCode)}` : '/liff/lottery';
       const inviteLink = buildLiffPermanentUrl(liffId, invitePath, '/liff/lottery');
@@ -592,16 +600,16 @@ function registerLiffRoutes(app, deps) {
       if (remainingInviteBonus > 0) {
         let secondMessage;
         if (drawsAfterThis === 0) {
-          secondMessage = `你的春日刮刮樂次數已用完。尚餘 ${remainingInviteBonus} 個好友加碼名額，邀請尚未加入 OpenRice LINE@ 的好友完成任務，即可再獲刮刮樂機會！`;
+          secondMessage = `你的春日刮刮樂次數已用完。尚可再透過好友獲得 ${remainingInviteBonus} 次加碼刮次（每 ${friendsPerBonusDraw} 位尚未加入的好友完成任務可獲 1 次）。`;
         } else {
-          secondMessage = `你還可透過邀請好友加入 OpenRice LINE@，再獲得 ${remainingInviteBonus} 次刮刮樂機會。`;
+          secondMessage = `你還可透過邀請好友加入 OpenRice LINE@，再獲得 ${remainingInviteBonus} 次刮刮樂機會（每 ${friendsPerBonusDraw} 位完成任務可獲 1 次）。`;
         }
         if (inviteLink) {
           secondMessage += `\n\n分享你的專屬邀請連結：\n${inviteLink}`;
         }
         pushMessages.push(secondMessage);
       } else if (drawsAfterThis === 0) {
-        pushMessages.push('你的春日刮刮樂次數已用完，好友加碼名額也已用罄。感謝參與春日野餐祭！');
+        pushMessages.push('你的春日刮刮樂次數已用完，加碼刮次也已領滿。感謝參與春日野餐祭！');
       }
       // 加碼用罄且仍有刮次：僅推播中獎（刮次優先，不另述加碼狀態）。
       // Keep scratch-card UX responsive: send LINE push in background.

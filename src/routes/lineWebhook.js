@@ -7,7 +7,9 @@ function safeEqualBase64(a, b) {
   return crypto.timingSafeEqual(left, right);
 }
 
-function createLineWebhookHandler({ pool, channelSecret, inviteBonusMax, linePush }) {
+function createLineWebhookHandler({ pool, channelSecret, inviteBonusMax, inviteFriendsPerDraw, linePush }) {
+  const friendsPerDraw = Math.max(1, Number.isFinite(Number(inviteFriendsPerDraw)) ? Number(inviteFriendsPerDraw) : 2);
+  const bonusCap = Math.max(0, Number.isFinite(Number(inviteBonusMax)) ? Number(inviteBonusMax) : 2);
   async function appendWebhookEventLog(payload) {
     await pool.query(
       `INSERT INTO line_webhook_events
@@ -66,9 +68,9 @@ function createLineWebhookHandler({ pool, channelSecret, inviteBonusMax, linePus
         };
       }
 
-      const currentExtraDraws = Number(inviterRs.rows[0].extra_draws || 0);
+      const oldExtraDraws = Number(inviterRs.rows[0].extra_draws || 0);
       const followedAtMs = eventTimestamp || Date.now();
-      if (currentExtraDraws >= inviteBonusMax) {
+      if (oldExtraDraws >= bonusCap) {
         await client.query(
           "UPDATE line_invites SET status = 'capped', updated_at = NOW(), followed_at = TO_TIMESTAMP($2::double precision / 1000.0) WHERE id = $1",
           [invite.id, followedAtMs]
@@ -80,6 +82,17 @@ function createLineWebhookHandler({ pool, channelSecret, inviteBonusMax, linePus
           inviterUserId: invite.inviter_user_id
         };
       }
+
+      const rewardedCountRs = await client.query(
+        `SELECT COUNT(*)::int AS c FROM line_invites
+         WHERE inviter_user_id = $1 AND status = 'rewarded'`,
+        [invite.inviter_user_id]
+      );
+      const nRewardedBefore = Number(rewardedCountRs.rows[0]?.c || 0);
+      const nAfterThisInvite = nRewardedBefore + 1;
+      const targetBonusDraws = Math.min(Math.floor(nAfterThisInvite / friendsPerDraw), bonusCap);
+      const effectiveBonusDraws = Math.max(oldExtraDraws, targetBonusDraws);
+      const grantDraws = effectiveBonusDraws - oldExtraDraws;
 
       const [inviteeUserRs, inviterLineRs] = await Promise.all([
         client.query('SELECT line_display_name, username FROM users WHERE line_user_id = $1', [lineUserId]),
@@ -93,9 +106,10 @@ function createLineWebhookHandler({ pool, channelSecret, inviteBonusMax, linePus
         '您的好友';
       const inviterLineUserId = inviterRow.line_user_id || null;
 
-      await client.query('UPDATE users SET extra_draws = extra_draws + 1, draws_left = draws_left + 1 WHERE id = $1', [
-        invite.inviter_user_id
-      ]);
+      await client.query(
+        'UPDATE users SET extra_draws = $1, draws_left = draws_left + $2 WHERE id = $3',
+        [effectiveBonusDraws, grantDraws, invite.inviter_user_id]
+      );
       await client.query(
         "UPDATE line_invites SET status = 'rewarded', updated_at = NOW(), followed_at = TO_TIMESTAMP($2::double precision / 1000.0), rewarded_at = NOW() WHERE id = $1",
         [invite.id, followedAtMs]
@@ -106,7 +120,8 @@ function createLineWebhookHandler({ pool, channelSecret, inviteBonusMax, linePus
         inviteId: invite.id,
         inviterUserId: invite.inviter_user_id,
         inviterLineUserId,
-        inviteeDisplayName
+        inviteeDisplayName,
+        grantDraws
       };
     } catch (err) {
       await client.query('ROLLBACK');
@@ -171,6 +186,7 @@ function createLineWebhookHandler({ pool, channelSecret, inviteBonusMax, linePus
         if (
           rewardResult?.result === 'rewarded' &&
           rewardResult.inviterLineUserId &&
+          Number(rewardResult.grantDraws || 0) > 0 &&
           linePush &&
           typeof linePush.pushLineMessages === 'function'
         ) {
