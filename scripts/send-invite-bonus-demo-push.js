@@ -6,6 +6,7 @@
  *   export DATABASE_URL="postgresql://..."
  *   export LINE_CHANNEL_ACCESS_TOKEN="..."
  *   export LINE_PUSH_PUBLIC_BASE_URL="https://你的正式網域"   # 選填，有則附 picnic-basket-003.png
+ *   export LIFF_ID="你的-LIFF-ID"   # 選填，有則文案附上刮刮樂永久連結（與正式 webhook 一致）
  *
  *   node scripts/send-invite-bonus-demo-push.js "Ice Chen" "某位好友"
  *
@@ -14,6 +15,7 @@
  */
 
 const { Pool } = require('pg');
+const { buildLiffPermanentUrl } = require('../src/core/liffPermalink');
 
 function normalizeLinePushPublicBaseUrl(raw) {
   const trimmed = typeof raw === 'string' ? raw.trim().replace(/\/+$/, '') : '';
@@ -74,7 +76,10 @@ async function main() {
 
   const row = rs.rows[0];
   const lineUserId = row.line_user_id;
-  const text = `您的朋友「${inviteeInMessage}」已成功加入 OpenRice LINE@！已累計 2 位好友完成任務，恭喜您獲得 1 次加碼刮刮樂次數！`;
+  const liffBuilt = buildLiffPermanentUrl(process.env.LIFF_ID || '', '/liff/lottery', '/liff/lottery');
+  const liffLine =
+    /^https:\/\/liff\.line\.me\//i.test(liffBuilt) ? `\n\n立即玩春日刮刮樂：\n${liffBuilt}` : '';
+  const text = `您的朋友「${inviteeInMessage}」已成功加入 OpenRice LINE@！已累計 2 位好友完成任務，恭喜您獲得 1 次加碼刮刮樂次數！${liffLine}`;
 
   const messages = [{ type: 'text', text }];
   if (baseUrl) {

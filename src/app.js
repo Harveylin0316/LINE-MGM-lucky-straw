@@ -13,6 +13,7 @@ const { initDb } = require('./core/dbInit');
 const { createAdminLoginThrottle } = require('./core/adminLoginThrottle');
 const { registerWebRoutes } = require('./routes/web');
 const { registerLiffRoutes } = require('./routes/liff');
+const { buildLiffPermanentUrl } = require('./core/liffPermalink');
 const { createLineWebhookHandler } = require('./routes/lineWebhook');
 const { createLinePushService } = require('./core/linePush');
 
@@ -25,6 +26,8 @@ const JWT_SECRET =
   (isProduction ? '' : 'local-dev-only-jwt-secret-change-before-production-123');
 const DATABASE_URL = process.env.DATABASE_URL;
 const LIFF_ID = process.env.LIFF_ID || '';
+const _liffLotteryBuilt = buildLiffPermanentUrl(LIFF_ID, '/liff/lottery', '/liff/lottery');
+const LIFF_LOTTERY_PUSH_URL = /^https:\/\/liff\.line\.me\//i.test(_liffLotteryBuilt) ? _liffLotteryBuilt : '';
 const LINE_CHANNEL_SECRET = process.env.LINE_CHANNEL_SECRET || '';
 const LINE_CHANNEL_ACCESS_TOKEN = process.env.LINE_CHANNEL_ACCESS_TOKEN || '';
 const LINE_OFFICIAL_ADD_FRIEND_URL_RAW = process.env.LINE_OFFICIAL_ADD_FRIEND_URL || '';
@@ -218,6 +221,7 @@ app.post(
     inviteBonusMax: Number.isFinite(LIFF_INVITE_BONUS_MAX) ? LIFF_INVITE_BONUS_MAX : 20,
     inviteFriendsPerDraw: LIFF_INVITE_FRIENDS_PER_DRAW,
     linePushPublicBaseUrl: LINE_PUSH_PUBLIC_BASE_URL,
+    liffLotteryPushUrl: LIFF_LOTTERY_PUSH_URL,
     linePush
   })
 );

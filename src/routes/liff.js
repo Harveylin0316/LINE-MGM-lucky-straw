@@ -1,40 +1,13 @@
 const bcrypt = require('bcryptjs');
 const crypto = require('crypto');
 const { getCampaignPhase } = require('../core/campaignWindow');
+const { buildLiffPermanentUrl } = require('../core/liffPermalink');
 
 function normalizeLiffNextPath(rawNextPath, fallbackPath = '/liff/lottery') {
   if (typeof rawNextPath !== 'string') return fallbackPath;
   if (!rawNextPath.startsWith('/liff')) return fallbackPath;
   if (rawNextPath.startsWith('//')) return fallbackPath;
   return rawNextPath;
-}
-
-/**
- * Path segment after https://liff.line.me/{liffId}/ is appended to the LIFF Endpoint URL from LINE Console.
- * If Endpoint is https://host/liff, use /lottery or /inviteCode — not /liff/lottery (would become /liff/liff/...).
- * Set LIFF_ENDPOINT_IS_SITE_ROOT=1 when Endpoint is https://host (no /liff); then keep /liff/... here.
- */
-function liffPermalinkSuffixFromExpressPath(expressPath, fallbackExpressPath = '/liff/lottery') {
-  const p =
-    typeof expressPath === 'string' && expressPath.startsWith('/')
-      ? expressPath
-      : fallbackExpressPath;
-  if (String(process.env.LIFF_ENDPOINT_IS_SITE_ROOT || '').trim() === '1') {
-    return p;
-  }
-  if (p === '/liff' || p === '/liff/') return '/';
-  if (p.startsWith('/liff/')) return p.slice('/liff'.length);
-  return p;
-}
-
-function buildLiffPermanentUrl(liffId, expressPath, fallbackExpressPath = '/liff/lottery') {
-  const safeLiffId = typeof liffId === 'string' ? liffId.trim() : '';
-  const resolved =
-    typeof expressPath === 'string' && expressPath.startsWith('/') ? expressPath : fallbackExpressPath;
-  if (!safeLiffId) return resolved;
-  const suffix = liffPermalinkSuffixFromExpressPath(resolved, fallbackExpressPath);
-  const safeSuffix = suffix.startsWith('/') ? suffix : `/${suffix}`;
-  return `https://liff.line.me/${encodeURIComponent(safeLiffId)}${safeSuffix}`;
 }
 
 function isLineMobileClientRequest(req) {

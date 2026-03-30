@@ -26,6 +26,7 @@ function createLineWebhookHandler({
   inviteBonusMax,
   inviteFriendsPerDraw,
   linePushPublicBaseUrl = '',
+  liffLotteryPushUrl = '',
   linePush
 }) {
   const friendsPerDraw = Math.max(1, Number.isFinite(Number(inviteFriendsPerDraw)) ? Number(inviteFriendsPerDraw) : 2);
@@ -216,8 +217,12 @@ function createLineWebhookHandler({
           let pushType = 'invite_reward_notification';
           if (grantDraws > 0) {
             pushType = 'invite_bonus_granted_notification';
+            const liffLine =
+              typeof liffLotteryPushUrl === 'string' && /^https:\/\/liff\.line\.me\//i.test(liffLotteryPushUrl.trim())
+                ? `\n\n立即玩春日刮刮樂：\n${liffLotteryPushUrl.trim()}`
+                : '';
             messages.push(
-              `您的朋友「${friendName}」已成功加入 OpenRice LINE@！已累計 2 位好友完成任務，恭喜您獲得 1 次加碼刮刮樂次數！`
+              `您的朋友「${friendName}」已成功加入 OpenRice LINE@！已累計 2 位好友完成任務，恭喜您獲得 1 次加碼刮刮樂次數！${liffLine}`
             );
             const img3 = picnicPushImageMessage(linePushPublicBaseUrl, 'picnic-basket-003.png');
             if (img3) messages.push(img3);
@@ -237,7 +242,8 @@ function createLineWebhookHandler({
                   pushType,
                   inviteeDisplayName: friendName,
                   inviteId: rewardResult.inviteId,
-                  grantDraws
+                  grantDraws,
+                  liffLotteryPushUrl: liffLotteryPushUrl || null
                 })
               )
               .catch(err => {
