@@ -303,7 +303,12 @@ registerWebRoutes(app, {
   lotteryCore,
   viewStateCore,
   adminLoginPath: ADMIN_LOGIN_PATH,
-  adminLoginThrottle
+  adminLoginThrottle,
+  linePush,
+  lineChannelAccessToken: LINE_CHANNEL_ACCESS_TOKEN,
+  inviteBonusMax: Number.isFinite(LIFF_INVITE_BONUS_MAX) ? LIFF_INVITE_BONUS_MAX : 20,
+  inviteFriendsPerDraw: LIFF_INVITE_FRIENDS_PER_DRAW,
+  liffLotteryPushUrl: LIFF_LOTTERY_PUSH_URL
 });
 
 registerLiffRoutes(app, {

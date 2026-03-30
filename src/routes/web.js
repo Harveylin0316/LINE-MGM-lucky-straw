@@ -1,5 +1,6 @@
 const bcrypt = require('bcryptjs');
 const { parseTaipeiDatetimeLocal, toTaipeiDatetimeLocalInput } = require('../core/campaignWindow');
+const { computeInviteLimit } = require('../core/inviteBonusConfig');
 
 async function logPrizeChange(client, payload) {
   await client.query(
@@ -25,6 +26,19 @@ function normalizeNextPath(rawNextPath, fallbackPath = '/admin/prizes') {
   return rawNextPath;
 }
 
+function escapeCsvField(val) {
+  const s = String(val == null ? '' : val);
+  if (/[",\n\r]/.test(s)) return `"${s.replace(/"/g, '""')}"`;
+  return s;
+}
+
+function escapeHtmlForTextareaContent(s) {
+  return String(s || '')
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;');
+}
+
 function registerWebRoutes(app, deps) {
   const {
     query,
@@ -33,7 +47,12 @@ function registerWebRoutes(app, deps) {
     lotteryCore,
     viewStateCore,
     adminLoginPath,
-    adminLoginThrottle
+    adminLoginThrottle,
+    linePush,
+    lineChannelAccessToken,
+    inviteBonusMax,
+    inviteFriendsPerDraw,
+    liffLotteryPushUrl
   } = deps;
 
   const { requireAdmin, signAuthToken, setAuthCookie, clearAuthCookie } = authCore;
@@ -270,6 +289,244 @@ function registerWebRoutes(app, deps) {
         hasPrevPage: page > 1,
         hasNextPage: offset + (rows.rows || []).length < totalCount
       });
+    } catch (err) {
+      next(err);
+    }
+  });
+
+  const inviteLimitForAdmin = computeInviteLimit(inviteBonusMax);
+  const friendsPerForAdmin = Math.max(
+    1,
+    Number.isFinite(Number(inviteFriendsPerDraw)) ? Number(inviteFriendsPerDraw) : 2
+  );
+
+  app.get('/admin/invite-reminders', requireAdmin, async (req, res, next) => {
+    try {
+      const pageSize = 100;
+      const page = parsePage(req.query.page);
+      const offset = (page - 1) * pageSize;
+      const onlyPending =
+        req.query.only_pending === '1' || req.query.only_pending === 'true' || req.query.only_pending === 'on';
+      const pushOk = req.query.push_ok != null ? String(req.query.push_ok) : '';
+      const pushFail = req.query.push_fail != null ? String(req.query.push_fail) : '';
+      const pushSkip = req.query.push_skip != null ? String(req.query.push_skip) : '';
+      const queryErr = typeof req.query.err === 'string' ? req.query.err : '';
+      const liffUrlStr = typeof liffLotteryPushUrl === 'string' ? liffLotteryPushUrl : '';
+      const defaultReminderText = liffUrlStr
+        ? `【春日野餐祭】您還有邀請加碼刮刮樂次數尚未領取！\n邀請尚未加入 OpenRice LINE@ 的好友完成加好友，累計 ${friendsPerForAdmin} 人即可加碼。\n立即開啟活動：\n${liffUrlStr}`
+        : `【春日野餐祭】您還有邀請加碼刮刮樂次數尚未領取！\n邀請尚未加入 OpenRice LINE@ 的好友完成加好友，累計 ${friendsPerForAdmin} 人即可加碼。\n請從 OpenRice LINE@ 選單再次進入刮刮樂，分享您的專屬邀請連結給好友。`;
+      const defaultReminderTextEscaped = escapeHtmlForTextareaContent(defaultReminderText);
+
+      if (req.query.export === 'csv') {
+        const baseWhereCsv = `
+        u.line_user_id IS NOT NULL
+        AND BTRIM(u.line_user_id) <> ''
+        AND (u.is_admin IS NOT TRUE)
+        AND u.extra_draws < $1
+      `;
+        const pendingClauseCsv = onlyPending
+          ? `AND EXISTS (
+            SELECT 1 FROM line_invites li
+            WHERE li.inviter_user_id = u.id AND li.status = 'pending'
+          )`
+          : '';
+        const exportSql = `
+        SELECT
+          u.id,
+          u.username,
+          u.line_display_name,
+          u.line_user_id,
+          u.extra_draws,
+          (SELECT COUNT(*)::int FROM line_invites li
+           WHERE li.inviter_user_id = u.id AND li.status = 'rewarded') AS invite_rewarded_count,
+          (SELECT COUNT(*)::int FROM line_invites li
+           WHERE li.inviter_user_id = u.id AND li.status = 'pending') AS invite_pending_count
+        FROM users u
+        WHERE ${baseWhereCsv}
+        ${pendingClauseCsv}
+        ORDER BY u.id ASC
+        LIMIT 5000
+      `;
+        const exportRs = await query(exportSql, [inviteLimitForAdmin]);
+        res.setHeader('Content-Type', 'text/csv; charset=utf-8');
+        res.setHeader('Content-Disposition', 'attachment; filename="invite-incomplete-users.csv"');
+        res.write('\ufeff');
+        res.write(
+          'id,username,line_display_name,line_user_id,extra_draws,invite_rewarded,invite_pending\n'
+        );
+        for (const r of exportRs.rows || []) {
+          const line = [
+            r.id,
+            escapeCsvField(r.username),
+            escapeCsvField(r.line_display_name),
+            escapeCsvField(r.line_user_id),
+            r.extra_draws ?? 0,
+            r.invite_rewarded_count ?? 0,
+            r.invite_pending_count ?? 0
+          ].join(',');
+          res.write(`${line}\n`);
+        }
+        return res.end();
+      }
+
+      if (inviteLimitForAdmin <= 0) {
+        return res.render('admin_invite_reminders', {
+          user: req.authUser.un,
+          isAdmin: true,
+          rows: [],
+          page: 1,
+          hasPrevPage: false,
+          hasNextPage: false,
+          totalCount: 0,
+          onlyPending,
+          inviteLimit: inviteLimitForAdmin,
+          friendsPerDraw: friendsPerForAdmin,
+          liffLotteryPushUrl: liffUrlStr,
+          defaultReminderText,
+          defaultReminderTextEscaped,
+          hasLineToken: Boolean(linePush && lineChannelAccessToken),
+          pushOk,
+          pushFail,
+          pushSkip,
+          err: queryErr,
+          disabledReason: '目前邀請加碼上限為 0，沒有「尚未完成邀請任務」的名單。'
+        });
+      }
+
+      const baseWhere = `
+        u.line_user_id IS NOT NULL
+        AND BTRIM(u.line_user_id) <> ''
+        AND (u.is_admin IS NOT TRUE)
+        AND u.extra_draws < $1
+      `;
+      const pendingClause = onlyPending
+        ? `AND EXISTS (
+            SELECT 1 FROM line_invites li
+            WHERE li.inviter_user_id = u.id AND li.status = 'pending'
+          )`
+        : '';
+
+      const listSql = `
+        SELECT
+          u.id,
+          u.username,
+          u.line_display_name,
+          u.line_user_id,
+          u.extra_draws,
+          (SELECT COUNT(*)::int FROM line_invites li
+           WHERE li.inviter_user_id = u.id AND li.status = 'rewarded') AS invite_rewarded_count,
+          (SELECT COUNT(*)::int FROM line_invites li
+           WHERE li.inviter_user_id = u.id AND li.status = 'pending') AS invite_pending_count
+        FROM users u
+        WHERE ${baseWhere}
+        ${pendingClause}
+        ORDER BY u.id ASC
+        LIMIT $2 OFFSET $3
+      `;
+      const countSql = `
+        SELECT COUNT(*)::int AS total FROM users u
+        WHERE ${baseWhere}
+        ${pendingClause}
+      `;
+
+      const [rowsRs, countRs] = await Promise.all([
+        query(listSql, [inviteLimitForAdmin, pageSize, offset]),
+        query(countSql, [inviteLimitForAdmin])
+      ]);
+      const totalCount = countRs.rows[0]?.total || 0;
+
+      return res.render('admin_invite_reminders', {
+        user: req.authUser.un,
+        isAdmin: true,
+        rows: rowsRs.rows || [],
+        page,
+        hasPrevPage: page > 1,
+        hasNextPage: offset + (rowsRs.rows || []).length < totalCount,
+        totalCount,
+        onlyPending,
+        inviteLimit: inviteLimitForAdmin,
+        friendsPerDraw: friendsPerForAdmin,
+        liffLotteryPushUrl: liffUrlStr,
+        defaultReminderText,
+        defaultReminderTextEscaped,
+        hasLineToken: Boolean(linePush && lineChannelAccessToken),
+        pushOk,
+        pushFail,
+        pushSkip,
+        err: queryErr,
+        disabledReason: ''
+      });
+    } catch (handlerErr) {
+      next(handlerErr);
+    }
+  });
+
+  app.post('/admin/invite-reminders/push', requireAdmin, async (req, res, next) => {
+    try {
+      const pendingQs = req.body.only_pending_filter === '1' ? '&only_pending=1' : '';
+
+      if (!lineChannelAccessToken) {
+        return res.redirect(`/admin/invite-reminders?err=no_line_token${pendingQs}`);
+      }
+      const rawIds = typeof req.body.userIds === 'string' ? req.body.userIds : '';
+      const ids = rawIds
+        .split(/[,\s]+/)
+        .map(s => parseInt(String(s).trim(), 10))
+        .filter(n => Number.isInteger(n) && n > 0);
+      const uniqueIds = [...new Set(ids)].slice(0, 50);
+
+      const message = typeof req.body.message === 'string' ? req.body.message.trim() : '';
+      if (!message || message.length > 5000) {
+        return res.redirect(`/admin/invite-reminders?err=bad_message${pendingQs}`);
+      }
+      if (uniqueIds.length === 0) {
+        return res.redirect(`/admin/invite-reminders?err=no_selection${pendingQs}`);
+      }
+
+      if (inviteLimitForAdmin <= 0) {
+        return res.redirect('/admin/invite-reminders');
+      }
+
+      let ok = 0;
+      let fail = 0;
+      let skip = 0;
+
+      for (const userId of uniqueIds) {
+        const uRs = await query(
+          `SELECT id, line_user_id, extra_draws, is_admin
+           FROM users WHERE id = $1`,
+          [userId]
+        );
+        if (uRs.rowCount === 0) {
+          skip += 1;
+          continue;
+        }
+        const u = uRs.rows[0];
+        const lineUid = String(u.line_user_id || '').trim();
+        if (!lineUid || u.is_admin === true || u.is_admin === 1) {
+          skip += 1;
+          continue;
+        }
+        if (Number(u.extra_draws || 0) >= inviteLimitForAdmin) {
+          skip += 1;
+          continue;
+        }
+
+        const pushed = await linePush.pushLineMessages(lineUid, [message], {
+          userId: u.id,
+          pushType: 'admin_invite_reminder'
+        });
+        if (pushed) ok += 1;
+        else fail += 1;
+      }
+
+      const q = new URLSearchParams({
+        push_ok: String(ok),
+        push_fail: String(fail),
+        push_skip: String(skip)
+      });
+      if (req.body.only_pending_filter === '1') q.set('only_pending', '1');
+      return res.redirect(`/admin/invite-reminders?${q.toString()}`);
     } catch (err) {
       next(err);
     }

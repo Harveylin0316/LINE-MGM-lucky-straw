@@ -1,0 +1,139 @@
+<%-
+  include('layout', {
+    user: user,
+    isAdmin: isAdmin,
+    body: `
+    <section class="card">
+      <h1>邀請任務提醒名單</h1>
+      <p class="muted">
+        列出已透過 LINE 參與（有綁定 <code>line_user_id</code>）、且<strong>尚未領滿邀請加碼</strong>
+        （<code>extra_draws &lt; ${inviteLimit}</code>，與前台／Webhook 規則一致）的用戶。
+        每頁最多顯示 100 人；單次推播最多 50 人，請分批操作並留意 LINE 官方 API 用量。
+      </p>
+      <p>
+        <a class="btn" href="/admin/prizes">獎品設定</a>
+        <a class="btn" href="/admin/reports">活動成效報表</a>
+      </p>
+
+      ${
+        err === 'no_line_token'
+          ? '<p class="error-banner">未設定 LINE_CHANNEL_ACCESS_TOKEN，無法推播。請於環境變數設定後重試。</p>'
+          : ''
+      }
+      ${
+        err === 'bad_message'
+          ? '<p class="error-banner">推播文字不可為空，且不可超過 5000 字（LINE 限制）。</p>'
+          : ''
+      }
+      ${
+        err === 'no_selection'
+          ? '<p class="error-banner">請至少勾選一位用戶，或確認已按下「全選本頁」。</p>'
+          : ''
+      }
+      ${
+        pushOk !== '' || pushFail !== '' || pushSkip !== ''
+          ? `<p class="ok-banner">推播結果：成功 ${pushOk} 筆、失敗 ${pushFail} 筆、略過 ${pushSkip} 筆（不符合條件或查無用戶）。紀錄可於「活動成效報表」查看 LINE 推播紀錄。</p>`
+          : ''
+      }
+      ${
+        disabledReason
+          ? `<p class="muted">${disabledReason}</p>`
+          : ''
+      }
+      ${
+        !hasLineToken && !disabledReason
+          ? '<p class="error-banner">目前未設定 LINE Channel Access Token，介面仍可匯出名單，但無法發送推播。</p>'
+          : ''
+      }
+
+      <form method="get" action="/admin/invite-reminders" class="form report-filter-form" style="margin-bottom: 16px;">
+        <label class="checkbox-label">
+          <input type="checkbox" name="only_pending" value="1" ${onlyPending ? 'checked' : ''} />
+          僅顯示「已有待完成邀請紀錄」（<code>line_invites.status = pending</code>）的邀請人
+        </label>
+        <button type="submit" class="btn primary">套用篩選</button>
+        <a class="btn" href="/admin/invite-reminders?export=csv${onlyPending ? '&only_pending=1' : ''}">下載 CSV（最多 5000 筆）</a>
+      </form>
+
+      ${
+        !disabledReason
+          ? `<p class="muted">符合條件人數：<strong>${totalCount}</strong>。需累計 <strong>${friendsPerDraw}</strong> 位好友完成加好友，邀請人可獲 1 次加碼（每人最多 <strong>${inviteLimit}</strong> 次加碼）。</p>`
+          : ''
+      }
+
+      ${
+        !disabledReason && Array.isArray(rows) && rows.length > 0
+          ? `<form id="invite-reminder-push-form" method="post" action="/admin/invite-reminders/push">
+        <input type="hidden" name="only_pending_filter" value="${onlyPending ? '1' : '0'}" />
+        <input type="hidden" name="userIds" id="invite-reminder-user-ids" value="" />
+        <label>
+          推播文字（將以 LINE Push 文字訊息發送）
+          <textarea name="message" rows="8" style="width:100%;max-width:640px;">${defaultReminderTextEscaped}</textarea>
+        </label>
+        <p class="muted" style="margin-top:8px;">
+          <button type="button" class="btn" id="invite-reminder-select-page">全選本頁</button>
+          <button type="button" class="btn" id="invite-reminder-clear-page">取消本頁勾選</button>
+          <button type="submit" class="btn primary" ${hasLineToken ? '' : 'disabled title="請先設定 LINE_CHANNEL_ACCESS_TOKEN"'}>推播給已勾選（最多 50 人）</button>
+        </p>
+        <table class="prize-table">
+          <thead>
+            <tr>
+              <th>選取</th>
+              <th>用戶 ID</th>
+              <th>帳號</th>
+              <th>LINE 名稱</th>
+              <th>加碼次數</th>
+              <th>已完成邀請</th>
+              <th>待好友加好友</th>
+            </tr>
+          </thead>
+          <tbody>
+            ${rows
+              .map((r) => {
+                const name = r.line_display_name ? r.line_display_name : '-';
+                return `<tr>
+                <td><input type="checkbox" class="invite-pick" name="pick" value="${r.id}" /></td>
+                <td>${r.id}</td>
+                <td>${r.username}</td>
+                <td>${name}</td>
+                <td>${r.extra_draws}</td>
+                <td>${r.invite_rewarded_count}</td>
+                <td>${r.invite_pending_count}</td>
+              </tr>`;
+              })
+              .join('')}
+          </tbody>
+        </table>
+        <div class="actions" style="margin-top: 12px;">
+          ${hasPrevPage ? `<a class="btn" href="/admin/invite-reminders?page=${page - 1}${onlyPending ? '&only_pending=1' : ''}">上一頁</a>` : ''}
+          ${hasNextPage ? `<a class="btn" href="/admin/invite-reminders?page=${page + 1}${onlyPending ? '&only_pending=1' : ''}">下一頁</a>` : ''}
+        </div>
+      </form>
+      <script>
+        (function () {
+          var form = document.getElementById('invite-reminder-push-form');
+          if (!form) return;
+          var hidden = document.getElementById('invite-reminder-user-ids');
+          function picks() {
+            return Array.prototype.slice.call(document.querySelectorAll('.invite-pick'));
+          }
+          document.getElementById('invite-reminder-select-page').addEventListener('click', function () {
+            picks().forEach(function (cb) { cb.checked = true; });
+          });
+          document.getElementById('invite-reminder-clear-page').addEventListener('click', function () {
+            picks().forEach(function (cb) { cb.checked = false; });
+          });
+          form.addEventListener('submit', function () {
+            var ids = picks().filter(function (cb) { return cb.checked; }).map(function (cb) { return cb.value; });
+            hidden.value = ids.join(',');
+          });
+        })();
+      </script>`
+          : !disabledReason
+            ? '<p class="muted">目前沒有符合條件的用戶。</p>'
+            : ''
+      }
+    </section>
+    `
+  })
+%>
