@@ -171,9 +171,12 @@
           : 1) - (typeof extraDraws !== 'undefined' ? Number(extraDraws) || 0 : 0)
       )}</strong> 次加碼刮次。</p>
       <code class="invite-link invite-link-compact" id="liff-invite-link" title="${inviteLink || ''}">${inviteLink || ''}</code>
+      <p class="muted" style="margin-top:10px;font-size:12px;line-height:1.5;">
+        分享時會盡量附上活動主視覺與邀請連結。若對方聊天室<strong>只有文字</strong>，請將 LINE 更新至最新版；若本頁完全沒出現主圖預覽，請確認 Netlify 已設定 <code>URL</code> 或 <code>LINE_PUSH_PUBLIC_BASE_URL</code>（HTTPS）。
+      </p>
       ${
         typeof inviteShareImageUrl !== 'undefined' && !inviteShareImageUrl
-          ? '<p class="muted" style="margin-top:10px;font-size:13px;">分享若沒有主視覺圖，請確認正式環境網址為 HTTPS，並在 Netlify／主機設定 <code>URL</code> 或 <code>LINE_PUSH_PUBLIC_BASE_URL</code>。</p>'
+          ? '<p class="muted" style="margin-top:8px;font-size:12px;color:#b45309;">目前無法組出圖片網址，分享將僅有文字。請檢查上述環境變數。</p>'
           : ''
       }
       <div class="actions">
@@ -254,93 +257,111 @@
           );
         }
 
-        /**
-         * 有 HTTPS 圖網址時用單一 Flex（主圖 + 文案 + 按鈕），LINE 聊天室裡較常正確顯示主視覺；
-         * 僅 image+text 兩則訊息時，部分版本只會送出文字。
-         */
-        function buildInviteShareMessages(inviteLink) {
-          var text = inviteShareText(inviteLink);
-          if (inviteShareImageUrl) {
-            return [
-              {
-                type: 'flex',
-                altText: 'OpenRice 春日野餐祭邀請你一起刮刮樂、抽里程數大獎',
-                contents: {
-                  type: 'bubble',
-                  hero: {
-                    type: 'image',
-                    url: inviteShareImageUrl,
-                    size: 'full',
-                    aspectRatio: '1:1',
-                    aspectMode: 'cover',
-                    action: { type: 'uri', uri: inviteLink }
-                  },
-                  body: {
-                    type: 'box',
-                    layout: 'vertical',
-                    spacing: 'md',
-                    contents: [
-                      {
-                        type: 'text',
-                        text:
-                          'OpenRice 春日野餐祭開跑！訂餐廳能賺現金，現在還有春日刮刮樂，刮開就知道有沒有中，大獎有 2 萬里程數！一起來試試手氣吧 👇',
-                        wrap: true,
-                        weight: 'bold',
-                        size: 'md'
-                      }
-                    ]
-                  },
-                  footer: {
-                    type: 'box',
-                    layout: 'vertical',
-                    spacing: 'sm',
-                    contents: [
-                      {
-                        type: 'button',
-                        style: 'primary',
-                        height: 'sm',
-                        action: { type: 'uri', label: '開啟邀請連結', uri: inviteLink }
-                      }
-                    ]
+        function buildInviteShareFlex(inviteLink) {
+          return {
+            type: 'flex',
+            altText: 'OpenRice 春日野餐祭邀請你一起刮刮樂、抽里程數大獎',
+            contents: {
+              type: 'bubble',
+              hero: {
+                type: 'image',
+                url: inviteShareImageUrl,
+                size: 'full',
+                aspectRatio: '1:1',
+                aspectMode: 'cover',
+                action: { type: 'uri', uri: inviteLink }
+              },
+              body: {
+                type: 'box',
+                layout: 'vertical',
+                spacing: 'md',
+                contents: [
+                  {
+                    type: 'text',
+                    text:
+                      'OpenRice 春日野餐祭開跑！訂餐廳能賺現金，現在還有春日刮刮樂，刮開就知道有沒有中，大獎有 2 萬里程數！一起來試試手氣吧 👇',
+                    wrap: true,
+                    weight: 'bold',
+                    size: 'md'
                   }
-                }
+                ]
+              },
+              footer: {
+                type: 'box',
+                layout: 'vertical',
+                spacing: 'sm',
+                contents: [
+                  {
+                    type: 'button',
+                    style: 'primary',
+                    height: 'sm',
+                    action: { type: 'uri', label: '開啟邀請連結', uri: inviteLink }
+                  }
+                ]
               }
-            ];
-          }
-          return [{ type: 'text', text: text }];
+            }
+          };
         }
 
+        /**
+         * LIFF 2：成功時 resolve { status: 'success' }；使用者取消則 resolve 但無參數。
+         * 若 Flex／多則訊息被平台拒絕會 reject，舊寫法在 catch 裡開 line.me 文字連結 → 對方永遠只有文字。
+         * 改為：先 image+text → 失敗再 Flex → 再純文字 picker → 最後才 line.me。
+         */
         function openLineShareFallback(inviteLink) {
           var text = inviteShareText(inviteLink);
           window.location.href = 'https://line.me/R/msg/text/?' + encodeURIComponent(text);
         }
 
         function runShareTargetPicker(inviteLink, releaseBtn) {
-          liff
-            .shareTargetPicker(buildInviteShareMessages(inviteLink))
-            .then(
-              function (result) {
-                if (result !== null) {
-                  btn.textContent = '已開啟分享';
-                  setTimeout(function () {
-                    btn.textContent = '分享春日邀請給好友';
-                  }, 1200);
-                } else {
-                  openLineShareFallback(inviteLink);
+          var text = inviteShareText(inviteLink);
+          var strategies = [];
+          if (inviteShareImageUrl) {
+            strategies.push(function () {
+              return [
+                {
+                  type: 'image',
+                  originalContentUrl: inviteShareImageUrl,
+                  previewImageUrl: inviteShareImageUrl
+                },
+                { type: 'text', text: text }
+              ];
+            });
+            strategies.push(function () {
+              return [buildInviteShareFlex(inviteLink)];
+            });
+          }
+          strategies.push(function () {
+            return [{ type: 'text', text: text }];
+          });
+
+          function flashSent() {
+            btn.textContent = '已開啟分享';
+            setTimeout(function () {
+              btn.textContent = '分享春日邀請給好友';
+            }, 1200);
+          }
+
+          function attempt(idx) {
+            if (idx >= strategies.length) {
+              openLineShareFallback(inviteLink);
+              releaseBtn();
+              return;
+            }
+            liff
+              .shareTargetPicker(strategies[idx]())
+              .then(function (result) {
+                if (result && result.status === 'success') {
+                  flashSent();
                 }
-              },
-              function () {
-                openLineShareFallback(inviteLink);
-              }
-            )
-            .then(
-              function () {
                 releaseBtn();
-              },
-              function () {
-                releaseBtn();
-              }
-            );
+              })
+              .catch(function () {
+                attempt(idx + 1);
+              });
+          }
+
+          attempt(0);
         }
 
         async function copyInviteLink(inviteLink) {
