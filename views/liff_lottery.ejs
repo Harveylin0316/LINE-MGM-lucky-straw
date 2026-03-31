@@ -213,6 +213,8 @@
         var retryBtn = document.getElementById('retry-scratch-btn');
         var retryLoadingHint = document.getElementById('retry-loading-hint');
         var liffId = ${JSON.stringify(liffId || '')};
+        /** 給 shareTargetPicker 用，須為公開 HTTPS（與 LINE push 圖片相同來源） */
+        var inviteShareImageUrl = ${JSON.stringify(typeof inviteShareImageUrl !== 'undefined' ? inviteShareImageUrl : '')};
         var liffInitPromise = null;
         /** true only after liff.init() succeeds — used to call shareTargetPicker without await before it (user-gesture). */
         var liffInitSucceeded = false;
@@ -240,15 +242,37 @@
         // Start init on load so the first tap is not blocked by async init (shareTargetPicker needs user activation).
         ensureLiffReady();
 
+        function inviteShareText(inviteLink) {
+          return (
+            'OpenRice 春日野餐祭開跑！訂餐廳能賺現金，現在還有春日刮刮樂，刮開就知道有沒有中，大獎有 2 萬里程數！一起來試試手氣吧 👇\\n' +
+            inviteLink
+          );
+        }
+
+        /** 有 HTTPS 圖網址時：圖片在前、文字在後（LINE shareTargetPicker 格式與 Messaging API 相同） */
+        function buildInviteShareMessages(inviteLink) {
+          var text = inviteShareText(inviteLink);
+          if (inviteShareImageUrl) {
+            return [
+              {
+                type: 'image',
+                originalContentUrl: inviteShareImageUrl,
+                previewImageUrl: inviteShareImageUrl
+              },
+              { type: 'text', text: text }
+            ];
+          }
+          return [{ type: 'text', text: text }];
+        }
+
         function openLineShareFallback(inviteLink) {
-          var text = 'OpenRice 春日野餐祭開跑！訂餐廳能賺現金，現在還有春日刮刮樂，刮開就知道有沒有中，大獎有 2 萬里程數！一起來試試手氣吧 👇\\n' + inviteLink;
+          var text = inviteShareText(inviteLink);
           window.location.href = 'https://line.me/R/msg/text/?' + encodeURIComponent(text);
         }
 
         function runShareTargetPicker(inviteLink, releaseBtn) {
-          var text = 'OpenRice 春日野餐祭開跑！訂餐廳能賺現金，現在還有春日刮刮樂，刮開就知道有沒有中，大獎有 2 萬里程數！一起來試試手氣吧 👇\\n' + inviteLink;
           liff
-            .shareTargetPicker([{ type: 'text', text: text }])
+            .shareTargetPicker(buildInviteShareMessages(inviteLink))
             .then(
               function (result) {
                 if (result !== null) {

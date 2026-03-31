@@ -473,6 +473,7 @@ function registerLiffRoutes(app, deps) {
         prizeName: escapeHtmlText(r.prize_name || '獎項'),
         atText: escapeHtmlText(formatWinTime(r.created_at))
       }));
+      const inviteShareImageUrl = await resolvePushImageUrl(linePushImageBaseCandidates, 'invite-share-banner.png');
       res.render('liff_lottery', {
         user: req.authUser.un,
         result: drawResult,
@@ -481,6 +482,7 @@ function registerLiffRoutes(app, deps) {
         displayName: row.line_display_name || row.username || req.authUser.un,
         availablePrizes,
         inviteLink,
+        inviteShareImageUrl: inviteShareImageUrl || '',
         rewardedInviteCount: Number(row.rewarded_count) || 0,
         pendingInviteCount: Number(row.pending_count) || 0,
         inviteBonusMax: inviteLimit,
