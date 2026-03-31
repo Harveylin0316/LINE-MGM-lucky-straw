@@ -10,17 +10,26 @@
  *
  * 用法：
  *   DATABASE_URL=... LIFF_INVITE_BONUS_MAX=20 LIFF_INVITE_FRIENDS_PER_DRAW=2 node scripts/backfill-invite-rewards.js
- *   同上 ... --apply                    # 真的寫入；未帶則僅列出候選
- *   同上 ... --apply --invite-ids=37,38 # 只處理指定 line_invites.id（仍須符合預設候選條件）
+ *   同上 ... --apply                              # 真的寫入 DB
+ *   同上 ... --apply --with-push                  # 補發成功且 result=rewarded 時，發與 Webhook 相同的 LINE 給邀請人
+ *   同上 ... --apply --invite-ids=37,38
  *
- * 注意：不會發 LINE 推播；若需通知請另行處理。可重複執行：已 rewarded 的列會從候選消失。
+ * --with-push 需 LINE_CHANNEL_ACCESS_TOKEN；圖片與 LIFF 連結與正式站相同，請一併設定：
+ *   LINE_PUSH_PUBLIC_BASE_URL 或 PUBLIC_SITE_URL（https）、LIFF_ID
+ *
+ * 可重複執行：已 rewarded 的列會從候選消失。
  */
 
 const { Pool } = require('pg');
 const { applyInviteFollowReward } = require('../src/core/inviteReward');
+const { createLinePushService } = require('../src/core/linePush');
+const { buildInviteRewardPushMessages } = require('../src/core/inviteRewardPushMessages');
+const { buildPushImageBaseCandidates } = require('../src/core/linePushImageResolve');
+const { buildLiffPermanentUrl } = require('../src/core/liffPermalink');
 
 function parseArgs() {
   const apply = process.argv.includes('--apply');
+  const withPush = process.argv.includes('--with-push');
   let inviteIds = null;
   for (const a of process.argv) {
     if (a.startsWith('--invite-ids=')) {
@@ -31,7 +40,7 @@ function parseArgs() {
         .filter(n => Number.isFinite(n));
     }
   }
-  return { apply, inviteIds: inviteIds && inviteIds.length ? inviteIds : null };
+  return { apply, withPush, inviteIds: inviteIds && inviteIds.length ? inviteIds : null };
 }
 
 function buildCandidateSql(inviteIds) {
@@ -39,7 +48,6 @@ function buildCandidateSql(inviteIds) {
     inviteIds && inviteIds.length
       ? `AND li.id = ANY($1::int[])`
       : '';
-  const paramsNote = inviteIds && inviteIds.length ? 'params: [inviteIds]' : 'params: []';
   return {
     text: `
 SELECT li.id AS invite_id,
@@ -74,17 +82,41 @@ async function main() {
     Number.parseInt(process.env.LIFF_INVITE_FRIENDS_PER_DRAW || '2', 10) || 2
   );
 
-  const { apply, inviteIds } = parseArgs();
+  const { apply, withPush, inviteIds } = parseArgs();
   const { text, params } = buildCandidateSql(inviteIds);
+
+  if (withPush && !apply) {
+    console.error('請同時加上 --apply；僅預覽時不會發推播。');
+    process.exit(1);
+  }
+  if (withPush && !process.env.LINE_CHANNEL_ACCESS_TOKEN) {
+    console.error('使用 --with-push 時請設定 LINE_CHANNEL_ACCESS_TOKEN');
+    process.exit(1);
+  }
 
   const pool = new Pool({
     connectionString: databaseUrl,
     ssl: { rejectUnauthorized: false }
   });
 
+  const linePushImageBaseCandidates = buildPushImageBaseCandidates();
+  const liffId = String(process.env.LIFF_ID || '').trim();
+  const liffLotteryBuilt = buildLiffPermanentUrl(liffId, '/liff/lottery', '/liff/lottery');
+  const liffLotteryPushUrl = /^https:\/\/liff\.line\.me\//i.test(liffLotteryBuilt) ? liffLotteryBuilt : '';
+
+  const linePush = withPush
+    ? createLinePushService({
+        query: (q, p) => pool.query(q, p),
+        lineChannelAccessToken: process.env.LINE_CHANNEL_ACCESS_TOKEN
+      })
+    : null;
+
   try {
     const { rows } = await pool.query(text, params);
-    console.log(`候選筆數: ${rows.length}${apply ? '' : '（預覽，未寫入；若要執行請加 --apply）'}`);
+    const pushNote = withPush ? '；成功補發為 rewarded 時會發 LINE' : '';
+    console.log(
+      `候選筆數: ${rows.length}${apply ? pushNote : '（預覽：加 --apply 寫入；加 --apply --with-push 另發 LINE）'}`
+    );
     if (rows.length === 0) {
       return;
     }
@@ -100,9 +132,10 @@ async function main() {
       }
 
       const client = await pool.connect();
+      let result;
       try {
         await client.query('BEGIN');
-        const result = await applyInviteFollowReward(client, {
+        result = await applyInviteFollowReward(client, {
           lineUserId,
           eventTimestamp: eventMs,
           inviteBonusMax,
@@ -119,6 +152,25 @@ async function main() {
         throw err;
       } finally {
         client.release();
+      }
+
+      if (withPush && linePush && result?.result === 'rewarded') {
+        const payload = await buildInviteRewardPushMessages({
+          rewardResult: result,
+          friendsPerDraw: inviteFriendsPerDraw,
+          liffLotteryPushUrl,
+          linePushImageBaseCandidates
+        });
+        if (payload) {
+          const ok = await linePush.pushLineMessages(
+            payload.inviterLineUserId,
+            payload.messages,
+            payload.pushExtras
+          );
+          console.log(`[push] invite_id=${row.invite_id} -> ${ok ? 'success' : 'failed_or_skipped'}`);
+        } else {
+          console.log(`[push] invite_id=${row.invite_id} -> skipped_no_template`);
+        }
       }
     }
   } finally {
