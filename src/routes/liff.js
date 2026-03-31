@@ -2,7 +2,7 @@ const bcrypt = require('bcryptjs');
 const crypto = require('crypto');
 const { getCampaignPhase } = require('../core/campaignWindow');
 const { buildLiffPermanentUrl } = require('../core/liffPermalink');
-const { resolvePushImageUrl } = require('../core/linePushImageResolve');
+const { resolvePushImageUrl, mergePushImageCandidatesWithRequest } = require('../core/linePushImageResolve');
 
 function normalizeLiffNextPath(rawNextPath, fallbackPath = '/liff/lottery') {
   if (typeof rawNextPath !== 'string') return fallbackPath;
@@ -473,7 +473,8 @@ function registerLiffRoutes(app, deps) {
         prizeName: escapeHtmlText(r.prize_name || '獎項'),
         atText: escapeHtmlText(formatWinTime(r.created_at))
       }));
-      const inviteShareImageUrl = await resolvePushImageUrl(linePushImageBaseCandidates, 'invite-share-banner.png');
+      const inviteImageCandidates = mergePushImageCandidatesWithRequest(linePushImageBaseCandidates, req);
+      const inviteShareImageUrl = await resolvePushImageUrl(inviteImageCandidates, 'invite-share-banner.png');
       res.render('liff_lottery', {
         user: req.authUser.un,
         result: drawResult,

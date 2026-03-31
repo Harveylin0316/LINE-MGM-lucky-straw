@@ -171,6 +171,11 @@
           : 1) - (typeof extraDraws !== 'undefined' ? Number(extraDraws) || 0 : 0)
       )}</strong> 次加碼刮次。</p>
       <code class="invite-link invite-link-compact" id="liff-invite-link" title="${inviteLink || ''}">${inviteLink || ''}</code>
+      ${
+        typeof inviteShareImageUrl !== 'undefined' && !inviteShareImageUrl
+          ? '<p class="muted" style="margin-top:10px;font-size:13px;">分享若沒有主視覺圖，請確認正式環境網址為 HTTPS，並在 Netlify／主機設定 <code>URL</code> 或 <code>LINE_PUSH_PUBLIC_BASE_URL</code>。</p>'
+          : ''
+      }
       <div class="actions">
         <button type="button" class="btn primary" id="share-invite-btn">分享春日邀請給好友</button>
         <button type="button" class="btn" id="copy-invite-btn">複製邀請連結</button>
@@ -249,17 +254,57 @@
           );
         }
 
-        /** 有 HTTPS 圖網址時：圖片在前、文字在後（LINE shareTargetPicker 格式與 Messaging API 相同） */
+        /**
+         * 有 HTTPS 圖網址時用單一 Flex（主圖 + 文案 + 按鈕），LINE 聊天室裡較常正確顯示主視覺；
+         * 僅 image+text 兩則訊息時，部分版本只會送出文字。
+         */
         function buildInviteShareMessages(inviteLink) {
           var text = inviteShareText(inviteLink);
           if (inviteShareImageUrl) {
             return [
               {
-                type: 'image',
-                originalContentUrl: inviteShareImageUrl,
-                previewImageUrl: inviteShareImageUrl
-              },
-              { type: 'text', text: text }
+                type: 'flex',
+                altText: 'OpenRice 春日野餐祭邀請你一起刮刮樂、抽里程數大獎',
+                contents: {
+                  type: 'bubble',
+                  hero: {
+                    type: 'image',
+                    url: inviteShareImageUrl,
+                    size: 'full',
+                    aspectRatio: '1:1',
+                    aspectMode: 'cover',
+                    action: { type: 'uri', uri: inviteLink }
+                  },
+                  body: {
+                    type: 'box',
+                    layout: 'vertical',
+                    spacing: 'md',
+                    contents: [
+                      {
+                        type: 'text',
+                        text:
+                          'OpenRice 春日野餐祭開跑！訂餐廳能賺現金，現在還有春日刮刮樂，刮開就知道有沒有中，大獎有 2 萬里程數！一起來試試手氣吧 👇',
+                        wrap: true,
+                        weight: 'bold',
+                        size: 'md'
+                      }
+                    ]
+                  },
+                  footer: {
+                    type: 'box',
+                    layout: 'vertical',
+                    spacing: 'sm',
+                    contents: [
+                      {
+                        type: 'button',
+                        style: 'primary',
+                        height: 'sm',
+                        action: { type: 'uri', label: '開啟邀請連結', uri: inviteLink }
+                      }
+                    ]
+                  }
+                }
+              }
             ];
           }
           return [{ type: 'text', text: text }];

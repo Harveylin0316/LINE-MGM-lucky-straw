@@ -79,4 +79,43 @@ async function resolvePushImageUrl(candidates, fileName) {
   return `${list[0]}${path}`;
 }
 
-module.exports = { normalizeHttpsOrigin, buildPushImageBaseCandidates, resolvePushImageUrl };
+/**
+ * 後端渲染 LIFF 頁時，Netlify 等環境有時未注入 URL，導致僅依 env 的候選為空。
+ * 用請求的 Host + x-forwarded-proto 補上一個 https origin，讓分享圖網址可組出。
+ */
+function httpsOriginFromRequest(req) {
+  if (!req || typeof req.get !== 'function') return '';
+  const host = String(req.get('x-forwarded-host') || req.get('host') || '')
+    .split(',')[0]
+    .trim();
+  if (!host) return '';
+  const xfProto = String(req.get('x-forwarded-proto') || '')
+    .split(',')[0]
+    .trim()
+    .toLowerCase();
+  if (xfProto === 'https') return `https://${host}`;
+  if (process.env.NODE_ENV === 'production') return `https://${host}`;
+  return '';
+}
+
+function mergePushImageCandidatesWithRequest(candidates, req) {
+  const fromEnv = Array.isArray(candidates) ? candidates.map(normalizeHttpsOrigin).filter(Boolean) : [];
+  const fromReq = httpsOriginFromRequest(req);
+  const seen = new Set();
+  const out = [];
+  for (const o of [...fromEnv, ...(fromReq ? [fromReq] : [])]) {
+    if (o && !seen.has(o)) {
+      seen.add(o);
+      out.push(o);
+    }
+  }
+  return out;
+}
+
+module.exports = {
+  normalizeHttpsOrigin,
+  buildPushImageBaseCandidates,
+  resolvePushImageUrl,
+  httpsOriginFromRequest,
+  mergePushImageCandidatesWithRequest
+};
