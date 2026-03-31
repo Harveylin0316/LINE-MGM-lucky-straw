@@ -3,6 +3,7 @@ const bcrypt = require('bcryptjs');
 const multer = require('multer');
 const { parseTaipeiDatetimeLocal, toTaipeiDatetimeLocalInput } = require('../core/campaignWindow');
 const { computeInviteLimit } = require('../core/inviteBonusConfig');
+const { buildInviteRewardPushMessages } = require('../core/inviteRewardPushMessages');
 
 async function logPrizeChange(client, payload) {
   await client.query(
@@ -67,6 +68,7 @@ function registerWebRoutes(app, deps) {
     inviteBonusMax,
     inviteFriendsPerDraw,
     liffLotteryPushUrl,
+    linePushImageBaseCandidates = [],
     resolvePublicSiteOrigin = () => ''
   } = deps;
 
@@ -362,13 +364,77 @@ function registerWebRoutes(app, deps) {
            draws_left = draws_left + $1,
            extra_draws = CASE WHEN $4::boolean THEN LEAST(extra_draws + $1, $3) ELSE extra_draws END
          WHERE id = $2 AND (is_admin IS NOT TRUE)
-         RETURNING id, username, draws_left, extra_draws`,
+         RETURNING id, username, draws_left, extra_draws, line_user_id`,
         [bonusCount, target.id, inviteLimitForAdmin, adjustExtra]
       );
       if (upd.rowCount === 0) {
         return rerenderForm({ error: '更新失敗（用戶可能為管理員）。' });
       }
       const row = upd.rows[0];
+
+      let pushNoteClass = '';
+      let pushNoteEscaped = '';
+      if (adjustExtra && bonusCount > 0) {
+        const lineUid = row.line_user_id ? String(row.line_user_id).trim() : '';
+        if (!lineChannelAccessToken || !linePush || typeof linePush.pushLineMessages !== 'function') {
+          pushNoteClass = 'error-banner';
+          pushNoteEscaped = escapeHtmlLite(
+            '已同步加碼紀錄，但伺服器未設定 LINE_CHANNEL_ACCESS_TOKEN 或推播模組不可用，無法發送 LINE。'
+          );
+        } else if (!lineUid) {
+          pushNoteClass = 'error-banner';
+          pushNoteEscaped = escapeHtmlLite(
+            '已同步加碼紀錄，但此用戶無 line_user_id（未以 LINE 綁定），無法發送 LINE 推播。'
+          );
+        } else {
+          try {
+            const rewardResult = {
+              result: 'rewarded',
+              inviteId: null,
+              inviterUserId: row.id,
+              inviterLineUserId: lineUid,
+              inviteeDisplayName: '您的好友',
+              grantDraws: 1,
+              isFirstRewardedFriend: false
+            };
+            const payload = await buildInviteRewardPushMessages({
+              rewardResult,
+              friendsPerDraw: friendsPerForAdmin,
+              liffLotteryPushUrl,
+              linePushImageBaseCandidates
+            });
+            if (!payload) {
+              pushNoteClass = 'error-banner';
+              pushNoteEscaped = escapeHtmlLite(
+                '已同步加碼紀錄，但無法組出推播內容（請檢查圖片網域環境變數）。請查看 line_push_logs。'
+              );
+            } else {
+              const ok = await linePush.pushLineMessages(
+                payload.inviterLineUserId,
+                payload.messages,
+                payload.pushExtras
+              );
+              if (ok) {
+                pushNoteClass = 'ok-banner';
+                pushNoteEscaped = escapeHtmlLite(
+                  '已發送 LINE 給該用戶，文案與圖片與 Webhook「累計好友完成任務、獲得加碼刮次」相同。'
+                );
+              } else {
+                pushNoteClass = 'error-banner';
+                pushNoteEscaped = escapeHtmlLite(
+                  '已同步加碼紀錄，但 LINE 推播未成功（可能 API 錯誤）。請至「活動成效報表」查看 line_push_logs。'
+                );
+              }
+            }
+          } catch (pushErr) {
+            pushNoteClass = 'error-banner';
+            pushNoteEscaped = escapeHtmlLite(
+              `已同步加碼紀錄，但推播時發生例外：${String(pushErr.message || pushErr).slice(0, 200)}`
+            );
+          }
+        }
+      }
+
       return res.render('admin_user_bonus', {
         user: req.authUser.un,
         isAdmin: true,
@@ -379,7 +445,9 @@ function registerWebRoutes(app, deps) {
           usernameEscaped: escapeHtmlLite(row.username),
           added: bonusCount,
           drawsLeftAfter: row.draws_left,
-          extraDrawsAfter: row.extra_draws
+          extraDrawsAfter: row.extra_draws,
+          pushNoteClass,
+          pushNoteEscaped
         },
         preserveTargetAttr: '',
         preserveCount: 1,

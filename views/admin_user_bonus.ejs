@@ -5,11 +5,15 @@
     body: `
     <section class="card">
       <h1>管理員 - 手動補加碼刮次</h1>
-      <p class="muted">依內部查核結果，為<strong>一般會員</strong>增加剩餘刮刮樂次數（<code>draws_left</code>）。可選同步調整 <code>extra_draws</code>（上限與活動「好友加碼」一致，目前後台上限為 ${inviteLimit}）。</p>
+      <p class="muted">依內部查核結果，為<strong>一般會員</strong>增加剩餘刮刮樂次數（<code>draws_left</code>）。可選同步調整 <code>extra_draws</code>（上限與活動「好友加碼」一致，目前後台上限為 ${inviteLimit}）。<strong>若勾選「同步增加加碼額度紀錄」，送出成功後會一併發送 LINE</strong>，內容與 Webhook 在好友累計完成任務並發放加碼時相同（恭喜獲得加碼刮次等）；須已設定 <code>LINE_CHANNEL_ACCESS_TOKEN</code>，且該用戶須有綁定 <code>line_user_id</code>。</p>
       <p><a class="btn" href="/admin/prizes">返回獎品設定</a> <a class="btn" href="/admin/reports">活動成效報表</a></p>
       ${
         success
-          ? `<p class="ok-banner">已為用戶 ID <strong>${success.userId}</strong>（${success.usernameEscaped}）增加 <strong>${success.added}</strong> 次刮次。更新後：剩餘 ${success.drawsLeftAfter} 次、加碼紀錄 extra_draws=${success.extraDrawsAfter}。</p>`
+          ? `<p class="ok-banner">已為用戶 ID <strong>${success.userId}</strong>（${success.usernameEscaped}）增加 <strong>${success.added}</strong> 次刮次。更新後：剩餘 ${success.drawsLeftAfter} 次、加碼紀錄 extra_draws=${success.extraDrawsAfter}。</p>${
+              success.pushNoteEscaped
+                ? `<p class="${success.pushNoteClass || 'ok-banner'}">${success.pushNoteEscaped}</p>`
+                : ''
+            }`
           : ''
       }
       ${error ? `<p class="error">${error}</p>` : ''}
