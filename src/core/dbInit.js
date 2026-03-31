@@ -1,5 +1,58 @@
 const bcrypt = require('bcryptjs');
 
+/** 與下方 ENABLE ROW LEVEL SECURITY 的表一致；RLS 開啟後須有 policy，否則非 superuser 連線會讀寫皆 0 列（Supabase 常見）。 */
+const APP_PUBLIC_TABLES_WITH_RLS = [
+  'users',
+  'prizes',
+  'draw_logs',
+  'prize_change_logs',
+  'line_invites',
+  'line_webhook_events',
+  'line_push_logs',
+  'campaign_settings',
+  'admin_login_throttle',
+  'line_push_media',
+  'admin_push_settings'
+];
+
+/**
+ * 允許後端連線角色（postgres，及 Supabase 的 service_role）存取上述表。
+ * anon / authenticated 仍無 policy → PostgREST 無法越權讀寫。
+ */
+async function ensureAppServerRlsPolicies(query) {
+  const tableList = APP_PUBLIC_TABLES_WITH_RLS.map(t => `'${t}'`).join(', ');
+  await query(`
+DO $$
+DECLARE
+  t text;
+  role_list text;
+BEGIN
+  IF EXISTS (SELECT 1 FROM pg_roles WHERE rolname = 'service_role') THEN
+    role_list := 'postgres, service_role';
+  ELSE
+    role_list := 'postgres';
+  END IF;
+
+  FOREACH t IN ARRAY ARRAY[${tableList}]
+  LOOP
+    IF EXISTS (
+      SELECT 1 FROM information_schema.tables
+      WHERE table_schema = 'public' AND table_name = t
+    ) AND NOT EXISTS (
+      SELECT 1 FROM pg_policies
+      WHERE schemaname = 'public' AND tablename = t AND policyname = 'app_server_full_access'
+    ) THEN
+      EXECUTE format(
+        'CREATE POLICY app_server_full_access ON public.%I FOR ALL TO %s USING (true) WITH CHECK (true)',
+        t,
+        role_list
+      );
+    END IF;
+  END LOOP;
+END $$;
+`);
+}
+
 /**
  * Netlify 等 serverless：冷啟動若跑完整 DDL（30+ 次往返 DB）會讓首個請求極慢。
  * 資料庫結構已就緒後，設環境變數 SKIP_DB_DDL_ON_BOOT=1 僅做 SELECT 1 驗證連線。
@@ -7,6 +60,7 @@ const bcrypt = require('bcryptjs');
 async function initDb({ query, adminUsername, adminPassword, skipDdl = false }) {
   if (skipDdl) {
     await query('SELECT 1');
+    await ensureAppServerRlsPolicies(query);
     return;
   }
 
@@ -164,6 +218,8 @@ async function initDb({ query, adminUsername, adminPassword, skipDdl = false }) 
       adminHash
     ]);
   }
+
+  await ensureAppServerRlsPolicies(query);
 }
 
 module.exports = { initDb };
