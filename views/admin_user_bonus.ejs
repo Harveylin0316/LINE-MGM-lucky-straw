@@ -1,0 +1,76 @@
+<%-
+  include('layout', {
+    user: user,
+    isAdmin: isAdmin,
+    body: `
+    <section class="card">
+      <h1>管理員 - 手動補加碼刮次</h1>
+      <p class="muted">依內部查核結果，為<strong>一般會員</strong>增加剩餘刮刮樂次數（<code>draws_left</code>）。可選同步調整 <code>extra_draws</code>（上限與活動「好友加碼」一致，目前後台上限為 ${inviteLimit}）。</p>
+      <p><a class="btn" href="/admin/prizes">返回獎品設定</a> <a class="btn" href="/admin/reports">活動成效報表</a></p>
+      ${
+        success
+          ? `<p class="ok-banner">已為用戶 ID <strong>${success.userId}</strong>（${success.usernameEscaped}）增加 <strong>${success.added}</strong> 次刮次。更新後：剩餘 ${success.drawsLeftAfter} 次、加碼紀錄 extra_draws=${success.extraDrawsAfter}。</p>`
+          : ''
+      }
+      ${error ? `<p class="error">${error}</p>` : ''}
+
+      <form method="post" action="/admin/users/bonus" class="form" style="max-width: 520px;" onsubmit="return confirm('確認要為該用戶補發刮次嗎？')">
+        <label>
+          用戶 ID 或登入帳號（username）
+          <input type="text" name="target_user" required autocomplete="off" placeholder="例如 42 或 lineuser_xxx" value="${preserveTargetAttr}" />
+        </label>
+        <label>
+          補發次數（1～20）
+          <input type="number" name="bonus_count" min="1" max="20" value="${preserveCount}" required />
+        </label>
+        <label class="checkbox-label">
+          <input type="checkbox" name="adjust_extra" value="1" ${adjustExtraChecked ? 'checked' : ''} />
+          同步增加加碼額度紀錄（<code>extra_draws</code>，並以上限 ${inviteLimit} 封頂；與系統發放好友加碼時一併調整兩欄位類似）
+        </label>
+        <button type="submit" class="btn primary">確認補發</button>
+      </form>
+
+      <details style="margin-top: 28px;">
+        <summary style="cursor: pointer; font-weight: 600;">如何用 SQL 找出「應該要補」的用戶（邀請加碼漏發）</summary>
+        <div class="muted" style="margin-top: 12px;">
+          <p>下列查的是：<strong>被邀請人已觸發 follow</strong>，但 Webhook 因故記成 <code>no_matching_invite</code>（例如曾開 RLS 卻無 policy），而 <code>line_invites</code> 仍是 <code>pending</code>。列出的是<strong>邀請人</strong>（應拿加碼的人），請用上方表單對 <code>inviter_user_id</code> 補發。</p>
+          <p>補發前建議在「LINE Webhook 診斷」比對時間序；若你已用腳本或手動改過 <code>line_invites</code>，名單可能已變少。</p>
+        </div>
+        <pre class="sql-help-block"><code>-- 邀請人與對應的 pending 邀請（曾 no_matching_invite 的 follow）
+SELECT u.id AS inviter_user_id,
+       u.username,
+       u.line_display_name,
+       u.draws_left,
+       u.extra_draws,
+       li.id AS line_invite_id,
+       li.invitee_line_user_id,
+       li.status,
+       li.created_at AS invite_created_at
+FROM line_invites li
+JOIN users u ON u.id = li.inviter_user_id
+JOIN line_webhook_events e
+  ON e.line_user_id = li.invitee_line_user_id
+ AND e.event_type = 'follow'
+ AND e.result = 'no_matching_invite'
+WHERE li.status = 'pending'
+  AND (u.is_admin IS NOT TRUE)
+ORDER BY li.id ASC;
+
+-- 僅看有哪些邀請人曾被影響（去重）
+SELECT DISTINCT u.id AS inviter_user_id,
+       u.username,
+       u.line_display_name
+FROM line_invites li
+JOIN users u ON u.id = li.inviter_user_id
+JOIN line_webhook_events e
+  ON e.line_user_id = li.invitee_line_user_id
+ AND e.event_type = 'follow'
+ AND e.result = 'no_matching_invite'
+WHERE li.status = 'pending'
+  AND (u.is_admin IS NOT TRUE)
+ORDER BY u.id;</code></pre>
+      </details>
+    </section>
+  `
+  })
+%>

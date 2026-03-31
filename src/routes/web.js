@@ -41,6 +41,14 @@ function escapeHtmlForTextareaContent(s) {
     .replace(/>/g, '&gt;');
 }
 
+function escapeHtmlLite(s) {
+  return String(s || '')
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;');
+}
+
 function isUuidParam(id) {
   return /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(String(id || ''));
 }
@@ -82,6 +90,12 @@ function registerWebRoutes(app, deps) {
       }
     }
   });
+
+  const inviteLimitForAdmin = computeInviteLimit(inviteBonusMax);
+  const friendsPerForAdmin = Math.max(
+    1,
+    Number.isFinite(Number(inviteFriendsPerDraw)) ? Number(inviteFriendsPerDraw) : 2
+  );
 
   async function loadInvitePushSettings() {
     const rs = await query(
@@ -279,6 +293,103 @@ function registerWebRoutes(app, deps) {
     }
   });
 
+  async function findUserForAdminBonus(raw) {
+    const s = String(raw || '').trim();
+    if (!s) return null;
+    const asNum = Number.parseInt(s, 10);
+    if (String(asNum) === s && asNum > 0) {
+      const rs = await query(
+        'SELECT id, username, line_display_name, draws_left, extra_draws, is_admin FROM users WHERE id = $1',
+        [asNum]
+      );
+      return rs.rowCount ? rs.rows[0] : null;
+    }
+    const rs = await query(
+      'SELECT id, username, line_display_name, draws_left, extra_draws, is_admin FROM users WHERE username = $1',
+      [s]
+    );
+    return rs.rowCount ? rs.rows[0] : null;
+  }
+
+  app.get('/admin/users/bonus', requireAdmin, async (req, res, next) => {
+    try {
+      res.render('admin_user_bonus', {
+        user: req.authUser.un,
+        isAdmin: true,
+        inviteLimit: inviteLimitForAdmin,
+        error: null,
+        success: null,
+        preserveTargetAttr: '',
+        preserveCount: 1,
+        adjustExtraChecked: true
+      });
+    } catch (err) {
+      next(err);
+    }
+  });
+
+  app.post('/admin/users/bonus', requireAdmin, async (req, res, next) => {
+    try {
+      const rawTarget = typeof req.body.target_user === 'string' ? req.body.target_user : '';
+      const bonusRaw = Number.parseInt(String(req.body.bonus_count ?? '1'), 10);
+      const bonusCount = Number.isFinite(bonusRaw) ? Math.min(20, Math.max(1, bonusRaw)) : 1;
+      const adjustExtra =
+        req.body.adjust_extra === '1' || req.body.adjust_extra === 'on' || req.body.adjust_extra === 'true';
+
+      const rerenderForm = (payload = {}) => {
+        res.render('admin_user_bonus', {
+          user: req.authUser.un,
+          isAdmin: true,
+          inviteLimit: inviteLimitForAdmin,
+          error: payload.error || null,
+          success: null,
+          preserveTargetAttr: escapeHtmlLite(rawTarget),
+          preserveCount: bonusCount,
+          adjustExtraChecked: payload.adjustExtraChecked != null ? payload.adjustExtraChecked : adjustExtra
+        });
+      };
+
+      const target = await findUserForAdminBonus(rawTarget);
+      if (!target) {
+        return rerenderForm({ error: '找不到此用戶（請輸入正整數 ID 或 username）。' });
+      }
+      if (target.is_admin === true || target.is_admin === 1) {
+        return rerenderForm({ error: '不可對管理員帳號補發。' });
+      }
+
+      const upd = await query(
+        `UPDATE users SET
+           draws_left = draws_left + $1,
+           extra_draws = CASE WHEN $4::boolean THEN LEAST(extra_draws + $1, $3) ELSE extra_draws END
+         WHERE id = $2 AND (is_admin IS NOT TRUE)
+         RETURNING id, username, draws_left, extra_draws`,
+        [bonusCount, target.id, inviteLimitForAdmin, adjustExtra]
+      );
+      if (upd.rowCount === 0) {
+        return rerenderForm({ error: '更新失敗（用戶可能為管理員）。' });
+      }
+      const row = upd.rows[0];
+      return res.render('admin_user_bonus', {
+        user: req.authUser.un,
+        isAdmin: true,
+        inviteLimit: inviteLimitForAdmin,
+        error: null,
+        success: {
+          userId: row.id,
+          usernameEscaped: escapeHtmlLite(row.username),
+          added: bonusCount,
+          drawsLeftAfter: row.draws_left,
+          extraDrawsAfter: row.extra_draws
+        },
+        preserveTargetAttr: '',
+        preserveCount: 1,
+        adjustExtraChecked: true
+      });
+    } catch (err) {
+      next(err);
+    }
+  });
+
   app.get('/admin/prizes', requireAdmin, async (req, res, next) => {
     try {
       const rows = await query('SELECT id, name, quantity, created_at FROM prizes ORDER BY id ASC');
@@ -350,12 +461,6 @@ function registerWebRoutes(app, deps) {
       next(err);
     }
   });
-
-  const inviteLimitForAdmin = computeInviteLimit(inviteBonusMax);
-  const friendsPerForAdmin = Math.max(
-    1,
-    Number.isFinite(Number(inviteFriendsPerDraw)) ? Number(inviteFriendsPerDraw) : 2
-  );
 
   app.get('/admin/invite-reminders', requireAdmin, async (req, res, next) => {
     try {
