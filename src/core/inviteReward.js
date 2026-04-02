@@ -31,7 +31,10 @@ async function applyInviteFollowReward(client, {
   const bonusCap = effectiveInviteBonusCap(inviteBonusMax);
 
   const inviteRs = await client.query(
-    'SELECT id, inviter_user_id, status FROM line_invites WHERE invitee_line_user_id = $1 FOR UPDATE',
+    `SELECT id, inviter_user_id, status, invitee_line_user_id FROM line_invites
+     WHERE LOWER(TRIM(invitee_line_user_id)) = LOWER(TRIM($1))
+     FOR UPDATE
+     LIMIT 1`,
     [lineUserId]
   );
   if (inviteRs.rowCount === 0) {
@@ -89,7 +92,11 @@ async function applyInviteFollowReward(client, {
   const grantDraws = effectiveBonusDraws - oldExtraDraws;
 
   const [inviteeUserRs, inviterLineRs] = await Promise.all([
-    client.query('SELECT line_display_name, username FROM users WHERE line_user_id = $1', [lineUserId]),
+    client.query(
+      `SELECT line_display_name, username FROM users
+       WHERE line_user_id IS NOT NULL AND LOWER(TRIM(line_user_id)) = LOWER(TRIM($1))`,
+      [invite.invitee_line_user_id]
+    ),
     client.query('SELECT line_user_id FROM users WHERE id = $1', [invite.inviter_user_id])
   ]);
   const inviteeRow = inviteeUserRs.rows[0] || {};

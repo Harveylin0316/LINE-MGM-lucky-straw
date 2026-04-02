@@ -100,7 +100,20 @@ function createLineWebhookHandler({
           });
           continue;
         }
-        const rewardResult = await rewardInviteForFollow(lineUserId, event.timestamp);
+        let rewardResult;
+        try {
+          rewardResult = await rewardInviteForFollow(lineUserId, event.timestamp);
+        } catch (rewardErr) {
+          await appendWebhookEventLog({
+            eventType: 'follow',
+            lineUserId,
+            result: 'reward_exception',
+            detail: String(rewardErr.message || rewardErr).slice(0, 800),
+            eventTimestamp: event?.timestamp,
+            rawEvent: event || {}
+          });
+          throw rewardErr;
+        }
         await appendWebhookEventLog({
           eventType: 'follow',
           lineUserId,

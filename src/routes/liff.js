@@ -1,5 +1,6 @@
 const bcrypt = require('bcryptjs');
 const crypto = require('crypto');
+const { normalizeLineMessagingUserId } = require('../core/lineUserId');
 const { getCampaignPhase } = require('../core/campaignWindow');
 const { buildLiffPermanentUrl } = require('../core/liffPermalink');
 const { resolvePushImageUrl, mergePushImageCandidatesWithRequest } = require('../core/linePushImageResolve');
@@ -137,19 +138,25 @@ function registerLiffRoutes(app, deps) {
   }
 
   async function upsertLineUser(client, profile) {
-    const existing = await client.query('SELECT id, username, is_admin FROM users WHERE line_user_id = $1 FOR UPDATE', [
-      profile.userId
-    ]);
+    const nid = normalizeLineMessagingUserId(profile.userId);
+    if (!nid || !/^U[0-9a-f]{32}$/i.test(nid)) {
+      throw new Error('invalid_line_profile_user_id');
+    }
+    const existing = await client.query(
+      `SELECT id, username, is_admin, line_user_id FROM users
+       WHERE line_user_id IS NOT NULL AND LOWER(TRIM(line_user_id)) = LOWER($1)
+       FOR UPDATE`,
+      [nid]
+    );
     if (existing.rowCount > 0) {
-      await client.query('UPDATE users SET line_display_name = $1, line_picture_url = $2 WHERE id = $3', [
-        profile.displayName || null,
-        profile.pictureUrl || null,
-        existing.rows[0].id
-      ]);
-      return existing.rows[0];
+      await client.query(
+        'UPDATE users SET line_display_name = $1, line_picture_url = $2, line_user_id = $3 WHERE id = $4',
+        [profile.displayName || null, profile.pictureUrl || null, nid, existing.rows[0].id]
+      );
+      return { id: existing.rows[0].id, username: existing.rows[0].username, is_admin: existing.rows[0].is_admin };
     }
 
-    const username = await findUniqueLineUsername(client, profile.userId);
+    const username = await findUniqueLineUsername(client, nid);
     const randomPassword = crypto.randomBytes(24).toString('hex');
     // LINE users do not authenticate with a typed password in this flow;
     // use a lower cost factor to reduce first-login latency.
@@ -158,7 +165,7 @@ function registerLiffRoutes(app, deps) {
       `INSERT INTO users (username, password_hash, draws_left, extra_draws, is_admin, line_user_id, line_display_name, line_picture_url)
        VALUES ($1, $2, 1, 0, false, $3, $4, $5)
        RETURNING id, username, is_admin`,
-      [username, passwordHash, profile.userId, profile.displayName || null, profile.pictureUrl || null]
+      [username, passwordHash, nid, profile.displayName || null, profile.pictureUrl || null]
     );
     return inserted.rows[0];
   }
@@ -183,32 +190,43 @@ function registerLiffRoutes(app, deps) {
         return 'invalid_ref';
       }
 
-      const inviteeLineUserId = inviteeRs.rows[0].line_user_id;
-      const inserted = await client.query(
-        `INSERT INTO line_invites (inviter_user_id, invitee_line_user_id, status)
-         VALUES ($1, $2, 'pending')
-         ON CONFLICT (invitee_line_user_id) DO NOTHING
-         RETURNING id`,
-        [inviterUserId, inviteeLineUserId]
-      );
-      if (inserted.rowCount > 0) {
-        await client.query('COMMIT');
-        return 'bound';
+      const inviteeLineUserId = normalizeLineMessagingUserId(inviteeRs.rows[0].line_user_id);
+      if (!/^U[0-9a-f]{32}$/i.test(inviteeLineUserId)) {
+        await client.query('ROLLBACK');
+        return 'missing_line_account';
       }
 
-      const existing = await client.query(
-        'SELECT inviter_user_id, status FROM line_invites WHERE invitee_line_user_id = $1',
+      const existingInvite = await client.query(
+        `SELECT id, inviter_user_id, status, invitee_line_user_id FROM line_invites
+         WHERE LOWER(TRIM(invitee_line_user_id)) = LOWER(TRIM($1::text))
+         FOR UPDATE`,
         [inviteeLineUserId]
       );
-      await client.query('COMMIT');
-      if (existing.rowCount === 0) return 'exists';
-      const row = existing.rows[0];
-      if (Number(row.inviter_user_id) === inviterUserId) {
-        if (row.status === 'rewarded') return 'already_rewarded';
-        if (row.status === 'capped') return 'already_capped';
-        return 'already_bound';
+
+      if (existingInvite.rowCount > 0) {
+        const row = existingInvite.rows[0];
+        if (row.invitee_line_user_id !== inviteeLineUserId) {
+          await client.query(
+            'UPDATE line_invites SET invitee_line_user_id = $1, updated_at = NOW() WHERE id = $2',
+            [inviteeLineUserId, row.id]
+          );
+        }
+        await client.query('COMMIT');
+        if (Number(row.inviter_user_id) === inviterUserId) {
+          if (row.status === 'rewarded') return 'already_rewarded';
+          if (row.status === 'capped') return 'already_capped';
+          return 'already_bound';
+        }
+        return 'bound_other';
       }
-      return 'bound_other';
+
+      await client.query(
+        `INSERT INTO line_invites (inviter_user_id, invitee_line_user_id, status)
+         VALUES ($1, $2, 'pending')`,
+        [inviterUserId, inviteeLineUserId]
+      );
+      await client.query('COMMIT');
+      return 'bound';
     } catch (err) {
       await client.query('ROLLBACK');
       throw err;
