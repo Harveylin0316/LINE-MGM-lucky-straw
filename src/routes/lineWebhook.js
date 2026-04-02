@@ -117,8 +117,11 @@ function createLineWebhookHandler({
         const resultCode = rewardResult?.result || 'processed';
         let logDetail = null;
         if (resultCode === 'no_matching_invite') {
-          logDetail =
-            '找不到此 LINE userId 對應的「待完成」邀請列。常見：①好友未先點你的邀請連結完成綁定就加好友 ②LIFF 與 Messaging API 不是同一個官方帳 Channel（兩邊 userId 會不同）③程式已修正大小寫後，須重新部署並請好友封鎖再重加以重新觸發 follow。';
+          const staticHint =
+            '找不到可更新的邀請列。請確認：①好友已用 LINE 開啟「你的邀請連結」並登入（會寫入 line_invites）後再加官方帳 ②Hosting 的 DATABASE_URL 與你在 Supabase 看的為同一資料庫 ③部署最新程式後請封鎖再重加官方帳以重送 follow。';
+          logDetail = rewardResult?.detail
+            ? `${rewardResult.detail} ${staticHint}`
+            : staticHint;
         }
         await appendWebhookEventLog({
           eventType: 'follow',

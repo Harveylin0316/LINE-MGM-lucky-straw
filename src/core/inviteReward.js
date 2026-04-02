@@ -3,6 +3,8 @@
  * 抽出為共用模組供 Webhook 與補發腳本使用。
  */
 
+const { normalizeLineMessagingUserId } = require('./lineUserId');
+
 /** 好友加碼刮次每人最多領取次數（與活動規則一致，固定為 1） */
 function effectiveInviteBonusCap(inviteBonusMax) {
   const raw = Number.isFinite(Number(inviteBonusMax)) ? Number(inviteBonusMax) : 2;
@@ -38,7 +40,27 @@ async function applyInviteFollowReward(client, {
     [lineUserId]
   );
   if (inviteRs.rowCount === 0) {
-    return { result: 'no_matching_invite' };
+    const raw = String(lineUserId ?? '');
+    const nid = normalizeLineMessagingUserId(raw);
+    const matchRs = await client.query(
+      `SELECT COUNT(*)::int AS c FROM line_invites
+       WHERE invitee_line_user_id IS NOT NULL
+         AND LOWER(TRIM(invitee_line_user_id)) = LOWER(TRIM($1::text))`,
+      [raw]
+    );
+    const matchCount = Number(matchRs.rows[0]?.c || 0);
+    const pendingTotalRs = await client.query(
+      `SELECT COUNT(*)::int AS c FROM line_invites WHERE status = 'pending'`
+    );
+    const pendingTotal = Number(pendingTotalRs.rows[0]?.c || 0);
+    const diag =
+      `診斷：userId 長度=${raw.length}；正規化=${nid}；` +
+      `符合此 userId 的邀請列（任意狀態）=${matchCount} 筆；` +
+      `全庫 pending 邀請=${pendingTotal} 筆。` +
+      (matchCount === 0
+        ? ' 代表此 Webhook 連到的資料庫裡，沒有任何 line_invites 以此 userId 為被邀請人（請比對 Supabase 是否同一專案／同一 DATABASE_URL；或好友未先完成邀請連結綁定）。'
+        : ' 與主查詢結果不一致時，可能為極短時間差內新寫入；可請好友封鎖再重加官方帳以重送 follow。');
+    return { result: 'no_matching_invite', detail: diag.slice(0, 1500) };
   }
 
   const invite = inviteRs.rows[0];
