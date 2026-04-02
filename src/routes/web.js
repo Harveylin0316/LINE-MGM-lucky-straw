@@ -128,6 +128,50 @@ function registerWebRoutes(app, deps) {
     };
   }
 
+  async function buildInviteReminderMessages(req, { messageFromForm, attachSavedImage }) {
+    const inviteSettings = await loadInvitePushSettings();
+    const publicOrigin = String(resolvePublicSiteOrigin(req) || '').replace(/\/+$/, '');
+    let imagePushUrl = '';
+    if (
+      attachSavedImage &&
+      inviteSettings.imageMediaId &&
+      /^https:\/\//i.test(publicOrigin)
+    ) {
+      imagePushUrl = `${publicOrigin}/p/line-media/${inviteSettings.imageMediaId}`;
+    }
+    const flexStored = inviteSettings.flexJson;
+    const flexBaseOk = flexStored && validateFlexPushMessage(flexStored).ok;
+    const messages = [];
+    if (flexBaseOk) {
+      const liffUrl = typeof liffLotteryPushUrl === 'string' ? liffLotteryPushUrl.trim() : '';
+      const flexMsg = cloneFlexForPush(flexStored, liffUrl);
+      const flexSendOk = validateFlexPushMessage(flexMsg);
+      if (!flexSendOk.ok) {
+        return { ok: false, err: 'flex_invalid', messages: [] };
+      }
+      messages.push(flexMsg);
+    } else {
+      const message = typeof messageFromForm === 'string' ? messageFromForm.trim() : '';
+      if (message.length > 5000) {
+        return { ok: false, err: 'bad_message', messages: [] };
+      }
+      if (!message && !imagePushUrl) {
+        return { ok: false, err: 'bad_message', messages: [] };
+      }
+      if (imagePushUrl) {
+        messages.push({
+          type: 'image',
+          originalContentUrl: imagePushUrl,
+          previewImageUrl: imagePushUrl
+        });
+      }
+      if (message) {
+        messages.push(message);
+      }
+    }
+    return { ok: true, err: null, messages };
+  }
+
   app.get('/p/line-media/:id', async (req, res, next) => {
     try {
       const { id } = req.params;
@@ -631,6 +675,9 @@ function registerWebRoutes(app, deps) {
       const flexHintEscaped = escapeHtmlLite(
         typeof req.query.flex_hint === 'string' ? req.query.flex_hint : ''
       );
+      const adminLinkRs = await query('SELECT line_user_id FROM users WHERE id = $1', [req.authUser.uid]);
+      const adminLineLinked = Boolean(String(adminLinkRs.rows[0]?.line_user_id || '').trim());
+      const testPushOk = req.query.test_push_ok === '1';
 
       if (inviteLimitForAdmin <= 0) {
         return res.render('admin_invite_reminders', {
@@ -661,6 +708,8 @@ function registerWebRoutes(app, deps) {
           flexHintEscaped,
           hasFlexSaved,
           flexMessageJsonEscaped,
+          adminLineLinked,
+          testPushOk,
           disabledReason: '目前活動設定為「邀請加碼」次數上限 0，因此沒有需要提醒的名單。若需使用本功能，請調整活動相關設定後再試。'
         });
       }
@@ -735,6 +784,8 @@ function registerWebRoutes(app, deps) {
         flexHintEscaped,
         hasFlexSaved,
         flexMessageJsonEscaped,
+        adminLineLinked,
+        testPushOk,
         disabledReason: ''
       });
     } catch (handlerErr) {
@@ -832,6 +883,58 @@ function registerWebRoutes(app, deps) {
     }
   );
 
+  app.post('/admin/invite-reminders/test-push', requireAdmin, async (req, res, next) => {
+    try {
+      const pendingQs = req.body.only_pending_echo === '1' ? '&only_pending=1' : '';
+      if (!lineChannelAccessToken) {
+        return res.redirect(`/admin/invite-reminders?err=no_line_token${pendingQs}`);
+      }
+      const liffUrlStr = typeof liffLotteryPushUrl === 'string' ? liffLotteryPushUrl : '';
+      const defaultReminderText = liffUrlStr
+        ? `【春日野餐祭】您還有邀請加碼刮刮樂次數尚未領取！\n邀請尚未加入 OpenRice LINE@ 的好友完成加好友，累計 ${friendsPerForAdmin} 人即可加碼。\n立即開啟活動：\n${liffUrlStr}`
+        : `【春日野餐祭】您還有邀請加碼刮刮樂次數尚未領取！\n邀請尚未加入 OpenRice LINE@ 的好友完成加好友，累計 ${friendsPerForAdmin} 人即可加碼。\n請從 OpenRice LINE@ 選單再次進入刮刮樂，分享您的專屬邀請連結給好友。`;
+
+      const inviteSettings = await loadInvitePushSettings();
+      const publicOrigin = String(resolvePublicSiteOrigin(req) || '').replace(/\/+$/, '');
+      const imageHttpsOk = /^https:\/\//i.test(publicOrigin);
+      const draftMsg = inviteSettings.messageText.trim() ? inviteSettings.messageText : defaultReminderText;
+      const attachSaved = Boolean(inviteSettings.imageMediaId && imageHttpsOk);
+
+      const built = await buildInviteReminderMessages(req, {
+        messageFromForm: draftMsg,
+        attachSavedImage: attachSaved
+      });
+      if (!built.ok) {
+        return res.redirect(`/admin/invite-reminders?err=${built.err}${pendingQs}`);
+      }
+
+      const rawTestId = typeof req.body.test_line_user_id === 'string' ? req.body.test_line_user_id.trim() : '';
+      let lineTo = '';
+      if (/^U[0-9a-f]{32}$/i.test(rawTestId)) {
+        lineTo = rawTestId;
+      } else if (rawTestId !== '') {
+        return res.redirect(`/admin/invite-reminders?err=test_bad_line_id${pendingQs}`);
+      } else {
+        const uRs = await query('SELECT line_user_id FROM users WHERE id = $1', [req.authUser.uid]);
+        lineTo = String(uRs.rows[0]?.line_user_id || '').trim();
+      }
+      if (!lineTo) {
+        return res.redirect(`/admin/invite-reminders?err=test_no_recipient${pendingQs}`);
+      }
+
+      const pushed = await linePush.pushLineMessages(lineTo, built.messages, {
+        userId: Number(req.authUser.uid) || null,
+        pushType: 'admin_invite_reminder_test'
+      });
+      if (!pushed) {
+        return res.redirect(`/admin/invite-reminders?err=test_push_failed${pendingQs}`);
+      }
+      return res.redirect(`/admin/invite-reminders?test_push_ok=1${pendingQs}`);
+    } catch (err) {
+      next(err);
+    }
+  });
+
   app.post('/admin/invite-reminders/push', requireAdmin, async (req, res, next) => {
     try {
       const pendingQs = req.body.only_pending_filter === '1' ? '&only_pending=1' : '';
@@ -851,44 +954,12 @@ function registerWebRoutes(app, deps) {
         return res.redirect(`/admin/invite-reminders?err=bad_message${pendingQs}`);
       }
 
-      const inviteSettings = await loadInvitePushSettings();
-      const publicOrigin = String(resolvePublicSiteOrigin(req) || '').replace(/\/+$/, '');
       const attachSavedImage = req.body.attach_saved_image === '1';
-      let imagePushUrl = '';
-      if (
-        attachSavedImage &&
-        inviteSettings.imageMediaId &&
-        /^https:\/\//i.test(publicOrigin)
-      ) {
-        imagePushUrl = `${publicOrigin}/p/line-media/${inviteSettings.imageMediaId}`;
+      const built = await buildInviteReminderMessages(req, { messageFromForm: message, attachSavedImage });
+      if (!built.ok) {
+        return res.redirect(`/admin/invite-reminders?err=${built.err}${pendingQs}`);
       }
-
-      const flexStored = inviteSettings.flexJson;
-      const flexBaseOk = flexStored && validateFlexPushMessage(flexStored).ok;
-      const messages = [];
-      if (flexBaseOk) {
-        const liffUrl = typeof liffLotteryPushUrl === 'string' ? liffLotteryPushUrl.trim() : '';
-        const flexMsg = cloneFlexForPush(flexStored, liffUrl);
-        const flexSendOk = validateFlexPushMessage(flexMsg);
-        if (!flexSendOk.ok) {
-          return res.redirect(`/admin/invite-reminders?err=flex_invalid${pendingQs}`);
-        }
-        messages.push(flexMsg);
-      } else {
-        if (!message && !imagePushUrl) {
-          return res.redirect(`/admin/invite-reminders?err=bad_message${pendingQs}`);
-        }
-        if (imagePushUrl) {
-          messages.push({
-            type: 'image',
-            originalContentUrl: imagePushUrl,
-            previewImageUrl: imagePushUrl
-          });
-        }
-        if (message) {
-          messages.push(message);
-        }
-      }
+      const messages = built.messages;
 
       if (uniqueIds.length === 0) {
         return res.redirect(`/admin/invite-reminders?err=no_selection${pendingQs}`);

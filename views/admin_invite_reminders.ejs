@@ -59,6 +59,26 @@
           : ''
       }
       ${
+        err === 'test_no_recipient'
+          ? '<p class="error-banner">無法發送測試：請在下方填寫有效的 LINE User ID（U 開頭共 33 字元），或先以<strong>已綁定 LINE 的帳號</strong>登入後台（測試會發給該後台帳號對應的 LINE）。</p>'
+          : ''
+      }
+      ${
+        err === 'test_bad_line_id'
+          ? '<p class="error-banner">測試接收的 LINE User ID 格式不正確。應為 U 開頭加上 32 個十六進位字元（共 33 字），或留空改由您的後台帳號接收。</p>'
+          : ''
+      }
+      ${
+        err === 'test_push_failed'
+          ? '<p class="error-banner">測試訊息發送失敗（LINE API 回傳錯誤或網路問題）。請查看伺服器紀錄或「活動成效報表」的推播紀錄，並確認 Channel / 接收者是否有效。</p>'
+          : ''
+      }
+      ${
+        testPushOk
+          ? '<p class="ok-banner">已送出 1 則測試訊息。請在 LINE 確認畫面與連結是否正常，再進行步驟三大量發送。</p>'
+          : ''
+      }
+      ${
         err === 'no_selection'
           ? '<p class="error-banner">請先勾選至少一位會員，或使用「全選本頁」。</p>'
           : ''
@@ -160,6 +180,28 @@
           });
         })();
       </script>
+    </section>
+
+    <section class="card">
+      <h2 class="admin-section-title">發送測試（僅 1 人）</h2>
+      <p class="muted">正式推播前可先測試：會使用與步驟三<strong>相同、目前已儲存</strong>的 Flex 或備援文字／圖片（請先按步驟一「儲存推播內容」）。不會發給名單內用戶。</p>
+      <p class="muted" style="font-size:13px;margin-bottom:12px;">
+        ${
+          adminLineLinked
+            ? '若下方「測試接收 LINE User ID」留空，將發送到<strong>您目前後台登入帳號</strong>所綁定的 LINE。'
+            : '您的後台帳號尚未綁定 LINE，請在下方填寫要接收測試的 LINE User ID（可請技術人員從後台或 Webhook 紀錄查詢）。'
+        }
+      </p>
+      <form method="post" action="/admin/invite-reminders/test-push" class="form admin-form-wide">
+        <input type="hidden" name="only_pending_echo" value="${onlyPending ? '1' : '0'}" />
+        <label>
+          測試接收 LINE User ID（選填）
+          <input type="text" name="test_line_user_id" autocomplete="off" placeholder="例如 U1234abcd…（共 33 字元）" style="max-width:520px;" />
+        </label>
+        <p style="margin-top:12px;">
+          <button type="submit" class="btn" ${hasLineToken ? '' : 'disabled title="需先完成 LINE 連線設定"'}>發送測試訊息</button>
+        </p>
+      </form>
     </section>
 
     <section class="card">
