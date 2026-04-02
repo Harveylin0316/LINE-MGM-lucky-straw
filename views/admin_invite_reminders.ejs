@@ -18,7 +18,7 @@
       <ol class="admin-steps-intro">
         <li>先編輯並<strong>儲存</strong>推播用的 <strong>LINE Flex 訊息</strong>（步驟一）；若未填 Flex，則改以文字／圖片備援。</li>
         <li>依需求<strong>篩選名單</strong>，確認人數是否合理（步驟二）。</li>
-        <li>在表格中<strong>勾選</strong>要聯絡的對象，按送出（步驟三）。每次最多送 <strong>50</strong> 人；圖片單張請勿超過 2MB。</li>
+        <li>在表格中<strong>勾選</strong>要聯絡的對象，按送出（步驟三）。名單<strong>每頁 50 人</strong>，每次送出最多 <strong>50</strong> 人；圖片單張請勿超過 2MB。</li>
       </ol>
       <div class="admin-toolbar">
         <a class="btn" href="/admin/prizes">獎品設定</a>
@@ -247,6 +247,9 @@
           ? '步驟一已儲存 Flex，本次將<strong>只傳送該 Flex 訊息</strong>（不會帶入下方備援文字或圖片）。請勾選對象後送出。'
           : '請確認推播文案無誤，勾選要聯絡的會員後按下綠色按鈕。若同時勾選「附上圖片」，會先傳圖再傳文字。'
       }</p>
+      <p class="muted" style="font-size:13px;margin-bottom:10px;">
+        名單<strong>每頁 50 人</strong>（第 ${page}／${Math.max(1, Math.ceil(totalCount / 50))} 頁，本頁 ${rows.length} 人；符合條件共約 ${totalCount} 人）。「全選本頁」只勾選目前這一頁；超過 50 人請分次送出，或換頁後再勾選。
+      </p>
       <form id="invite-reminder-push-form" method="post" action="/admin/invite-reminders/push">
         <input type="hidden" name="only_pending_filter" value="${onlyPending ? '1' : '0'}" />
         <input type="hidden" name="userIds" id="invite-reminder-user-ids" value="" />

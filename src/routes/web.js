@@ -620,7 +620,7 @@ function registerWebRoutes(app, deps) {
 
   app.get('/admin/invite-reminders', requireAdmin, async (req, res, next) => {
     try {
-      const pageSize = 100;
+      const pageSize = 50;
       const page = parsePage(req.query.page);
       const offset = (page - 1) * pageSize;
       const onlyPending =
