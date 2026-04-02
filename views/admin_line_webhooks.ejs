@@ -6,7 +6,7 @@
     body: `
     <section class="card">
       <h1>LINE Webhook 診斷</h1>
-      <p class="muted">檢查 follow 事件是否進站，以及邀請加碼處理結果。</p>
+      <p class="muted">檢查 follow 事件是否進站，以及邀請加碼處理結果。下方時間為<strong>台灣時間</strong>（Asia/Taipei）。</p>
       <div class="admin-toolbar">
         <a class="btn" href="/admin/prizes">獎品設定</a>
         <a class="btn" href="/admin/prizes/logs">獎品修改紀錄</a>
@@ -25,8 +25,8 @@
                   <th>邀請者ID</th>
                   <th>結果</th>
                   <th>說明</th>
-                  <th>事件時間</th>
-                  <th>記錄時間</th>
+                  <th>事件時間（台灣）</th>
+                  <th>記錄時間（台灣）</th>
                 </tr>
               </thead>
               <tbody>
@@ -40,8 +40,8 @@
                       <td>${r.inviter_user_id || '-'}</td>
                       <td>${r.result}</td>
                       <td>${r.detail || '-'}</td>
-                      <td>${r.event_timestamp || '-'}</td>
-                      <td>${r.created_at}</td>
+                      <td>${r.event_at_taipei}</td>
+                      <td>${r.logged_at_taipei}</td>
                     </tr>`
                   )
                   .join('')}

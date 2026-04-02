@@ -51,6 +51,23 @@ function escapeHtmlLite(s) {
     .replace(/"/g, '&quot;');
 }
 
+/** 後台列表顯示用：台灣時間（與資料庫 timestamptz 儲存無關，僅轉換顯示） */
+function formatDateTimeTaipei(value) {
+  if (value == null) return '';
+  const d = value instanceof Date ? value : new Date(value);
+  if (Number.isNaN(d.getTime())) return '';
+  return d.toLocaleString('zh-TW', {
+    timeZone: 'Asia/Taipei',
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+    hour: '2-digit',
+    minute: '2-digit',
+    second: '2-digit',
+    hour12: false
+  });
+}
+
 function isUuidParam(id) {
   return /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(String(id || ''));
 }
@@ -574,10 +591,21 @@ function registerWebRoutes(app, deps) {
         query('SELECT COUNT(*)::int AS total FROM line_webhook_events')
       ]);
       const totalCount = total.rows[0]?.total || 0;
+      const recordsForView = (rows.rows || []).map(r => ({
+        id: r.id,
+        event_type: r.event_type,
+        line_user_id: r.line_user_id,
+        invite_id: r.invite_id,
+        inviter_user_id: r.inviter_user_id,
+        result: r.result,
+        detail: r.detail,
+        event_at_taipei: formatDateTimeTaipei(r.event_timestamp) || '-',
+        logged_at_taipei: formatDateTimeTaipei(r.created_at) || '-'
+      }));
       res.render('admin_line_webhooks', {
         user: req.authUser.un,
         isAdmin: true,
-        records: rows.rows || [],
+        records: recordsForView,
         page,
         hasPrevPage: page > 1,
         hasNextPage: offset + (rows.rows || []).length < totalCount
