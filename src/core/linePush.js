@@ -1,6 +1,6 @@
 /**
  * LINE Messaging API：push 訊息與寫入 line_push_logs（供 LIFF、Webhook 共用）
- * messages 可為字串（text）或 { type: 'image', originalContentUrl, previewImageUrl? }
+ * messages 可為字串（text）、{ type: 'image', ... }、{ type: 'flex', altText, contents }
  */
 function normalizeLinePushMessageItem(item) {
   if (typeof item === 'string') {
@@ -12,6 +12,12 @@ function normalizeLinePushMessageItem(item) {
     const previewImageUrl = String(item.previewImageUrl || item.originalContentUrl || '').trim();
     if (!originalContentUrl || !previewImageUrl) return null;
     return { type: 'image', originalContentUrl, previewImageUrl };
+  }
+  if (item && typeof item === 'object' && item.type === 'flex') {
+    const altText = String(item.altText || '').trim();
+    const contents = item.contents;
+    if (!altText || !contents || typeof contents !== 'object') return null;
+    return { type: 'flex', altText, contents };
   }
   return null;
 }

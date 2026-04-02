@@ -16,7 +16,7 @@
       </div>
       <p class="muted" style="margin-bottom:8px;"><strong>建議操作流程：</strong></p>
       <ol class="admin-steps-intro">
-        <li>先編輯並<strong>儲存</strong>推播要用的文字／圖片（步驟一）。</li>
+        <li>先編輯並<strong>儲存</strong>推播用的 <strong>LINE Flex 訊息</strong>（步驟一）；若未填 Flex，則改以文字／圖片備援。</li>
         <li>依需求<strong>篩選名單</strong>，確認人數是否合理（步驟二）。</li>
         <li>在表格中<strong>勾選</strong>要聯絡的對象，按送出（步驟三）。每次最多送 <strong>50</strong> 人；圖片單張請勿超過 2MB。</li>
       </ol>
@@ -45,7 +45,17 @@
       }
       ${
         err === 'bad_message'
-          ? '<p class="error-banner">推播內容請至少填寫文字，或搭配已上傳且可公開顯示的圖片；文字請勿超過 5000 字。</p>'
+          ? '<p class="error-banner">推播內容請至少填寫文字，或搭配已上傳且可公開顯示的圖片；文字請勿超過 5000 字。（若步驟一已儲存有效的 Flex，則不需填寫此備援文字。）</p>'
+          : ''
+      }
+      ${
+        err === 'bad_flex'
+          ? `<p class="error-banner">Flex JSON 格式不正確或不符合推播要求。${flexHintEscaped ? ` ${flexHintEscaped}` : ' 請確認為有效的 JSON，且根層級為 type: flex、含 altText 與 contents。'}</p>`
+          : ''
+      }
+      ${
+        err === 'flex_invalid'
+          ? '<p class="error-banner">已儲存的 Flex 在替換活動連結後無法通過驗證（例如 LIFF 網址未設定）。請檢查環境設定或調整 Flex 內按鈕連結。</p>'
           : ''
       }
       ${
@@ -81,8 +91,8 @@
     </section>
 
     <section class="card">
-      <h2 class="admin-section-title">步驟一：設定推播內容（文字／圖片）</h2>
-      <p class="muted">儲存後，步驟三的推播表單會自動帶入這裡的文字；送出前仍可再改。若有上傳圖片，LINE 會向本網站抓取圖檔（網址需為安全的 https）。</p>
+      <h2 class="admin-section-title">步驟一：設定推播內容（LINE Flex）</h2>
+      <p class="muted">建議使用 Flex 氣泡，在手機上較美觀。儲存後，步驟三會<strong>優先傳送此 Flex</strong>。按鈕連結可填佔位符 <code>{{LIFF_URL}}</code>，推播時會自動換成實際活動網址。可用 <a href="https://developers.line.biz/flex-simulator/" target="_blank" rel="noopener noreferrer">LINE Flex Message Simulator</a> 預覽 JSON。</p>
       ${
         imageMediaId && !imageHttpsOk
           ? '<p class="error-banner">目前無法保證圖片在 LINE 上正常顯示：請確認網站對外為 <strong>https</strong>，並請技術人員檢查公開網址設定。</p>'
@@ -91,33 +101,65 @@
       <form method="post" action="/admin/invite-reminders/settings" enctype="multipart/form-data" class="form admin-form-wide">
         <input type="hidden" name="only_pending_echo" value="${onlyPending ? '1' : '0'}" />
         <label>
-          推播文字（給會員看的內容）
-          <textarea name="message_text" rows="6" placeholder="例如：提醒對方分享邀請連結、完成好友任務可再獲刮刮樂次數…">${savedMessageEscaped}</textarea>
+          Flex 訊息 JSON（根層級須含 <code>type: "flex"</code>、<code>altText</code>、<code>contents</code>）
+          <textarea name="flex_message_json" rows="18" style="font-family:ui-monospace,SFMono-Regular,monospace;font-size:13px;" placeholder='貼上 Flex JSON，或按下方「載入預設範本」'>${flexMessageJsonEscaped}</textarea>
         </label>
-        <label style="display:block;margin-top:12px;">
-          推播圖片（選填，PNG 或 JPEG）
-          <input type="file" name="push_image" accept="image/png,image/jpeg" />
-        </label>
-        ${
-          imageMediaId
-            ? `<div style="margin-top:12px;">
-            <p class="muted">目前使用的圖片：</p>
-            ${
-              imagePreviewUrl
-                ? `<p><img src="${imagePreviewUrl}" alt="推播圖預覽" style="max-width:280px;border:1px solid #e5e7eb;border-radius:8px;" /></p>`
-                : '<p class="muted">（若看不到預覽，代表網址可能不是 https，請洽技術人員）</p>'
-            }
-            <label class="checkbox-label">
-              <input type="checkbox" name="remove_image" value="1" />
-              刪除目前儲存的圖片
-            </label>
-          </div>`
-            : ''
-        }
+        <p style="margin-top:8px;display:flex;flex-wrap:wrap;gap:8px;align-items:center;">
+          <button type="button" class="btn" id="invite-flex-load-default">載入預設範本</button>
+          <span class="muted" style="font-size:13px;">預設檔：<code>/line-flex-default-invite-reminder.json</code></span>
+        </p>
+        <details class="admin-details" style="margin-top:16px;">
+          <summary>備援：純文字與圖片（未儲存 Flex 或 Flex 無效時使用）</summary>
+          <p class="muted" style="margin-top:8px;">若上方 Flex 留空並儲存，推播改為傳送此處文字與選填圖片。</p>
+          <label>
+            推播文字
+            <textarea name="message_text" rows="5" placeholder="例如：提醒對方分享邀請連結…">${savedMessageEscaped}</textarea>
+          </label>
+          <label style="display:block;margin-top:12px;">
+            推播圖片（選填，PNG 或 JPEG）
+            <input type="file" name="push_image" accept="image/png,image/jpeg" />
+          </label>
+          ${
+            imageMediaId
+              ? `<div style="margin-top:12px;">
+              <p class="muted">目前使用的圖片：</p>
+              ${
+                imagePreviewUrl
+                  ? `<p><img src="${imagePreviewUrl}" alt="推播圖預覽" style="max-width:280px;border:1px solid #e5e7eb;border-radius:8px;" /></p>`
+                  : '<p class="muted">（若看不到預覽，代表網址可能不是 https，請洽技術人員）</p>'
+              }
+              <label class="checkbox-label">
+                <input type="checkbox" name="remove_image" value="1" />
+                刪除目前儲存的圖片
+              </label>
+            </div>`
+              : ''
+          }
+        </details>
         <p style="margin-top:12px;">
           <button type="submit" class="btn primary">儲存推播內容</button>
         </p>
       </form>
+      <script>
+        (function () {
+          var btn = document.getElementById('invite-flex-load-default');
+          var ta = document.querySelector('textarea[name="flex_message_json"]');
+          if (!btn || !ta) return;
+          btn.addEventListener('click', function () {
+            fetch('/line-flex-default-invite-reminder.json', { credentials: 'same-origin' })
+              .then(function (r) {
+                if (!r.ok) throw new Error('load failed');
+                return r.json();
+              })
+              .then(function (j) {
+                ta.value = JSON.stringify(j, null, 2);
+              })
+              .catch(function () {
+                alert('無法載入預設範本，請重新整理頁面或洽技術人員。');
+              });
+          });
+        })();
+      </script>
     </section>
 
     <section class="card">
@@ -144,16 +186,24 @@
       !disabledReason && Array.isArray(rows) && rows.length > 0
         ? `<section class="card">
       <h2 class="admin-section-title">步驟三：勾選對象並發送 LINE</h2>
-      <p class="muted">請確認推播文案無誤，勾選要聯絡的會員後按下綠色按鈕。若同時勾選「附上圖片」，會先傳圖再傳文字。</p>
+      <p class="muted">${
+        hasFlexSaved
+          ? '步驟一已儲存 Flex，本次將<strong>只傳送該 Flex 訊息</strong>（不會帶入下方備援文字或圖片）。請勾選對象後送出。'
+          : '請確認推播文案無誤，勾選要聯絡的會員後按下綠色按鈕。若同時勾選「附上圖片」，會先傳圖再傳文字。'
+      }</p>
       <form id="invite-reminder-push-form" method="post" action="/admin/invite-reminders/push">
         <input type="hidden" name="only_pending_filter" value="${onlyPending ? '1' : '0'}" />
         <input type="hidden" name="userIds" id="invite-reminder-user-ids" value="" />
-        <label class="admin-form-wide">
+        ${
+          hasFlexSaved
+            ? '<input type="hidden" name="message" value="" />'
+            : `<label class="admin-form-wide">
           這次推播要傳給會員的文字（送出前可再改）
           <textarea name="message" rows="8">${pushMessageEscaped}</textarea>
-        </label>
+        </label>`
+        }
         ${
-          imageMediaId && imageHttpsOk
+          !hasFlexSaved && imageMediaId && imageHttpsOk
             ? `<p class="muted" style="margin-top:8px;">
             <label class="checkbox-label">
               <input type="checkbox" name="attach_saved_image" value="1" checked />

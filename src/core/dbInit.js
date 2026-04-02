@@ -61,6 +61,7 @@ async function initDb({ query, adminUsername, adminPassword, skipDdl = false }) 
   if (skipDdl) {
     await query('SELECT 1');
     await ensureAppServerRlsPolicies(query);
+    await query('ALTER TABLE admin_push_settings ADD COLUMN IF NOT EXISTS flex_json JSONB');
     return;
   }
 
@@ -176,6 +177,7 @@ async function initDb({ query, adminUsername, adminPassword, skipDdl = false }) 
   await query(
     `INSERT INTO admin_push_settings (slug, message_text) VALUES ('invite_reminder', '') ON CONFLICT (slug) DO NOTHING`
   );
+  await query('ALTER TABLE admin_push_settings ADD COLUMN IF NOT EXISTS flex_json JSONB');
 
   // Supabase exposes public schema via PostgREST by default.
   // Enable RLS on app tables to prevent direct external reads/writes.

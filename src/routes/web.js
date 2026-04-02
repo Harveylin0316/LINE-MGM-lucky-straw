@@ -4,6 +4,7 @@ const multer = require('multer');
 const { parseTaipeiDatetimeLocal, toTaipeiDatetimeLocalInput } = require('../core/campaignWindow');
 const { computeInviteLimit } = require('../core/inviteBonusConfig');
 const { buildInviteRewardPushMessages } = require('../core/inviteRewardPushMessages');
+const { validateFlexPushMessage, cloneFlexForPush } = require('../core/lineFlexMessage');
 
 async function logPrizeChange(client, payload) {
   await client.query(
@@ -101,17 +102,29 @@ function registerWebRoutes(app, deps) {
 
   async function loadInvitePushSettings() {
     const rs = await query(
-      `SELECT message_text, image_media_id FROM admin_push_settings WHERE slug = 'invite_reminder'`
+      `SELECT message_text, image_media_id, flex_json FROM admin_push_settings WHERE slug = 'invite_reminder'`
     );
     if (rs.rowCount === 0) {
       await query(
         `INSERT INTO admin_push_settings (slug, message_text) VALUES ('invite_reminder', '') ON CONFLICT (slug) DO NOTHING`
       );
-      return { messageText: '', imageMediaId: null };
+      return { messageText: '', imageMediaId: null, flexJson: null };
+    }
+    let flexJson = rs.rows[0].flex_json;
+    if (flexJson != null && typeof flexJson === 'string') {
+      try {
+        flexJson = JSON.parse(flexJson);
+      } catch {
+        flexJson = null;
+      }
+    }
+    if (flexJson != null && typeof flexJson !== 'object') {
+      flexJson = null;
     }
     return {
       messageText: String(rs.rows[0].message_text || ''),
-      imageMediaId: rs.rows[0].image_media_id || null
+      imageMediaId: rs.rows[0].image_media_id || null,
+      flexJson
     };
   }
 
@@ -610,6 +623,14 @@ function registerWebRoutes(app, deps) {
       const pushDraftMessage = inviteSettings.messageText.trim() ? inviteSettings.messageText : defaultReminderText;
       const pushMessageEscaped = escapeHtmlForTextareaContent(pushDraftMessage);
       const settingsSaved = req.query.settings_saved === '1';
+      const flexV = inviteSettings.flexJson ? validateFlexPushMessage(inviteSettings.flexJson) : null;
+      const hasFlexSaved = Boolean(flexV && flexV.ok);
+      const flexMessageJsonEscaped = hasFlexSaved
+        ? escapeHtmlForTextareaContent(JSON.stringify(inviteSettings.flexJson, null, 2))
+        : '';
+      const flexHintEscaped = escapeHtmlLite(
+        typeof req.query.flex_hint === 'string' ? req.query.flex_hint : ''
+      );
 
       if (inviteLimitForAdmin <= 0) {
         return res.render('admin_invite_reminders', {
@@ -637,6 +658,9 @@ function registerWebRoutes(app, deps) {
           pushFail,
           pushSkip,
           err: queryErr,
+          flexHintEscaped,
+          hasFlexSaved,
+          flexMessageJsonEscaped,
           disabledReason: '目前活動設定為「邀請加碼」次數上限 0，因此沒有需要提醒的名單。若需使用本功能，請調整活動相關設定後再試。'
         });
       }
@@ -708,6 +732,9 @@ function registerWebRoutes(app, deps) {
         pushFail,
         pushSkip,
         err: queryErr,
+        flexHintEscaped,
+        hasFlexSaved,
+        flexMessageJsonEscaped,
         disabledReason: ''
       });
     } catch (handlerErr) {
@@ -731,15 +758,35 @@ function registerWebRoutes(app, deps) {
       try {
         const pendingQs = req.body.only_pending_echo === '1' ? '&only_pending=1' : '';
         const msg = typeof req.body.message_text === 'string' ? req.body.message_text.trim().slice(0, 5000) : '';
+        const flexRaw = typeof req.body.flex_message_json === 'string' ? req.body.flex_message_json.trim() : '';
+        let flexJsonDb = null;
+        if (flexRaw !== '') {
+          let parsed;
+          try {
+            parsed = JSON.parse(flexRaw);
+          } catch {
+            return res.redirect(`/admin/invite-reminders?err=bad_flex${pendingQs}`);
+          }
+          const v = validateFlexPushMessage(parsed);
+          if (!v.ok) {
+            return res.redirect(
+              `/admin/invite-reminders?err=bad_flex&flex_hint=${encodeURIComponent(v.error)}${pendingQs}`
+            );
+          }
+          flexJsonDb = parsed;
+        }
         const removeImage = req.body.remove_image === '1' || req.body.remove_image === 'on';
         const file = req.file;
         const client = await pool.connect();
         try {
           await client.query('BEGIN');
           await client.query(
-            `INSERT INTO admin_push_settings (slug, message_text) VALUES ('invite_reminder', $1)
-             ON CONFLICT (slug) DO UPDATE SET message_text = EXCLUDED.message_text, updated_at = NOW()`,
-            [msg]
+            `INSERT INTO admin_push_settings (slug, message_text, flex_json) VALUES ('invite_reminder', $1, $2::jsonb)
+             ON CONFLICT (slug) DO UPDATE SET
+               message_text = EXCLUDED.message_text,
+               flex_json = EXCLUDED.flex_json,
+               updated_at = NOW()`,
+            [msg, flexJsonDb]
           );
           const cur = await client.query(
             `SELECT image_media_id FROM admin_push_settings WHERE slug = 'invite_reminder' FOR UPDATE`
@@ -815,8 +862,32 @@ function registerWebRoutes(app, deps) {
       ) {
         imagePushUrl = `${publicOrigin}/p/line-media/${inviteSettings.imageMediaId}`;
       }
-      if (!message && !imagePushUrl) {
-        return res.redirect(`/admin/invite-reminders?err=bad_message${pendingQs}`);
+
+      const flexStored = inviteSettings.flexJson;
+      const flexBaseOk = flexStored && validateFlexPushMessage(flexStored).ok;
+      const messages = [];
+      if (flexBaseOk) {
+        const liffUrl = typeof liffLotteryPushUrl === 'string' ? liffLotteryPushUrl.trim() : '';
+        const flexMsg = cloneFlexForPush(flexStored, liffUrl);
+        const flexSendOk = validateFlexPushMessage(flexMsg);
+        if (!flexSendOk.ok) {
+          return res.redirect(`/admin/invite-reminders?err=flex_invalid${pendingQs}`);
+        }
+        messages.push(flexMsg);
+      } else {
+        if (!message && !imagePushUrl) {
+          return res.redirect(`/admin/invite-reminders?err=bad_message${pendingQs}`);
+        }
+        if (imagePushUrl) {
+          messages.push({
+            type: 'image',
+            originalContentUrl: imagePushUrl,
+            previewImageUrl: imagePushUrl
+          });
+        }
+        if (message) {
+          messages.push(message);
+        }
       }
 
       if (uniqueIds.length === 0) {
@@ -825,18 +896,6 @@ function registerWebRoutes(app, deps) {
 
       if (inviteLimitForAdmin <= 0) {
         return res.redirect('/admin/invite-reminders');
-      }
-
-      const messages = [];
-      if (imagePushUrl) {
-        messages.push({
-          type: 'image',
-          originalContentUrl: imagePushUrl,
-          previewImageUrl: imagePushUrl
-        });
-      }
-      if (message) {
-        messages.push(message);
       }
 
       let ok = 0;

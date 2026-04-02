@@ -1,0 +1,50 @@
+{
+  "type": "flex",
+  "altText": "春日野餐祭｜邀請好友拿加碼刮刮樂",
+  "contents": {
+    "type": "bubble",
+    "size": "mega",
+    "header": {
+      "type": "box",
+      "layout": "vertical",
+      "contents": [
+        {
+          "type": "text",
+          "text": "邀請好友 · 加碼刮刮樂",
+          "weight": "bold",
+          "size": "xl",
+          "color": "#1a1a1a",
+          "align": "center"
+        }
+      ],
+      "paddingAll": "lg",
+      "backgroundColor": "#E8F5E9"
+    },
+    "body": {
+      "type": "box",
+      "layout": "vertical",
+      "spacing": "md",
+      "paddingAll": "lg",
+      "contents": [
+        {
+          "type": "text",
+          "text": "邀請尚未加入 OpenRice LINE@ 的好友完成加官方帳，累計達標即可獲得加碼刮刮樂次數。",
+          "wrap": true,
+          "size": "md",
+          "color": "#333333"
+        },
+        { "type": "separator", "margin": "md" },
+        {
+          "type": "button",
+          "style": "primary",
+          "height": "sm",
+          "action": {
+            "type": "uri",
+            "label": "開啟活動並分享邀請",
+            "uri": "{{LIFF_URL}}"
+          }
+        }
+      ]
+    }
+  }
+}
