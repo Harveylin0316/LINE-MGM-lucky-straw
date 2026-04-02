@@ -114,13 +114,19 @@ function createLineWebhookHandler({
           });
           throw rewardErr;
         }
+        const resultCode = rewardResult?.result || 'processed';
+        let logDetail = null;
+        if (resultCode === 'no_matching_invite') {
+          logDetail =
+            '找不到此 LINE userId 對應的「待完成」邀請列。常見：①好友未先點你的邀請連結完成綁定就加好友 ②LIFF 與 Messaging API 不是同一個官方帳 Channel（兩邊 userId 會不同）③程式已修正大小寫後，須重新部署並請好友封鎖再重加以重新觸發 follow。';
+        }
         await appendWebhookEventLog({
           eventType: 'follow',
           lineUserId,
           inviteId: rewardResult?.inviteId || null,
           inviterUserId: rewardResult?.inviterUserId || null,
-          result: rewardResult?.result || 'processed',
-          detail: null,
+          result: resultCode,
+          detail: logDetail,
           eventTimestamp: event?.timestamp,
           rawEvent: event || {}
         });

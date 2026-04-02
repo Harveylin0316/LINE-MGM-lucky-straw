@@ -598,7 +598,10 @@ function registerWebRoutes(app, deps) {
         invite_id: r.invite_id,
         inviter_user_id: r.inviter_user_id,
         result: r.result,
-        detail: r.detail,
+        detailHtml:
+          r.detail != null && String(r.detail).trim() !== ''
+            ? escapeHtmlLite(r.detail)
+            : '-',
         event_at_taipei: formatDateTimeTaipei(r.event_timestamp) || '-',
         logged_at_taipei: formatDateTimeTaipei(r.created_at) || '-'
       }));
