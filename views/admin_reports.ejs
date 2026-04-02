@@ -84,6 +84,58 @@
         ${hasNextPage ? `<a class="btn" href="/admin/reports?page=${page + 1}${keyword ? `&q=${encodeURIComponent(keyword)}` : ''}">下一頁</a>` : ''}
       </div>
 
+      <h2 style="margin-top: 28px;">刮刮樂／中獎明細</h2>
+      <p class="muted">每一筆刮獎紀錄與中獎獎品（資料來源：<code>draw_logs</code>），依時間由新到舊。</p>
+      ${
+        Array.isArray(drawLogs) && drawLogs.length > 0
+          ? `<table class="prize-table">
+              <thead>
+                <tr>
+                  <th>紀錄 ID</th>
+                  <th>時間</th>
+                  <th>用戶 ID</th>
+                  <th>帳號</th>
+                  <th>LINE 名稱</th>
+                  <th>中獎</th>
+                  <th>獎品名稱</th>
+                  <th>訊息</th>
+                </tr>
+              </thead>
+              <tbody>
+                ${drawLogs
+                  .map((r) => {
+                    const t = r.created_at ? new Date(r.created_at).toLocaleString('zh-TW') : '-';
+                    const win = r.is_win ? '<span class="ok-chip">是</span>' : '<span class="muted">否</span>';
+                    return `<tr>
+                      <td>${r.id}</td>
+                      <td>${t}</td>
+                      <td>${r.user_id != null ? r.user_id : '-'}</td>
+                      <td>${r.usernameEsc || '-'}</td>
+                      <td>${r.lineNameEsc || '-'}</td>
+                      <td>${win}</td>
+                      <td>${r.prizeEsc || '-'}</td>
+                      <td>${r.messageEsc || '-'}</td>
+                    </tr>`;
+                  })
+                  .join('')}
+              </tbody>
+            </table>
+            <p class="muted">共 ${drawLogsTotal} 筆；本頁 ${drawLogs.length} 筆。</p>
+            <div class="actions">
+              ${
+                hasPrevDrawPage
+                  ? `<a class="btn" href="/admin/reports?draw_page=${drawPage - 1}${keyword ? `&q=${encodeURIComponent(keyword)}` : ''}${page > 1 ? `&page=${page}` : ''}">上一頁（明細）</a>`
+                  : ''
+              }
+              ${
+                hasNextDrawPage
+                  ? `<a class="btn" href="/admin/reports?draw_page=${drawPage + 1}${keyword ? `&q=${encodeURIComponent(keyword)}` : ''}${page > 1 ? `&page=${page}` : ''}">下一頁（明細）</a>`
+                  : ''
+              }
+            </div>`
+          : '<p class="muted">尚無刮獎紀錄。</p>'
+      }
+
       <h2 style="margin-top: 24px;">LINE 推播紀錄（最近 30 筆）</h2>
       ${
         Array.isArray(pushLogs) && pushLogs.length > 0

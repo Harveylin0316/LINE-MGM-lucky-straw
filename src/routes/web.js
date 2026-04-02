@@ -952,12 +952,39 @@ function registerWebRoutes(app, deps) {
         LIMIT ${limitPlaceholder} OFFSET ${offsetPlaceholder}
       `;
       const usersRs = await query(userStatsSql, listParams);
-      const pushLogsRs = await query(
-        `SELECT id, user_id, line_user_id, push_type, status, http_status, detail, created_at
-         FROM line_push_logs
-         ORDER BY id DESC
-         LIMIT 30`
-      );
+
+      const drawPageSize = 50;
+      const drawPage = parsePage(req.query.draw_page);
+      const drawOffset = (drawPage - 1) * drawPageSize;
+      const [pushLogsRs, drawLogsRs, drawLogsCountRs] = await Promise.all([
+        query(
+          `SELECT id, user_id, line_user_id, push_type, status, http_status, detail, created_at
+           FROM line_push_logs
+           ORDER BY id DESC
+           LIMIT 30`
+        ),
+        query(
+          `SELECT d.id, d.user_id, d.is_win, d.prize_name, d.message, d.created_at,
+                  u.username, u.line_display_name
+           FROM draw_logs d
+           LEFT JOIN users u ON u.id = d.user_id
+           ORDER BY d.id DESC
+           LIMIT $1 OFFSET $2`,
+          [drawPageSize, drawOffset]
+        ),
+        query('SELECT COUNT(*)::int AS total FROM draw_logs')
+      ]);
+      const drawLogsTotal = drawLogsCountRs.rows[0]?.total || 0;
+      const drawLogsForView = (drawLogsRs.rows || []).map(r => ({
+        id: r.id,
+        user_id: r.user_id,
+        is_win: r.is_win,
+        created_at: r.created_at,
+        usernameEsc: escapeHtmlLite(r.username || ''),
+        lineNameEsc: escapeHtmlLite(r.line_display_name || ''),
+        prizeEsc: escapeHtmlLite(r.prize_name || ''),
+        messageEsc: escapeHtmlLite(r.message || '')
+      }));
 
       const [
         totalUsersRs,
@@ -982,6 +1009,11 @@ function registerWebRoutes(app, deps) {
         keyword,
         users: usersRs.rows || [],
         pushLogs: pushLogsRs.rows || [],
+        drawLogs: drawLogsForView,
+        drawPage,
+        drawLogsTotal,
+        hasPrevDrawPage: drawPage > 1,
+        hasNextDrawPage: drawOffset + drawLogsForView.length < drawLogsTotal,
         page,
         hasPrevPage: page > 1,
         hasNextPage: offset + (usersRs.rows || []).length < totalUsersForPage,
