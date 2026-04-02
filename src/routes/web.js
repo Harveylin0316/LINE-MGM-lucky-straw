@@ -637,7 +637,7 @@ function registerWebRoutes(app, deps) {
           pushFail,
           pushSkip,
           err: queryErr,
-          disabledReason: '目前邀請加碼上限為 0，沒有「尚未完成邀請任務」的名單。'
+          disabledReason: '目前活動設定為「邀請加碼」次數上限 0，因此沒有需要提醒的名單。若需使用本功能，請調整活動相關設定後再試。'
         });
       }
 

@@ -5,50 +5,67 @@
     bodyClass: 'admin-shell',
     body: `
     <section class="card">
-      <h1>邀請任務提醒名單</h1>
-      <p class="muted">
-        列出已透過 LINE 參與（有綁定 <code>line_user_id</code>）、且<strong>尚未領滿邀請加碼</strong>
-        （<code>extra_draws &lt; ${inviteLimit}</code>）的用戶。可在此<strong>儲存推播文字與圖片</strong>，再勾選名單批次推播。
-        單次推播最多 50 人；圖檔單張最大 2MB（PNG／JPEG）。LINE 僅能抓取<strong>公開 HTTPS</strong> 圖片網址，正式環境請設定 <code>LINE_PUSH_PUBLIC_BASE_URL</code> 或 Netlify 的 <code>URL</code>。
+      <h1>邀請好友｜提醒名單與推播</h1>
+      <p class="muted" style="margin-bottom:12px;">
+        在這裡可以對<strong>還沒拿滿「邀請加碼刮次」的會員</strong>發 LINE 提醒，鼓勵他們分享邀請連結、完成好友任務。
       </p>
+      <div class="admin-tip">
+        <strong>誰會出現在下方的名單？</strong><br />
+        已用 LINE 登入過活動、且<strong>依規則還能再透過邀請好友拿到加碼</strong>的一般會員（後台管理員不會列入）。<br />
+        若您只想找<strong>「已經分享過連結，但好友還沒加官方帳」</strong>的人，請在步驟二勾選對應選項，名單會變精準、較適合催進度。
+      </div>
+      <p class="muted" style="margin-bottom:8px;"><strong>建議操作流程：</strong></p>
+      <ol class="admin-steps-intro">
+        <li>先編輯並<strong>儲存</strong>推播要用的文字／圖片（步驟一）。</li>
+        <li>依需求<strong>篩選名單</strong>，確認人數是否合理（步驟二）。</li>
+        <li>在表格中<strong>勾選</strong>要聯絡的對象，按送出（步驟三）。每次最多送 <strong>50</strong> 人；圖片單張請勿超過 2MB。</li>
+      </ol>
       <div class="admin-toolbar">
         <a class="btn" href="/admin/prizes">獎品設定</a>
         <a class="btn" href="/admin/reports">活動成效報表</a>
       </div>
 
+      <details class="admin-details" style="margin-top:20px;">
+        <summary>給技術人員看的說明（環境變數、欄位名稱）</summary>
+        <div class="muted">
+          <p>名單條件對應：<code>line_user_id</code> 有值、非管理員、<code>extra_draws &lt; ${inviteLimit}</code>。勾選「只顯示待完成邀請」時另需存在 <code>line_invites.status = 'pending'</code>。</p>
+          <p>圖片需公開 <strong>HTTPS</strong> 網址；正式站請設定公開網域相關環境變數（如 <code>LINE_PUSH_PUBLIC_BASE_URL</code> 或託管平台提供的網址）。推播需設定 <code>LINE_CHANNEL_ACCESS_TOKEN</code>。</p>
+        </div>
+      </details>
+
       ${
         settingsSaved
-          ? '<p class="ok-banner">已儲存推播內容（文字與圖片設定）。</p>'
+          ? '<p class="ok-banner">已儲存推播內容。</p>'
           : ''
       }
       ${
         err === 'no_line_token'
-          ? '<p class="error-banner">未設定 LINE_CHANNEL_ACCESS_TOKEN，無法推播。請於環境變數設定後重試。</p>'
+          ? '<p class="error-banner">目前無法發送 LINE：請技術人員設定「Channel Access Token」後再試。</p>'
           : ''
       }
       ${
         err === 'bad_message'
-          ? '<p class="error-banner">推播需至少包含「文字」或「已儲存且可公開的圖片」其一；文字不可超過 5000 字。</p>'
+          ? '<p class="error-banner">推播內容請至少填寫文字，或搭配已上傳且可公開顯示的圖片；文字請勿超過 5000 字。</p>'
           : ''
       }
       ${
         err === 'no_selection'
-          ? '<p class="error-banner">請至少勾選一位用戶，或確認已按下「全選本頁」。</p>'
+          ? '<p class="error-banner">請先勾選至少一位會員，或使用「全選本頁」。</p>'
           : ''
       }
       ${
         err === 'upload_too_large'
-          ? '<p class="error-banner">上傳失敗：檔案超過 2MB。</p>'
+          ? '<p class="error-banner">圖片太大：請選擇 2MB 以下的檔案。</p>'
           : ''
       }
       ${
         err === 'upload_invalid'
-          ? '<p class="error-banner">上傳失敗：僅支援 PNG、JPEG。</p>'
+          ? '<p class="error-banner">圖片格式僅支援 PNG、JPEG。</p>'
           : ''
       }
       ${
         pushOk !== '' || pushFail !== '' || pushSkip !== ''
-          ? `<p class="ok-banner">推播結果：成功 ${pushOk} 筆、失敗 ${pushFail} 筆、略過 ${pushSkip} 筆。紀錄可於「活動成效報表」查看。</p>`
+          ? `<p class="ok-banner">本次推播結果：成功 ${pushOk} 人、失敗 ${pushFail} 人、略過 ${pushSkip} 人。詳情可到「活動成效報表」查看推播紀錄。</p>`
           : ''
       }
       ${
@@ -58,41 +75,41 @@
       }
       ${
         !hasLineToken && !disabledReason
-          ? '<p class="error-banner">目前未設定 LINE Channel Access Token，無法發送推播；仍可儲存文案／圖片與匯出名單。</p>'
+          ? '<p class="error-banner">目前無法實際發送 LINE（尚未完成官方帳號連線設定）。您仍可儲存文案／圖片，或下載名單交給技術人員處理。</p>'
           : ''
       }
     </section>
 
     <section class="card">
-      <h2 class="admin-section-title">LINE 推播內容設定</h2>
-      <p class="muted">儲存後，下方「發送推播」表單會帶入文字預設值；發送前仍可修改。圖片會以公開網址 <code>/p/line-media/…</code> 供 LINE 伺服器抓取。</p>
+      <h2 class="admin-section-title">步驟一：設定推播內容（文字／圖片）</h2>
+      <p class="muted">儲存後，步驟三的推播表單會自動帶入這裡的文字；送出前仍可再改。若有上傳圖片，LINE 會向本網站抓取圖檔（網址需為安全的 https）。</p>
       ${
         imageMediaId && !imageHttpsOk
-          ? '<p class="error-banner">目前網站對外網址不是 HTTPS（或無法判定公開網域），LINE 無法顯示推播圖片。請設定環境變數 <code>LINE_PUSH_PUBLIC_BASE_URL</code>（或 Netlify 自動注入的 <code>URL</code>）為正式 https 網域。</p>'
+          ? '<p class="error-banner">目前無法保證圖片在 LINE 上正常顯示：請確認網站對外為 <strong>https</strong>，並請技術人員檢查公開網址設定。</p>'
           : ''
       }
-      <form method="post" action="/admin/invite-reminders/settings" enctype="multipart/form-data" class="form">
+      <form method="post" action="/admin/invite-reminders/settings" enctype="multipart/form-data" class="form admin-form-wide">
         <input type="hidden" name="only_pending_echo" value="${onlyPending ? '1' : '0'}" />
         <label>
-          預設推播文字（可留空若僅發圖）
-          <textarea name="message_text" rows="6" style="width:100%;max-width:640px;">${savedMessageEscaped}</textarea>
+          推播文字（給會員看的內容）
+          <textarea name="message_text" rows="6" placeholder="例如：提醒對方分享邀請連結、完成好友任務可再獲刮刮樂次數…">${savedMessageEscaped}</textarea>
         </label>
         <label style="display:block;margin-top:12px;">
-          上傳推播圖片（PNG 或 JPEG，選填）
+          推播圖片（選填，PNG 或 JPEG）
           <input type="file" name="push_image" accept="image/png,image/jpeg" />
         </label>
         ${
           imageMediaId
             ? `<div style="margin-top:12px;">
-            <p class="muted">目前圖片：</p>
+            <p class="muted">目前使用的圖片：</p>
             ${
               imagePreviewUrl
                 ? `<p><img src="${imagePreviewUrl}" alt="推播圖預覽" style="max-width:280px;border:1px solid #e5e7eb;border-radius:8px;" /></p>`
-                : '<p class="muted">（無法預覽：請確認公開網域為 HTTPS）</p>'
+                : '<p class="muted">（若看不到預覽，代表網址可能不是 https，請洽技術人員）</p>'
             }
             <label class="checkbox-label">
               <input type="checkbox" name="remove_image" value="1" />
-              移除已儲存的圖片
+              刪除目前儲存的圖片
             </label>
           </div>`
             : ''
@@ -104,18 +121,21 @@
     </section>
 
     <section class="card">
-      <h2 class="admin-section-title">名單與篩選</h2>
+      <h2 class="admin-section-title">步驟二：篩選名單</h2>
       <form method="get" action="/admin/invite-reminders" class="form report-filter-form">
-        <label class="checkbox-label">
-          <input type="checkbox" name="only_pending" value="1" ${onlyPending ? 'checked' : ''} />
-          僅顯示「已有待完成邀請紀錄」（<code>line_invites.status = pending</code>）的邀請人
+        <label class="checkbox-label" style="display:flex;align-items:flex-start;gap:10px;max-width:720px;">
+          <input type="checkbox" name="only_pending" value="1" ${onlyPending ? 'checked' : ''} style="margin-top:4px;" />
+          <span><strong>只顯示「好友還沒加完官方帳」的邀請人</strong><br />
+          <span class="muted" style="font-size:13px;">勾選後，只會列出「已經產生邀請紀錄、但對方尚未完成加好友」的會員，較適合催進度。不勾選則包含「尚未分享過、但仍可邀請拿加碼」的所有人，名單會較多。</span></span>
         </label>
-        <button type="submit" class="btn primary">套用篩選</button>
-        <a class="btn" href="/admin/invite-reminders?export=csv${onlyPending ? '&only_pending=1' : ''}">下載 CSV（最多 5000 筆）</a>
+        <div style="display:flex;flex-wrap:wrap;gap:8px;margin-top:12px;">
+          <button type="submit" class="btn primary">套用篩選</button>
+          <a class="btn" href="/admin/invite-reminders?export=csv${onlyPending ? '&only_pending=1' : ''}">下載 Excel 用名單（CSV，最多 5000 人）</a>
+        </div>
       </form>
       ${
         !disabledReason
-          ? `<p class="muted">符合條件人數：<strong>${totalCount}</strong>。需累計 <strong>${friendsPerDraw}</strong> 位好友完成加好友，邀請人可獲 1 次加碼（每人最多 <strong>${inviteLimit}</strong> 次加碼）。</p>`
+          ? `<p class="muted" style="margin-top:12px;">目前符合條件約 <strong>${totalCount}</strong> 人。活動規則：每累計 <strong>${friendsPerDraw}</strong> 位好友完成加官方帳，可獲得 <strong>1</strong> 次加碼刮刮樂；每人最多 <strong>${inviteLimit}</strong> 次。</p>`
           : ''
       }
     </section>
@@ -123,47 +143,48 @@
     ${
       !disabledReason && Array.isArray(rows) && rows.length > 0
         ? `<section class="card">
-      <h2 class="admin-section-title">發送推播</h2>
+      <h2 class="admin-section-title">步驟三：勾選對象並發送 LINE</h2>
+      <p class="muted">請確認推播文案無誤，勾選要聯絡的會員後按下綠色按鈕。若同時勾選「附上圖片」，會先傳圖再傳文字。</p>
       <form id="invite-reminder-push-form" method="post" action="/admin/invite-reminders/push">
         <input type="hidden" name="only_pending_filter" value="${onlyPending ? '1' : '0'}" />
         <input type="hidden" name="userIds" id="invite-reminder-user-ids" value="" />
-        <label>
-          推播文字（與圖片一併送出時，順序為圖片 → 文字）
-          <textarea name="message" rows="8" style="width:100%;max-width:640px;">${pushMessageEscaped}</textarea>
+        <label class="admin-form-wide">
+          這次推播要傳給會員的文字（送出前可再改）
+          <textarea name="message" rows="8">${pushMessageEscaped}</textarea>
         </label>
         ${
           imageMediaId && imageHttpsOk
             ? `<p class="muted" style="margin-top:8px;">
             <label class="checkbox-label">
               <input type="checkbox" name="attach_saved_image" value="1" checked />
-              一併附上已儲存的圖片
+              一併附上步驟一儲存的圖片
             </label>
           </p>`
             : ''
         }
-        <p class="muted" style="margin-top:8px;">
+        <p class="muted" style="margin-top:12px;display:flex;flex-wrap:wrap;gap:8px;align-items:center;">
           <button type="button" class="btn" id="invite-reminder-select-page">全選本頁</button>
           <button type="button" class="btn" id="invite-reminder-clear-page">取消本頁勾選</button>
-          <button type="submit" class="btn primary" ${hasLineToken ? '' : 'disabled title="請先設定 LINE_CHANNEL_ACCESS_TOKEN"'}>推播給已勾選（最多 50 人）</button>
+          <button type="submit" class="btn primary" ${hasLineToken ? '' : 'disabled title="需先完成 LINE 連線設定"'}>發送 LINE 給已勾選（最多 50 人）</button>
         </p>
         <div class="table-responsive"><table class="prize-table">
           <thead>
             <tr>
-              <th>選取</th>
-              <th>用戶 ID</th>
-              <th>帳號</th>
-              <th>LINE 名稱</th>
-              <th>加碼次數</th>
-              <th>已完成邀請</th>
-              <th>待好友加好友</th>
+              <th>勾選</th>
+              <th>會員編號</th>
+              <th>登入帳號</th>
+              <th>LINE 顯示名稱</th>
+              <th>已拿到加碼次數</th>
+              <th>好友已完成任務（人）</th>
+              <th>尚待好友完成（人）</th>
             </tr>
           </thead>
           <tbody>
             ${rows
               .map((r) => {
-                const name = r.line_display_name ? r.line_display_name : '-';
+                const name = r.line_display_name ? r.line_display_name : '—';
                 return `<tr>
-                <td><input type="checkbox" class="invite-pick" name="pick" value="${r.id}" /></td>
+                <td><input type="checkbox" class="invite-pick" name="pick" value="${r.id}" aria-label="選取會員 ${r.id}" /></td>
                 <td>${r.id}</td>
                 <td>${r.username}</td>
                 <td>${name}</td>
@@ -175,6 +196,7 @@
               .join('')}
           </tbody>
         </table></div>
+        <p class="muted" style="font-size:13px;margin-top:8px;">「會員編號」為系統內部編號，與報表或客服對帳時可使用。</p>
         <div class="actions" style="margin-top: 12px;">
           ${hasPrevPage ? `<a class="btn" href="/admin/invite-reminders?page=${page - 1}${onlyPending ? '&only_pending=1' : ''}">上一頁</a>` : ''}
           ${hasNextPage ? `<a class="btn" href="/admin/invite-reminders?page=${page + 1}${onlyPending ? '&only_pending=1' : ''}">下一頁</a>` : ''}
@@ -202,7 +224,7 @@
       </script>
     </section>`
         : !disabledReason
-          ? '<section class="card"><p class="muted">目前沒有符合篩選條件的用戶，無法發送推播。</p></section>'
+          ? '<section class="card"><p class="muted">目前沒有符合篩選條件的會員，無法發送推播。可試著取消「只顯示待完成邀請」看看名單是否增加。</p></section>'
           : ''
     }
     `
