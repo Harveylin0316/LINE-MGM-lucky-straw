@@ -1092,6 +1092,10 @@ function registerWebRoutes(app, deps) {
           u.line_display_name,
           u.draws_left,
           u.extra_draws,
+          COALESCE((
+            SELECT COUNT(*)::int FROM line_invites li
+            WHERE li.inviter_user_id = u.id AND li.status = 'rewarded'
+          ), 0) AS invite_rewarded_count,
           COALESCE(COUNT(d.id), 0)::int AS draws_used,
           COALESCE(COUNT(*) FILTER (WHERE d.is_win = true), 0)::int AS wins,
           MAX(d.created_at) AS last_draw_at,
