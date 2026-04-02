@@ -60,12 +60,22 @@
       }
       ${
         err === 'test_no_recipient'
-          ? '<p class="error-banner">無法發送測試：請在下方填寫有效的 LINE User ID（U 開頭共 33 字元），或先以<strong>已綁定 LINE 的帳號</strong>登入後台（測試會發給該後台帳號對應的 LINE）。</p>'
+          ? '<p class="error-banner">無法發送測試：請填寫「會員名稱／顯示名稱」、有效的 LINE User ID（U 開頭共 33 字元），或先以<strong>已綁定 LINE 的帳號</strong>登入後台。</p>'
+          : ''
+      }
+      ${
+        err === 'test_name_not_found'
+          ? '<p class="error-banner">找不到符合此名稱且已綁定 LINE 的會員。請確認與系統內「LINE 顯示名稱」或「登入帳號」完全一致（可複製步驟三名單上的名稱），或改用 LINE User ID。</p>'
+          : ''
+      }
+      ${
+        err === 'test_name_ambiguous'
+          ? '<p class="error-banner">有多位會員符合此名稱，無法決定接收者。請改用 LINE User ID，或請技術人員區分帳號。</p>'
           : ''
       }
       ${
         err === 'test_bad_line_id'
-          ? '<p class="error-banner">測試接收的 LINE User ID 格式不正確。應為 U 開頭加上 32 個十六進位字元（共 33 字），或留空改由您的後台帳號接收。</p>'
+          ? '<p class="error-banner">LINE User ID 格式不正確（須為 U 開頭加 32 個十六進位字元）。若要用名稱查找，請<strong>清空</strong>此欄並改填「會員名稱／顯示名稱」。</p>'
           : ''
       }
       ${
@@ -188,15 +198,19 @@
       <p class="muted" style="font-size:13px;margin-bottom:12px;">
         ${
           adminLineLinked
-            ? '若下方「測試接收 LINE User ID」留空，將發送到<strong>您目前後台登入帳號</strong>所綁定的 LINE。'
-            : '您的後台帳號尚未綁定 LINE，請在下方填寫要接收測試的 LINE User ID（可請技術人員從後台或 Webhook 紀錄查詢）。'
+            ? '可填「會員名稱／顯示名稱」或 LINE User ID；兩者都留空時，測試會發到<strong>您目前後台登入帳號</strong>所綁定的 LINE。'
+            : '您的後台帳號尚未綁定 LINE，請填寫會員名稱（與步驟三名單上的 LINE 顯示名稱或登入帳號一致）或 LINE User ID。'
         }
       </p>
       <form method="post" action="/admin/invite-reminders/test-push" class="form admin-form-wide">
         <input type="hidden" name="only_pending_echo" value="${onlyPending ? '1' : '0'}" />
         <label>
-          測試接收 LINE User ID（選填）
-          <input type="text" name="test_line_user_id" autocomplete="off" placeholder="例如 U1234abcd…（共 33 字元）" style="max-width:520px;" />
+          會員名稱／顯示名稱（選填，與名單上相同，例如 Ice Chen）
+          <input type="text" name="test_member_name" autocomplete="name" placeholder="對應 LINE 顯示名稱或網站登入帳號" style="max-width:520px;" />
+        </label>
+        <label style="display:block;margin-top:12px;">
+          LINE User ID（選填，若填此欄則優先使用、忽略上方名稱）
+          <input type="text" name="test_line_user_id" autocomplete="off" placeholder="U 開頭共 33 字元" style="max-width:520px;" />
         </label>
         <p style="margin-top:12px;">
           <button type="submit" class="btn" ${hasLineToken ? '' : 'disabled title="需先完成 LINE 連線設定"'}>發送測試訊息</button>

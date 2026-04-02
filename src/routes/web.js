@@ -909,11 +909,34 @@ function registerWebRoutes(app, deps) {
       }
 
       const rawTestId = typeof req.body.test_line_user_id === 'string' ? req.body.test_line_user_id.trim() : '';
+      const rawMemberName =
+        typeof req.body.test_member_name === 'string' ? req.body.test_member_name.trim().slice(0, 200) : '';
       let lineTo = '';
+      let testPushUserId = Number(req.authUser.uid) || null;
       if (/^U[0-9a-f]{32}$/i.test(rawTestId)) {
         lineTo = rawTestId;
       } else if (rawTestId !== '') {
         return res.redirect(`/admin/invite-reminders?err=test_bad_line_id${pendingQs}`);
+      } else if (rawMemberName !== '') {
+        const nameRs = await query(
+          `SELECT id, line_user_id FROM users
+           WHERE COALESCE(BTRIM(line_user_id), '') <> ''
+           AND (
+             LOWER(TRIM(COALESCE(line_display_name, ''))) = LOWER(TRIM($1::text))
+             OR LOWER(TRIM(username)) = LOWER(TRIM($1::text))
+           )
+           ORDER BY id ASC
+           LIMIT 2`,
+          [rawMemberName]
+        );
+        if (nameRs.rowCount === 0) {
+          return res.redirect(`/admin/invite-reminders?err=test_name_not_found${pendingQs}`);
+        }
+        if (nameRs.rowCount > 1) {
+          return res.redirect(`/admin/invite-reminders?err=test_name_ambiguous${pendingQs}`);
+        }
+        lineTo = String(nameRs.rows[0].line_user_id || '').trim();
+        testPushUserId = nameRs.rows[0].id;
       } else {
         const uRs = await query('SELECT line_user_id FROM users WHERE id = $1', [req.authUser.uid]);
         lineTo = String(uRs.rows[0]?.line_user_id || '').trim();
@@ -923,7 +946,7 @@ function registerWebRoutes(app, deps) {
       }
 
       const pushed = await linePush.pushLineMessages(lineTo, built.messages, {
-        userId: Number(req.authUser.uid) || null,
+        userId: testPushUserId,
         pushType: 'admin_invite_reminder_test'
       });
       if (!pushed) {
