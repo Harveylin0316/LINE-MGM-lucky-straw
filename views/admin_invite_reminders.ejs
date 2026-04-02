@@ -2,6 +2,7 @@
   include('layout', {
     user: user,
     isAdmin: isAdmin,
+    bodyClass: 'admin-shell',
     body: `
     <section class="card">
       <h1>邀請任務提醒名單</h1>
@@ -10,10 +11,10 @@
         （<code>extra_draws &lt; ${inviteLimit}</code>）的用戶。可在此<strong>儲存推播文字與圖片</strong>，再勾選名單批次推播。
         單次推播最多 50 人；圖檔單張最大 2MB（PNG／JPEG）。LINE 僅能抓取<strong>公開 HTTPS</strong> 圖片網址，正式環境請設定 <code>LINE_PUSH_PUBLIC_BASE_URL</code> 或 Netlify 的 <code>URL</code>。
       </p>
-      <p>
+      <div class="admin-toolbar">
         <a class="btn" href="/admin/prizes">獎品設定</a>
         <a class="btn" href="/admin/reports">活動成效報表</a>
-      </p>
+      </div>
 
       ${
         settingsSaved
@@ -62,8 +63,8 @@
       }
     </section>
 
-    <section class="card" style="margin-top: 20px;">
-      <h2>LINE 推播內容設定</h2>
+    <section class="card">
+      <h2 class="admin-section-title">LINE 推播內容設定</h2>
       <p class="muted">儲存後，下方「發送推播」表單會帶入文字預設值；發送前仍可修改。圖片會以公開網址 <code>/p/line-media/…</code> 供 LINE 伺服器抓取。</p>
       ${
         imageMediaId && !imageHttpsOk
@@ -102,8 +103,8 @@
       </form>
     </section>
 
-    <section class="card" style="margin-top: 20px;">
-      <h2>名單與篩選</h2>
+    <section class="card">
+      <h2 class="admin-section-title">名單與篩選</h2>
       <form method="get" action="/admin/invite-reminders" class="form report-filter-form">
         <label class="checkbox-label">
           <input type="checkbox" name="only_pending" value="1" ${onlyPending ? 'checked' : ''} />
@@ -121,8 +122,8 @@
 
     ${
       !disabledReason && Array.isArray(rows) && rows.length > 0
-        ? `<section class="card" style="margin-top: 20px;">
-      <h2>發送推播</h2>
+        ? `<section class="card">
+      <h2 class="admin-section-title">發送推播</h2>
       <form id="invite-reminder-push-form" method="post" action="/admin/invite-reminders/push">
         <input type="hidden" name="only_pending_filter" value="${onlyPending ? '1' : '0'}" />
         <input type="hidden" name="userIds" id="invite-reminder-user-ids" value="" />
@@ -145,7 +146,7 @@
           <button type="button" class="btn" id="invite-reminder-clear-page">取消本頁勾選</button>
           <button type="submit" class="btn primary" ${hasLineToken ? '' : 'disabled title="請先設定 LINE_CHANNEL_ACCESS_TOKEN"'}>推播給已勾選（最多 50 人）</button>
         </p>
-        <table class="prize-table">
+        <div class="table-responsive"><table class="prize-table">
           <thead>
             <tr>
               <th>選取</th>
@@ -173,7 +174,7 @@
               })
               .join('')}
           </tbody>
-        </table>
+        </table></div>
         <div class="actions" style="margin-top: 12px;">
           ${hasPrevPage ? `<a class="btn" href="/admin/invite-reminders?page=${page - 1}${onlyPending ? '&only_pending=1' : ''}">上一頁</a>` : ''}
           ${hasNextPage ? `<a class="btn" href="/admin/invite-reminders?page=${page + 1}${onlyPending ? '&only_pending=1' : ''}">下一頁</a>` : ''}
@@ -201,7 +202,7 @@
       </script>
     </section>`
         : !disabledReason
-          ? '<section class="card" style="margin-top: 20px;"><p class="muted">目前沒有符合篩選條件的用戶，無法發送推播。</p></section>'
+          ? '<section class="card"><p class="muted">目前沒有符合篩選條件的用戶，無法發送推播。</p></section>'
           : ''
     }
     `

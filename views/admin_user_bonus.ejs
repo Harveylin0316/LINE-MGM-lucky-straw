@@ -2,11 +2,15 @@
   include('layout', {
     user: user,
     isAdmin: isAdmin,
+    bodyClass: 'admin-shell',
     body: `
     <section class="card">
-      <h1>管理員 - 手動補加碼刮次</h1>
+      <h1>手動補加碼刮次</h1>
       <p class="muted">依內部查核結果，為<strong>一般會員</strong>增加剩餘刮刮樂次數（<code>draws_left</code>）。可選同步調整 <code>extra_draws</code>（上限與活動「好友加碼」一致，目前後台上限為 ${inviteLimit}）。<strong>若勾選「同步增加加碼額度紀錄」，送出成功後會一併發送 LINE</strong>，內容與 Webhook 在好友累計完成任務並發放加碼時相同（恭喜獲得加碼刮次等）；須已設定 <code>LINE_CHANNEL_ACCESS_TOKEN</code>，且該用戶須有綁定 <code>line_user_id</code>。</p>
-      <p><a class="btn" href="/admin/prizes">返回獎品設定</a> <a class="btn" href="/admin/reports">活動成效報表</a></p>
+      <div class="admin-toolbar">
+        <a class="btn" href="/admin/prizes">獎品設定</a>
+        <a class="btn" href="/admin/reports">活動成效報表</a>
+      </div>
       ${
         success
           ? `<p class="ok-banner">已為用戶 ID <strong>${success.userId}</strong>（${success.usernameEscaped}）增加 <strong>${success.added}</strong> 次刮次。更新後：剩餘 ${success.drawsLeftAfter} 次、加碼紀錄 extra_draws=${success.extraDrawsAfter}。</p>${
@@ -18,7 +22,7 @@
       }
       ${error ? `<p class="error">${error}</p>` : ''}
 
-      <form method="post" action="/admin/users/bonus" class="form" style="max-width: 520px;" onsubmit="return confirm('確認要為該用戶補發刮次嗎？')">
+      <form method="post" action="/admin/users/bonus" class="form admin-form-narrow" onsubmit="return confirm('確認要為該用戶補發刮次嗎？')">
         <label>
           用戶 ID 或登入帳號（username）
           <input type="text" name="target_user" required autocomplete="off" placeholder="例如 42 或 lineuser_xxx" value="${preserveTargetAttr}" />
@@ -34,9 +38,9 @@
         <button type="submit" class="btn primary">確認補發</button>
       </form>
 
-      <details style="margin-top: 28px;">
-        <summary style="cursor: pointer; font-weight: 600;">如何用 SQL 找出「應該要補」的用戶（邀請加碼漏發）</summary>
-        <div class="muted" style="margin-top: 12px;">
+      <details class="admin-details">
+        <summary>如何用 SQL 找出「應該要補」的用戶（邀請加碼漏發）</summary>
+        <div class="muted">
           <p>下列查的是：<strong>被邀請人已觸發 follow</strong>，但 Webhook 因故記成 <code>no_matching_invite</code>（例如曾開 RLS 卻無 policy），而 <code>line_invites</code> 仍是 <code>pending</code>。列出的是<strong>邀請人</strong>（應拿加碼的人），請用上方表單對 <code>inviter_user_id</code> 補發。</p>
           <p>補發前建議在「LINE Webhook 診斷」比對時間序；若你已用腳本或手動改過 <code>line_invites</code>，名單可能已變少。</p>
         </div>

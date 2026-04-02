@@ -2,14 +2,15 @@
   include('layout', {
     user: user,
     isAdmin: isAdmin,
+    bodyClass: 'admin-shell',
     body: `
     <section class="card">
-      <h1>管理員 - 活動成效報表</h1>
+      <h1>活動成效報表</h1>
       <p class="muted">快速查看活動成效與用戶使用次數，協助偵測異常使用。</p>
-      <p>
-        <a class="btn" href="/admin/prizes">回到獎品設定</a>
-        <a class="btn" href="/admin/line/webhooks">LINE Webhook 診斷</a>
-      </p>
+      <div class="admin-toolbar">
+        <a class="btn" href="/admin/prizes">獎品設定</a>
+        <a class="btn" href="/admin/line/webhooks">LINE Webhook</a>
+      </div>
 
       <div class="report-grid">
         <div class="report-card"><span>總用戶數</span><strong>${summary.totalUsers}</strong></div>
@@ -26,7 +27,8 @@
         <div class="report-card danger"><span>疑似異常用戶(24h >= 20次)</span><strong>${summary.suspiciousUsers24h}</strong></div>
       </div>
 
-      <h2 style="margin-top: 20px;">用戶使用明細</h2>
+      <div class="admin-section">
+      <h2 class="admin-section-title">用戶使用明細</h2>
       <form method="get" action="/admin/reports" class="form report-filter-form">
         <label>
           依帳號或 LINE 名稱搜尋
@@ -37,7 +39,7 @@
 
       ${
         Array.isArray(users) && users.length > 0
-          ? `<table class="prize-table">
+          ? `<div class="table-responsive"><table class="prize-table">
               <thead>
                 <tr>
                   <th>用戶ID</th>
@@ -75,7 +77,7 @@
                   })
                   .join('')}
               </tbody>
-            </table>`
+            </table></div>`
           : '<p class="muted">目前查無符合條件的用戶資料。</p>'
       }
 
@@ -83,12 +85,14 @@
         ${hasPrevPage ? `<a class="btn" href="/admin/reports?page=${page - 1}${keyword ? `&q=${encodeURIComponent(keyword)}` : ''}">上一頁</a>` : ''}
         ${hasNextPage ? `<a class="btn" href="/admin/reports?page=${page + 1}${keyword ? `&q=${encodeURIComponent(keyword)}` : ''}">下一頁</a>` : ''}
       </div>
+      </div>
 
-      <h2 style="margin-top: 28px;">刮刮樂／中獎明細</h2>
+      <div class="admin-section">
+      <h2 class="admin-section-title">刮刮樂／中獎明細</h2>
       <p class="muted">每一筆刮獎紀錄與中獎獎品（資料來源：<code>draw_logs</code>），依時間由新到舊。</p>
       ${
         Array.isArray(drawLogs) && drawLogs.length > 0
-          ? `<table class="prize-table">
+          ? `<div class="table-responsive"><table class="prize-table">
               <thead>
                 <tr>
                   <th>紀錄 ID</th>
@@ -119,7 +123,7 @@
                   })
                   .join('')}
               </tbody>
-            </table>
+            </table></div>
             <p class="muted">共 ${drawLogsTotal} 筆；本頁 ${drawLogs.length} 筆。</p>
             <div class="actions">
               ${
@@ -135,11 +139,13 @@
             </div>`
           : '<p class="muted">尚無刮獎紀錄。</p>'
       }
+      </div>
 
-      <h2 style="margin-top: 24px;">LINE 推播紀錄（最近 30 筆）</h2>
+      <div class="admin-section">
+      <h2 class="admin-section-title">LINE 推播紀錄（最近 30 筆）</h2>
       ${
         Array.isArray(pushLogs) && pushLogs.length > 0
-          ? `<table class="prize-table">
+          ? `<div class="table-responsive"><table class="prize-table">
               <thead>
                 <tr>
                   <th>時間</th>
@@ -178,9 +184,10 @@
                   })
                   .join('')}
               </tbody>
-            </table>`
+            </table></div>`
           : '<p class="muted">目前還沒有 LINE 推播紀錄。</p>'
       }
+      </div>
     </section>
   `
   })

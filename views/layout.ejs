@@ -7,11 +7,17 @@
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <link rel="stylesheet" href="/style.css" />
   </head>
-  <body>
-    <header class="topbar">
-      <div class="container">
-        <div class="brand">春日饗里 LINE MGM 刮刮樂 後台</div>
-        <nav>
+  <body class="<%= typeof bodyClass === 'string' && bodyClass.trim() ? bodyClass.trim() : '' %>">
+    <header class="topbar<%= typeof bodyClass === 'string' && String(bodyClass).includes('admin-shell') ? ' topbar--admin' : '' %>">
+      <div class="container topbar-inner">
+        <div class="brand">
+          <% if (typeof isAdmin !== 'undefined' && isAdmin && user) { %>
+          <a href="/admin/prizes" class="brand-link">春日饗里 LINE MGM 刮刮樂 後台</a>
+          <% } else { %>
+          <span class="brand-text">春日饗里 LINE MGM 刮刮樂 後台</span>
+          <% } %>
+        </div>
+        <nav class="topbar-nav" aria-label="主選單">
           <% if (user) { %>
           <span class="welcome">嗨，<%= user %></span>
           <% if (isAdmin) { %>
@@ -20,13 +26,13 @@
           <a href="/admin/reports">活動成效報表</a>
           <a href="/admin/users/bonus">手動補加碼</a>
           <a href="/admin/invite-reminders">邀請提醒名單</a>
-          <a href="/admin/line/webhooks">LINE Webhook 診斷</a>
+          <a href="/admin/line/webhooks">LINE Webhook</a>
           <% } %>
-          <form action="/logout" method="post" class="inline-form">
+          <form action="/logout" method="post" class="inline-form topbar-logout">
             <button type="submit">登出</button>
           </form>
           <% } else { %>
-          <span class="muted">管理入口為內部專用</span>
+          <span class="topbar-guest-hint">管理入口為內部專用</span>
           <% } %>
         </nav>
       </div>
