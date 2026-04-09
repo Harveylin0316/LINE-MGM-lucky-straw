@@ -1,0 +1,59 @@
+<%-
+  include('layout', {
+    user: user,
+    isAdmin: isAdmin,
+    bodyClass: 'admin-shell',
+    body: `
+    <section class="card">
+      <h1>手動補加碼紀錄</h1>
+      <p class="muted">以下為管理員在「手動補加碼刮次」成功送出後的稽核紀錄（時間為台灣時間）。部署此功能<strong>之前</strong>的補發不會出現在表中。</p>
+      <div class="admin-toolbar">
+        <a class="btn" href="/admin/users/bonus">返回手動補加碼</a>
+        <a class="btn" href="/admin/reports">活動成效報表</a>
+      </div>
+
+      ${
+        Array.isArray(records) && records.length > 0
+          ? `<p class="muted">共 <strong>${totalCount}</strong> 筆。</p>
+          <div class="table-responsive"><table class="prize-table">
+              <thead>
+                <tr>
+                  <th>ID</th>
+                  <th>時間（台灣）</th>
+                  <th>對象用戶 ID</th>
+                  <th>當時帳號</th>
+                  <th>補發次數</th>
+                  <th>同步加碼紀錄</th>
+                  <th>操作管理員</th>
+                  <th>當時剩餘刮次</th>
+                  <th>當時 extra_draws</th>
+                </tr>
+              </thead>
+              <tbody>
+                ${records
+                  .map(
+                    r => `<tr>
+                      <td>${r.id}</td>
+                      <td>${r.created_at_taipei}</td>
+                      <td>${r.target_user_id}</td>
+                      <td>${r.target_username_esc}</td>
+                      <td>${r.bonus_count}</td>
+                      <td>${r.adjust_extra ? '是' : '否'}</td>
+                      <td>${r.admin_username_esc}</td>
+                      <td>${r.draws_left_after}</td>
+                      <td>${r.extra_draws_after}</td>
+                    </tr>`
+                  )
+                  .join('')}
+              </tbody>
+            </table></div>
+          <div class="actions">
+            ${hasPrevPage ? `<a class="btn" href="/admin/users/bonus/logs?page=${page - 1}">上一頁</a>` : ''}
+            ${hasNextPage ? `<a class="btn" href="/admin/users/bonus/logs?page=${page + 1}">下一頁</a>` : ''}
+          </div>`
+          : '<p class="muted">尚無紀錄。成功執行「手動補加碼刮次」後會寫入此表。</p>'
+      }
+    </section>
+  `
+  })
+%>

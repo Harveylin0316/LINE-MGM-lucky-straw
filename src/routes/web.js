@@ -446,6 +446,25 @@ function registerWebRoutes(app, deps) {
       }
       const row = upd.rows[0];
 
+      try {
+        await query(
+          `INSERT INTO admin_manual_bonus_logs
+            (target_user_id, target_username, bonus_count, adjust_extra, admin_username, draws_left_after, extra_draws_after)
+           VALUES ($1, $2, $3, $4, $5, $6, $7)`,
+          [
+            row.id,
+            String(target.username || ''),
+            bonusCount,
+            adjustExtra,
+            String(req.authUser.un || ''),
+            Number(row.draws_left ?? 0),
+            Number(row.extra_draws ?? 0)
+          ]
+        );
+      } catch (logErr) {
+        console.error('admin_manual_bonus_logs insert failed:', logErr.message);
+      }
+
       let pushNoteClass = '';
       let pushNoteEscaped = '';
       if (adjustExtra && bonusCount > 0) {
@@ -526,6 +545,47 @@ function registerWebRoutes(app, deps) {
         preserveTargetAttr: '',
         preserveCount: 1,
         adjustExtraChecked: true
+      });
+    } catch (err) {
+      next(err);
+    }
+  });
+
+  app.get('/admin/users/bonus/logs', requireAdmin, async (req, res, next) => {
+    try {
+      const pageSize = 50;
+      const page = parsePage(req.query.page);
+      const offset = (page - 1) * pageSize;
+      const [rowsRs, countRs] = await Promise.all([
+        query(
+          `SELECT id, created_at, target_user_id, target_username, bonus_count, adjust_extra, admin_username, draws_left_after, extra_draws_after
+           FROM admin_manual_bonus_logs
+           ORDER BY id DESC
+           LIMIT $1 OFFSET $2`,
+          [pageSize, offset]
+        ),
+        query('SELECT COUNT(*)::int AS total FROM admin_manual_bonus_logs')
+      ]);
+      const totalCount = countRs.rows[0]?.total || 0;
+      const records = (rowsRs.rows || []).map(r => ({
+        id: r.id,
+        created_at_taipei: formatDateTimeTaipei(r.created_at) || '-',
+        target_user_id: r.target_user_id,
+        target_username_esc: escapeHtmlLite(r.target_username || ''),
+        bonus_count: r.bonus_count,
+        adjust_extra: Boolean(r.adjust_extra),
+        admin_username_esc: escapeHtmlLite(r.admin_username || ''),
+        draws_left_after: r.draws_left_after,
+        extra_draws_after: r.extra_draws_after
+      }));
+      res.render('admin_user_bonus_logs', {
+        user: req.authUser.un,
+        isAdmin: true,
+        records,
+        page,
+        hasPrevPage: page > 1,
+        hasNextPage: offset + records.length < totalCount,
+        totalCount
       });
     } catch (err) {
       next(err);

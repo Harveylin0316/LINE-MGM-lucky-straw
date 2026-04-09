@@ -12,7 +12,8 @@ const APP_PUBLIC_TABLES_WITH_RLS = [
   'campaign_settings',
   'admin_login_throttle',
   'line_push_media',
-  'admin_push_settings'
+  'admin_push_settings',
+  'admin_manual_bonus_logs'
 ];
 
 /**
@@ -60,6 +61,18 @@ END $$;
 async function initDb({ query, adminUsername, adminPassword, skipDdl = false }) {
   if (skipDdl) {
     await query('SELECT 1');
+    await query(`CREATE TABLE IF NOT EXISTS admin_manual_bonus_logs (
+      id BIGSERIAL PRIMARY KEY,
+      created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+      target_user_id INTEGER NOT NULL,
+      target_username TEXT NOT NULL,
+      bonus_count INTEGER NOT NULL,
+      adjust_extra BOOLEAN NOT NULL DEFAULT false,
+      admin_username TEXT NOT NULL,
+      draws_left_after INTEGER NOT NULL,
+      extra_draws_after INTEGER NOT NULL
+    )`);
+    await query('ALTER TABLE admin_manual_bonus_logs ENABLE ROW LEVEL SECURITY');
     await ensureAppServerRlsPolicies(query);
     await query('ALTER TABLE admin_push_settings ADD COLUMN IF NOT EXISTS flex_json JSONB');
     return;
@@ -179,6 +192,18 @@ async function initDb({ query, adminUsername, adminPassword, skipDdl = false }) 
   );
   await query('ALTER TABLE admin_push_settings ADD COLUMN IF NOT EXISTS flex_json JSONB');
 
+  await query(`CREATE TABLE IF NOT EXISTS admin_manual_bonus_logs (
+    id BIGSERIAL PRIMARY KEY,
+    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    target_user_id INTEGER NOT NULL,
+    target_username TEXT NOT NULL,
+    bonus_count INTEGER NOT NULL,
+    adjust_extra BOOLEAN NOT NULL DEFAULT false,
+    admin_username TEXT NOT NULL,
+    draws_left_after INTEGER NOT NULL,
+    extra_draws_after INTEGER NOT NULL
+  )`);
+
   // Supabase exposes public schema via PostgREST by default.
   // Enable RLS on app tables to prevent direct external reads/writes.
   await query('ALTER TABLE users ENABLE ROW LEVEL SECURITY');
@@ -192,6 +217,7 @@ async function initDb({ query, adminUsername, adminPassword, skipDdl = false }) 
   await query('ALTER TABLE admin_login_throttle ENABLE ROW LEVEL SECURITY');
   await query('ALTER TABLE line_push_media ENABLE ROW LEVEL SECURITY');
   await query('ALTER TABLE admin_push_settings ENABLE ROW LEVEL SECURITY');
+  await query('ALTER TABLE admin_manual_bonus_logs ENABLE ROW LEVEL SECURITY');
 
   await query(
     'CREATE INDEX IF NOT EXISTS admin_login_throttle_ip_created_idx ON admin_login_throttle (ip_key, created_at DESC)'
@@ -207,6 +233,9 @@ async function initDb({ query, adminUsername, adminPassword, skipDdl = false }) 
   await query('CREATE INDEX IF NOT EXISTS line_push_logs_created_id_desc_idx ON line_push_logs(created_at DESC, id DESC)');
   await query('CREATE INDEX IF NOT EXISTS line_push_logs_user_id_idx ON line_push_logs(user_id)');
   await query('CREATE INDEX IF NOT EXISTS line_push_logs_status_idx ON line_push_logs(status)');
+  await query(
+    'CREATE INDEX IF NOT EXISTS admin_manual_bonus_logs_created_id_desc_idx ON admin_manual_bonus_logs (created_at DESC, id DESC)'
+  );
   await query("DELETE FROM prizes WHERE name ~* '^\\s*test\\b'");
 
   const adminCheck = await query('SELECT id FROM users WHERE username = $1', [adminUsername]);
