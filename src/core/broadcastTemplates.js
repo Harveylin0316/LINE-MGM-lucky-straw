@@ -87,20 +87,24 @@ function buildYellowFlexFromTemplate(t, { heroImageUrl } = {}) {
       type: 'text',
       text: t.title,
       weight: 'bold',
-      size: 'xl',
+      size: 'lg',
       color: COLORS.titleText,
       wrap: true
     });
   }
   if (t.subtitle) {
-    bodyContents.push({
-      type: 'text',
-      text: t.subtitle,
-      size: 'md',
-      color: COLORS.subtitleText,
-      wrap: true,
-      margin: 'md',
-      lineSpacing: '6px'
+    // 用 \n\n 切段，每段獨立 text + spacing，視覺更有節奏
+    const subtitleParagraphs = t.subtitle.split(/\n{2,}/).map(s => s.trim()).filter(Boolean);
+    subtitleParagraphs.forEach((para, idx) => {
+      bodyContents.push({
+        type: 'text',
+        text: para,
+        size: 'sm',
+        color: COLORS.subtitleText,
+        wrap: true,
+        margin: idx === 0 ? 'md' : 'lg',
+        lineSpacing: '4px'
+      });
     });
   }
   if (t.couponCode) {
@@ -108,10 +112,10 @@ function buildYellowFlexFromTemplate(t, { heroImageUrl } = {}) {
       type: 'box',
       layout: 'vertical',
       margin: 'lg',
-      paddingTop: 'md',
-      paddingBottom: 'md',
-      paddingStart: 'lg',
-      paddingEnd: 'lg',
+      paddingTop: 'sm',
+      paddingBottom: 'sm',
+      paddingStart: 'md',
+      paddingEnd: 'md',
       cornerRadius: '8px',
       borderWidth: '1px',
       borderColor: COLORS.couponBorder,
@@ -120,18 +124,18 @@ function buildYellowFlexFromTemplate(t, { heroImageUrl } = {}) {
         {
           type: 'text',
           text: '優惠碼',
-          size: 'xs',
+          size: 'xxs',
           color: COLORS.couponLabel,
           align: 'center'
         },
         {
           type: 'text',
           text: t.couponCode,
-          size: 'xxl',
+          size: 'xl',
           weight: 'bold',
           color: COLORS.couponCode,
           align: 'center',
-          margin: 'sm'
+          margin: 'xs'
         }
       ]
     });
@@ -140,23 +144,23 @@ function buildYellowFlexFromTemplate(t, { heroImageUrl } = {}) {
     bodyContents.push({
       type: 'text',
       text: t.disclaimer,
-      size: 'xs',
+      size: 'xxs',
       color: COLORS.disclaimerText,
       wrap: true,
-      margin: 'lg'
+      margin: 'md'
     });
   }
   if (t.ctaLabel && t.ctaUrl) {
     bodyContents.push({
       type: 'box',
       layout: 'vertical',
-      margin: 'xl',
+      margin: 'lg',
       backgroundColor: COLORS.buttonBg,
       cornerRadius: '8px',
-      paddingTop: 'md',
-      paddingBottom: 'md',
-      paddingStart: 'lg',
-      paddingEnd: 'lg',
+      paddingTop: 'sm',
+      paddingBottom: 'sm',
+      paddingStart: 'md',
+      paddingEnd: 'md',
       action: { type: 'uri', label: t.ctaLabel, uri: t.ctaUrl },
       contents: [
         {
@@ -164,7 +168,7 @@ function buildYellowFlexFromTemplate(t, { heroImageUrl } = {}) {
           text: t.ctaLabel,
           color: COLORS.buttonText,
           weight: 'bold',
-          size: 'md',
+          size: 'sm',
           align: 'center',
           wrap: false
         }
@@ -183,8 +187,8 @@ function buildYellowFlexFromTemplate(t, { heroImageUrl } = {}) {
     body: {
       type: 'box',
       layout: 'vertical',
-      spacing: 'sm',
-      paddingAll: 'lg',
+      spacing: 'none',
+      paddingAll: 'md',
       backgroundColor: COLORS.cardBg,
       contents: bodyContents
     }
