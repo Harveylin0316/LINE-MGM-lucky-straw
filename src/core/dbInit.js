@@ -15,7 +15,8 @@ const APP_PUBLIC_TABLES_WITH_RLS = [
   'admin_push_settings',
   'admin_manual_bonus_logs',
   'admin_broadcasts',
-  'admin_broadcast_recipients'
+  'admin_broadcast_recipients',
+  'admin_test_recipients'
 ];
 
 /**
@@ -103,6 +104,17 @@ async function initDb({ query, adminUsername, adminPassword, skipDdl = false }) 
       created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
     )`);
     await query('ALTER TABLE admin_broadcast_recipients ENABLE ROW LEVEL SECURITY');
+    await query(`CREATE TABLE IF NOT EXISTS admin_test_recipients (
+      id BIGSERIAL PRIMARY KEY,
+      label TEXT NOT NULL,
+      line_user_id TEXT NOT NULL,
+      added_by TEXT,
+      created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+    )`);
+    await query('ALTER TABLE admin_test_recipients ENABLE ROW LEVEL SECURITY');
+    await query(
+      'CREATE UNIQUE INDEX IF NOT EXISTS admin_test_recipients_line_user_id_unique ON admin_test_recipients (line_user_id)'
+    );
     await query(
       'CREATE INDEX IF NOT EXISTS admin_broadcasts_created_id_desc_idx ON admin_broadcasts (created_at DESC, id DESC)'
     );
@@ -271,6 +283,14 @@ async function initDb({ query, adminUsername, adminPassword, skipDdl = false }) 
     created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
   )`);
 
+  await query(`CREATE TABLE IF NOT EXISTS admin_test_recipients (
+    id BIGSERIAL PRIMARY KEY,
+    label TEXT NOT NULL,
+    line_user_id TEXT NOT NULL,
+    added_by TEXT,
+    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+  )`);
+
   // Supabase exposes public schema via PostgREST by default.
   // Enable RLS on app tables to prevent direct external reads/writes.
   await query('ALTER TABLE users ENABLE ROW LEVEL SECURITY');
@@ -287,9 +307,13 @@ async function initDb({ query, adminUsername, adminPassword, skipDdl = false }) 
   await query('ALTER TABLE admin_manual_bonus_logs ENABLE ROW LEVEL SECURITY');
   await query('ALTER TABLE admin_broadcasts ENABLE ROW LEVEL SECURITY');
   await query('ALTER TABLE admin_broadcast_recipients ENABLE ROW LEVEL SECURITY');
+  await query('ALTER TABLE admin_test_recipients ENABLE ROW LEVEL SECURITY');
 
   await query(
     'CREATE INDEX IF NOT EXISTS admin_login_throttle_ip_created_idx ON admin_login_throttle (ip_key, created_at DESC)'
+  );
+  await query(
+    'CREATE UNIQUE INDEX IF NOT EXISTS admin_test_recipients_line_user_id_unique ON admin_test_recipients (line_user_id)'
   );
   await query(
     'CREATE INDEX IF NOT EXISTS admin_broadcasts_created_id_desc_idx ON admin_broadcasts (created_at DESC, id DESC)'

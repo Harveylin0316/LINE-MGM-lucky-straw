@@ -177,6 +177,66 @@ function registerAdminBroadcastRoutes(app, deps) {
     }
   );
 
+  // ---------- 3a. test-recipients CRUD ----------
+  app.get('/admin/broadcast/test-recipients', requireAdmin, async (_req, res) => {
+    try {
+      const rs = await query(
+        `SELECT id, label, line_user_id, added_by, created_at
+         FROM admin_test_recipients ORDER BY id ASC`
+      );
+      return res.json({ ok: true, recipients: rs.rows });
+    } catch (err) {
+      console.error('list test recipients error:', err);
+      return safeJsonError(res, 500, 'list_failed', { detail: err && err.message });
+    }
+  });
+
+  app.post('/admin/broadcast/test-recipients', requireAdmin, async (req, res) => {
+    try {
+      const body = req.body || {};
+      const label = String(body.label || '').trim().slice(0, 100);
+      const lineUserId = String(body.lineUserId || '').trim();
+      if (!label) return safeJsonError(res, 400, 'label_required');
+      if (!/^U[0-9a-f]{32}$/i.test(lineUserId)) {
+        return safeJsonError(res, 400, 'invalid_line_user_id');
+      }
+      const addedBy = (req.authUser && (req.authUser.un || req.authUser.username)) || 'admin';
+      try {
+        const rs = await query(
+          `INSERT INTO admin_test_recipients (label, line_user_id, added_by)
+           VALUES ($1, $2, $3)
+           RETURNING id, label, line_user_id, added_by, created_at`,
+          [label, lineUserId, addedBy]
+        );
+        return res.json({ ok: true, recipient: rs.rows[0] });
+      } catch (e) {
+        if (e && e.code === '23505') {
+          return safeJsonError(res, 400, 'duplicate_line_user_id');
+        }
+        throw e;
+      }
+    } catch (err) {
+      console.error('add test recipient error:', err);
+      return safeJsonError(res, 500, 'add_failed', { detail: err && err.message });
+    }
+  });
+
+  app.delete('/admin/broadcast/test-recipients/:id', requireAdmin, async (req, res) => {
+    const idStr = String(req.params.id || '').trim();
+    if (!isPositiveIntegerString(idStr)) return safeJsonError(res, 400, 'invalid_id');
+    try {
+      const rs = await query(
+        'DELETE FROM admin_test_recipients WHERE id = $1 RETURNING id',
+        [Number(idStr)]
+      );
+      if (rs.rowCount === 0) return safeJsonError(res, 404, 'not_found');
+      return res.json({ ok: true });
+    } catch (err) {
+      console.error('delete test recipient error:', err);
+      return safeJsonError(res, 500, 'delete_failed', { detail: err && err.message });
+    }
+  });
+
   // ---------- 3b. test push（單筆，真的打 LINE API） ----------
   app.post('/admin/broadcast/test-push', requireAdmin, async (req, res) => {
     try {

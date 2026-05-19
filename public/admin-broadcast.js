@@ -391,10 +391,165 @@
       name_not_found: '找不到該會員顯示名稱或帳號',
       name_ambiguous: '有多人符合，請改填 LINE userId',
       no_recipient: '送給自己時你的帳號未綁定 LINE，請填入收件人',
-      push_failed: 'LINE push 失敗（請至 line_push_logs 查 detail）'
+      push_failed: 'LINE push 失敗（請至 line_push_logs 查 detail）',
+      label_required: '請填顯示名',
+      duplicate_line_user_id: '這個 LINE userId 已在清單'
     };
     return map[code] || code || 'unknown';
   }
+
+  // ------------------------------------------------------------------
+  // 7c. 測試人員清單（伺服器端 admin_test_recipients 表）
+  // ------------------------------------------------------------------
+  function loadTestRecipients() {
+    fetch('/admin/broadcast/test-recipients')
+      .then(function (r) { return r.json(); })
+      .then(function (data) {
+        if (!data.ok) {
+          $('test-recipient-list').innerHTML = '<div class="muted" style="font-size:12px;">載入失敗</div>';
+          return;
+        }
+        renderTestRecipients(data.recipients || []);
+      })
+      .catch(function () {
+        $('test-recipient-list').innerHTML = '<div class="muted" style="font-size:12px;">載入失敗</div>';
+      });
+  }
+
+  function renderTestRecipients(list) {
+    var wrap = $('test-recipient-list');
+    if (!list || list.length === 0) {
+      wrap.innerHTML = '<div class="muted" style="font-size:12px;">尚無測試人員。在下方「＋ 新增」表單加入。</div>';
+      return;
+    }
+    wrap.innerHTML = list.map(function (r) {
+      return '<div class="test-recipient-row" data-id="' + r.id +
+        '" data-uid="' + escapeHtml(r.line_user_id) + '">' +
+        '<span class="tr-label">' + escapeHtml(r.label) + '</span>' +
+        '<code class="tr-uid">' + escapeHtml(r.line_user_id) + '</code>' +
+        '<button type="button" class="btn-test-one">發給此人</button>' +
+        '<button type="button" class="btn-remove">移除</button>' +
+        '</div>';
+    }).join('');
+    $$('.btn-test-one', wrap).forEach(function (btn) {
+      btn.addEventListener('click', function () {
+        var row = btn.closest('.test-recipient-row');
+        sendTestTo(row.getAttribute('data-uid'), row.querySelector('.tr-label').textContent);
+      });
+    });
+    $$('.btn-remove', wrap).forEach(function (btn) {
+      btn.addEventListener('click', function () {
+        var row = btn.closest('.test-recipient-row');
+        removeRecipient(row.getAttribute('data-id'));
+      });
+    });
+  }
+
+  function sendTestTo(lineUid, label) {
+    var statusEl = $('test-push-status');
+    var cfg = collectMessageConfig();
+    if (cfg.mode === 'flex_json' && cfg.flex === null) {
+      statusEl.textContent = 'JSON 格式錯誤：' + cfg._parseError;
+      return;
+    }
+    statusEl.textContent = '送給 ' + label + '…';
+    fetch('/admin/broadcast/test-push', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ test_line_user_id: lineUid, message_config: cfg })
+    })
+      .then(function (r) { return r.json(); })
+      .then(function (data) {
+        if (data.ok) {
+          statusEl.innerHTML = '✓ 已送給 <strong>' + escapeHtml(label) + '</strong>';
+        } else {
+          var msg = errorMap(data.error);
+          if (data.detail) msg += '｜' + data.detail;
+          statusEl.textContent = '失敗（' + label + '）：' + msg;
+        }
+      })
+      .catch(function (e) { statusEl.textContent = '網路錯誤（' + label + '）：' + e.message; });
+  }
+
+  function removeRecipient(id) {
+    if (!confirm('確定從測試人員清單移除這位？')) return;
+    fetch('/admin/broadcast/test-recipients/' + id, { method: 'DELETE' })
+      .then(function (r) { return r.json(); })
+      .then(function (data) {
+        if (data.ok) loadTestRecipients();
+        else alert('移除失敗：' + (data.error || ''));
+      });
+  }
+
+  $('btn-test-push-all').addEventListener('click', function () {
+    var statusEl = $('test-push-status');
+    var cfg = collectMessageConfig();
+    if (cfg.mode === 'flex_json' && cfg.flex === null) {
+      statusEl.textContent = 'JSON 格式錯誤：' + cfg._parseError;
+      return;
+    }
+    if (!INIT.hasLineToken) { alert('尚未設定 LINE token'); return; }
+
+    fetch('/admin/broadcast/test-recipients')
+      .then(function (r) { return r.json(); })
+      .then(function (data) {
+        if (!data.ok || !data.recipients || data.recipients.length === 0) {
+          statusEl.textContent = '清單為空，請先新增測試人員';
+          return;
+        }
+        var list = data.recipients;
+        if (!confirm('將發測試訊息給 ' + list.length + ' 位測試人員，確認？')) return;
+        var idx = 0;
+        var ok = 0;
+        var fail = 0;
+        function next() {
+          if (idx >= list.length) {
+            statusEl.innerHTML = '✓ 完成：成功 <strong>' + ok + '</strong> ／ 失敗 <strong>' + fail + '</strong>';
+            return;
+          }
+          var r = list[idx++];
+          statusEl.textContent = '送給 ' + r.label + '（' + idx + '/' + list.length + '）…';
+          fetch('/admin/broadcast/test-push', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ test_line_user_id: r.line_user_id, message_config: cfg })
+          })
+            .then(function (r2) { return r2.json(); })
+            .then(function (d) { if (d.ok) ok++; else fail++; })
+            .catch(function () { fail++; })
+            .then(function () { setTimeout(next, 200); });
+        }
+        next();
+      });
+  });
+
+  $('btn-add-recipient').addEventListener('click', function () {
+    var label = $('new-tr-label').value.trim();
+    var uid = $('new-tr-uid').value.trim();
+    var statusEl = $('add-recipient-status');
+    if (!label) { statusEl.textContent = '請填顯示名'; return; }
+    if (!/^U[0-9a-f]{32}$/i.test(uid)) { statusEl.textContent = 'LINE userId 格式錯（U + 32 hex）'; return; }
+    statusEl.textContent = '新增中…';
+    fetch('/admin/broadcast/test-recipients', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ label: label, lineUserId: uid })
+    })
+      .then(function (r) { return r.json(); })
+      .then(function (data) {
+        if (data.ok) {
+          statusEl.textContent = '✓ 已加入：' + label;
+          $('new-tr-label').value = '';
+          $('new-tr-uid').value = '';
+          loadTestRecipients();
+        } else {
+          statusEl.textContent = '失敗：' + errorMap(data.error) + (data.detail ? '｜' + data.detail : '');
+        }
+      });
+  });
+
+  // 啟動：載入清單
+  loadTestRecipients();
 
   // ------------------------------------------------------------------
   // 8. send / process-chunk loop

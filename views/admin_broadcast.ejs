@@ -159,12 +159,38 @@
             </div>
 
             <div class="broadcast-field test-push-block">
-              <div class="broadcast-field-label">先發測試訊息（真的打 LINE API，建議批次送之前先試）</div>
-              <div class="broadcast-inline-field">
-                <input type="text" id="test-recipient" placeholder="留空 = 送給自己｜或填 LINE userId (U+32 hex)｜或會員顯示名稱/帳號" style="flex:1;min-width:300px;" />
-                <button type="button" class="btn" id="btn-test-push">發測試訊息</button>
+              <div class="broadcast-field-label">📨 發測試訊息（建議批次送前先試）</div>
+
+              <div class="test-recipient-list" id="test-recipient-list">
+                <div class="muted" style="font-size:12px;">載入中…</div>
               </div>
-              <div id="test-push-status" class="muted" style="margin-top:6px;font-size:13px;">尚未送出</div>
+
+              <div class="broadcast-action-row" style="margin-top:10px;">
+                <button type="button" class="btn btn-warning" id="btn-test-push-all">🚀 發給全部測試人員</button>
+                <span id="test-push-status" class="muted" style="font-size:13px;">尚未送出</span>
+              </div>
+
+              <details class="add-test-recipient" style="margin-top:12px;">
+                <summary>＋ 新增 / 用其他 LINE userId 臨時發送</summary>
+                <div style="margin-top:10px; display:grid; gap:10px;">
+                  <div>
+                    <div class="broadcast-field-label" style="font-size:12px;">臨時發給單一收件人（不會加入清單）</div>
+                    <div class="broadcast-inline-field">
+                      <input type="text" id="test-recipient" placeholder="留空 = 送給自己｜LINE userId｜會員顯示名/帳號" style="flex:1;min-width:280px;" />
+                      <button type="button" class="btn" id="btn-test-push">發測試訊息</button>
+                    </div>
+                  </div>
+                  <div>
+                    <div class="broadcast-field-label" style="font-size:12px;">加入測試人員清單（之後可一鍵發送）</div>
+                    <div class="broadcast-inline-field">
+                      <input type="text" id="new-tr-label" placeholder="顯示名 e.g. Harvey" style="width:160px;" />
+                      <input type="text" id="new-tr-uid" placeholder="LINE userId (U+32 hex)" style="flex:1;min-width:280px;" />
+                      <button type="button" class="btn" id="btn-add-recipient">加入清單</button>
+                    </div>
+                    <div id="add-recipient-status" class="muted" style="font-size:12px;margin-top:4px;"></div>
+                  </div>
+                </div>
+              </details>
             </div>
           </fieldset>
 
@@ -374,11 +400,71 @@
       .link-btn:hover { color: #1f2937; }
       .test-push-block {
         margin-top: 14px;
-        padding: 12px 14px;
+        padding: 14px 16px;
         background: #fffdf5;
         border: 1px dashed #fde68a;
         border-radius: 10px;
       }
+      .test-recipient-list {
+        display: flex;
+        flex-direction: column;
+        gap: 6px;
+        margin-top: 6px;
+      }
+      .test-recipient-row {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        padding: 8px 12px;
+        background: #fff;
+        border: 1px solid #fde68a;
+        border-radius: 8px;
+        font-size: 13px;
+        flex-wrap: wrap;
+      }
+      .test-recipient-row .tr-label {
+        font-weight: 600;
+        color: #1f2937;
+        min-width: 60px;
+      }
+      .test-recipient-row .tr-uid {
+        flex: 1;
+        min-width: 0;
+        font-size: 11px;
+        color: #6b7280;
+        background: #f9fafb;
+        padding: 2px 6px;
+        border-radius: 4px;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+      }
+      .test-recipient-row .btn-test-one {
+        background: #facc15;
+        color: #1f2937;
+        font-weight: 600;
+        border: 1px solid #d97706;
+        border-radius: 6px;
+        padding: 4px 10px;
+        cursor: pointer;
+        font-size: 12px;
+      }
+      .test-recipient-row .btn-test-one:hover { background: #eab308; }
+      .test-recipient-row .btn-remove {
+        background: none;
+        border: none;
+        color: #dc2626;
+        cursor: pointer;
+        font-size: 12px;
+        text-decoration: underline;
+      }
+      .add-test-recipient summary {
+        cursor: pointer;
+        color: #6b7280;
+        font-size: 13px;
+        padding: 4px 0;
+      }
+      .add-test-recipient summary:hover { color: #1f2937; }
       .broadcast-tabs {
         display: flex;
         gap: 6px;
