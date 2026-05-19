@@ -113,6 +113,16 @@ h1 {
   background: #b91c1c;
 }
 
+.btn.btn-warning {
+  background: #facc15;
+  color: #111827;
+  border-color: #facc15;
+}
+
+.btn.btn-warning:hover {
+  background: #eab308;
+}
+
 .form label {
   display: block;
   margin-bottom: 12px;
