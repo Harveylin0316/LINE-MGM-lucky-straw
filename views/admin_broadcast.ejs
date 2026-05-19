@@ -79,6 +79,12 @@
           <fieldset class="broadcast-step">
             <legend><span class="step-pill">2</span> 訊息內容</legend>
 
+            <div class="draft-bar">
+              <span class="draft-bar-hint">💾 自動草稿：你在這區塊填的內容會記住，下次回來自動帶回</span>
+              <span id="draft-status-time" class="muted">尚未儲存</span>
+              <button type="button" id="btn-clear-draft" class="link-btn">清除草稿</button>
+            </div>
+
             <div class="broadcast-tabs">
               <button type="button" class="tab-btn active" data-mode="template">黃色模板</button>
               <button type="button" class="tab-btn" data-mode="flex_json">進階 Flex JSON</button>
@@ -342,6 +348,30 @@
       .audience-sample table { width: 100%; font-size: 12px; }
       .audience-sample th { text-align: left; color: #6b7280; font-weight: 500; padding: 2px 6px 4px; }
       .audience-sample td { padding: 2px 6px; vertical-align: top; }
+      .draft-bar {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        font-size: 12px;
+        padding: 6px 10px;
+        margin-bottom: 10px;
+        background: #fefce8;
+        border: 1px solid #fde68a;
+        border-radius: 8px;
+        color: #4b5563;
+        flex-wrap: wrap;
+      }
+      .draft-bar-hint { flex: 1; min-width: 0; }
+      .link-btn {
+        background: none;
+        border: none;
+        padding: 0;
+        color: #6b7280;
+        text-decoration: underline;
+        cursor: pointer;
+        font-size: 12px;
+      }
+      .link-btn:hover { color: #1f2937; }
       .test-push-block {
         margin-top: 14px;
         padding: 12px 14px;

@@ -40,6 +40,7 @@
       $('pane-flex-json').hidden = (mode !== 'flex_json');
       state.messagePreviewed = false;
       updateSendButton();
+      saveDraft();
     });
   });
 
@@ -137,6 +138,7 @@
         statusEl.innerHTML = '已上傳 ✓ <a href="' + data.url + '" target="_blank" rel="noopener">查看</a>';
         state.messagePreviewed = false;
         updateSendButton();
+        saveDraft();
       })
       .catch(function (e) { statusEl.textContent = '錯誤：' + e.message; });
   });
@@ -504,4 +506,113 @@
         // chunk loop 下一輪會偵測到 cancelled status 自動停下
       });
   });
+
+  // ------------------------------------------------------------------
+  // 9. draft（localStorage 自動草稿）
+  //    存：模板各欄位 + flex JSON + 測試收件人 + hero media id/url + tab mode
+  //    不存：file binary、audience 條件、訊息預覽結果
+  // ------------------------------------------------------------------
+  var DRAFT_KEY = 'broadcast_draft_v1';
+  var DRAFT_FIELDS = [
+    'tpl-title', 'tpl-subtitle', 'tpl-coupon-code', 'tpl-disclaimer',
+    'tpl-cta-label', 'tpl-cta-url', 'tpl-alt', 'flex-json', 'test-recipient'
+  ];
+  var draftSaveTimer = null;
+
+  function saveDraft() {
+    try {
+      var d = {
+        mode: state.mode,
+        hero: { mediaId: state.heroMediaId || null, url: state.heroUrl || null },
+        template: {
+          title: $('tpl-title').value,
+          subtitle: $('tpl-subtitle').value,
+          couponCode: $('tpl-coupon-code').value,
+          disclaimer: $('tpl-disclaimer').value,
+          ctaLabel: $('tpl-cta-label').value,
+          ctaUrl: $('tpl-cta-url').value,
+          altText: $('tpl-alt').value
+        },
+        flexJson: $('flex-json').value,
+        testRecipient: $('test-recipient').value,
+        _t: Date.now()
+      };
+      localStorage.setItem(DRAFT_KEY, JSON.stringify(d));
+      var ds = $('draft-status-time');
+      if (ds) ds.textContent = '已自動儲存 ' + new Date(d._t).toLocaleTimeString('zh-TW');
+    } catch (e) { /* quota / denied: silent */ }
+  }
+
+  function scheduleSave() {
+    if (draftSaveTimer) clearTimeout(draftSaveTimer);
+    draftSaveTimer = setTimeout(saveDraft, 300);
+  }
+
+  function loadDraft() {
+    try {
+      var raw = localStorage.getItem(DRAFT_KEY);
+      if (!raw) return false;
+      var d = JSON.parse(raw);
+      if (!d || typeof d !== 'object') return false;
+      var tpl = d.template || {};
+      if (tpl.title != null) $('tpl-title').value = tpl.title;
+      if (tpl.subtitle != null) $('tpl-subtitle').value = tpl.subtitle;
+      if (tpl.couponCode != null) $('tpl-coupon-code').value = tpl.couponCode;
+      if (tpl.disclaimer != null) $('tpl-disclaimer').value = tpl.disclaimer;
+      if (tpl.ctaLabel != null) $('tpl-cta-label').value = tpl.ctaLabel;
+      if (tpl.ctaUrl != null) $('tpl-cta-url').value = tpl.ctaUrl;
+      if (tpl.altText != null) $('tpl-alt').value = tpl.altText;
+      if (d.flexJson != null) $('flex-json').value = d.flexJson;
+      if (d.testRecipient != null) $('test-recipient').value = d.testRecipient;
+      if (d.hero && d.hero.mediaId) {
+        state.heroMediaId = d.hero.mediaId;
+        state.heroUrl = d.hero.url || null;
+        var hs = $('hero-status');
+        if (hs) {
+          if (d.hero.url) {
+            hs.innerHTML = '已上傳（草稿）✓ <a href="' + d.hero.url +
+              '" target="_blank" rel="noopener">查看</a>';
+          } else {
+            hs.textContent = '已存草稿 (mediaId: ' + d.hero.mediaId.slice(0, 8) + '…)';
+          }
+        }
+      }
+      if (d.mode === 'flex_json') {
+        var jsonBtn = document.querySelector('.tab-btn[data-mode="flex_json"]');
+        if (jsonBtn) jsonBtn.click();
+      }
+      var ds = $('draft-status-time');
+      if (ds && d._t) {
+        ds.textContent = '已從草稿載入（' + new Date(d._t).toLocaleString('zh-TW') + '）';
+      }
+      return true;
+    } catch (e) {
+      return false;
+    }
+  }
+
+  function clearDraft() {
+    if (!confirm('確定清除草稿？這會把目前填的所有欄位清空。')) return;
+    try { localStorage.removeItem(DRAFT_KEY); } catch (e) {}
+    DRAFT_FIELDS.forEach(function (id) {
+      var el = $(id);
+      if (el) el.value = '';
+    });
+    state.heroMediaId = null;
+    state.heroUrl = null;
+    var hs = $('hero-status');
+    if (hs) hs.textContent = '未上傳';
+    var ds = $('draft-status-time');
+    if (ds) ds.textContent = '已清除草稿';
+  }
+
+  DRAFT_FIELDS.forEach(function (id) {
+    var el = $(id);
+    if (el) el.addEventListener('input', scheduleSave);
+  });
+  var btnClearDraft = $('btn-clear-draft');
+  if (btnClearDraft) btnClearDraft.addEventListener('click', clearDraft);
+
+  // 啟動：嘗試 restore 上次的草稿
+  loadDraft();
 })();
