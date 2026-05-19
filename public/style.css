@@ -1509,6 +1509,34 @@ body.admin-shell main.container {
   text-decoration: none;
 }
 
+.topbar.topbar--admin .topbar-nav > a.nav-primary {
+  background: rgba(250, 204, 21, 0.18);
+  border-color: rgba(250, 204, 21, 0.35);
+  color: #fef3c7;
+  font-weight: 600;
+}
+
+.topbar.topbar--admin .topbar-nav > a.nav-primary:hover {
+  background: rgba(250, 204, 21, 0.28);
+  border-color: rgba(250, 204, 21, 0.55);
+}
+
+.topbar.topbar--admin .topbar-nav .nav-divider {
+  color: rgba(255, 255, 255, 0.18);
+  padding: 0 4px;
+  font-weight: 300;
+  user-select: none;
+}
+
+.topbar.topbar--admin .topbar-nav .nav-section-label {
+  font-size: 11px;
+  letter-spacing: 0.5px;
+  color: #9ca3af;
+  text-transform: uppercase;
+  padding: 0 2px 0 4px;
+  white-space: nowrap;
+}
+
 .topbar.topbar--admin .welcome {
   font-size: 13px;
   color: #9ca3af;

@@ -3,7 +3,7 @@
   <head>
     <meta charset="UTF-8" />
     <link rel="icon" href="/favicon.svg" type="image/svg+xml" />
-    <title>春日饗里 LINE MGM 刮刮樂 後台</title>
+    <title>OpenRice LINE CRM 後台</title>
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <link rel="stylesheet" href="/style.css" />
   </head>
@@ -12,23 +12,25 @@
       <div class="container topbar-inner">
         <div class="brand">
           <% if (typeof isAdmin !== 'undefined' && isAdmin && user) { %>
-          <a href="/admin/prizes" class="brand-link">春日饗里 LINE MGM 刮刮樂 後台</a>
+          <a href="/admin/broadcast" class="brand-link">OpenRice LINE CRM</a>
           <% } else { %>
-          <span class="brand-text">春日饗里 LINE MGM 刮刮樂 後台</span>
+          <span class="brand-text">OpenRice LINE CRM</span>
           <% } %>
         </div>
         <nav class="topbar-nav" aria-label="主選單">
           <% if (user) { %>
           <span class="welcome">嗨，<%= user %></span>
           <% if (isAdmin) { %>
+          <a href="/admin/broadcast" class="nav-primary">📨 群發訊息</a>
+          <a href="/admin/line/webhooks" class="nav-primary">📡 Webhook 診斷</a>
+          <span class="nav-divider" aria-hidden="true">|</span>
+          <span class="nav-section-label" aria-hidden="true">春日饗里活動</span>
+          <a href="/admin/reports">活動成效報表</a>
           <a href="/admin/prizes">獎品設定</a>
           <a href="/admin/campaign">活動時間</a>
-          <a href="/admin/reports">活動成效報表</a>
+          <a href="/admin/invite-reminders">邀請提醒</a>
           <a href="/admin/users/bonus">手動補加碼</a>
           <a href="/admin/users/bonus/logs">補加碼紀錄</a>
-          <a href="/admin/invite-reminders">邀請好友提醒</a>
-          <a href="/admin/broadcast">群發訊息</a>
-          <a href="/admin/line/webhooks">LINE Webhook</a>
           <% } %>
           <form action="/logout" method="post" class="inline-form topbar-logout">
             <button type="submit">登出</button>
