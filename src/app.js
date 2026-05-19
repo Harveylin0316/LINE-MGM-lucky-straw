@@ -14,6 +14,7 @@ const { createAdminLoginThrottle } = require('./core/adminLoginThrottle');
 const { registerWebRoutes } = require('./routes/web');
 const { registerLiffRoutes } = require('./routes/liff');
 const { registerAdminBroadcastRoutes } = require('./routes/adminBroadcast');
+const { registerAdminHubRoutes } = require('./routes/adminHub');
 const { buildLiffPermanentUrl } = require('./core/liffPermalink');
 const { buildPushImageBaseCandidates } = require('./core/linePushImageResolve');
 const { createLineWebhookHandler } = require('./routes/lineWebhook');
@@ -337,6 +338,8 @@ registerAdminBroadcastRoutes(app, {
   lineChannelAccessToken: LINE_CHANNEL_ACCESS_TOKEN,
   resolvePublicSiteOrigin
 });
+
+registerAdminHubRoutes(app, { authCore });
 
 registerLiffRoutes(app, {
   query,

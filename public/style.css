@@ -1537,6 +1537,16 @@ body.admin-shell main.container {
   white-space: nowrap;
 }
 
+.topbar.topbar--admin .topbar-nav > a.nav-campaign {
+  background: rgba(146, 64, 14, 0.18);
+  border-color: rgba(146, 64, 14, 0.3);
+  color: #fde68a;
+}
+.topbar.topbar--admin .topbar-nav > a.nav-campaign:hover {
+  background: rgba(146, 64, 14, 0.28);
+  border-color: rgba(146, 64, 14, 0.5);
+}
+
 .topbar.topbar--admin .welcome {
   font-size: 13px;
   color: #9ca3af;

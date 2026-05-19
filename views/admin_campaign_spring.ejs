@@ -1,0 +1,158 @@
+<%-
+  include('layout', {
+    user: user,
+    isAdmin: isAdmin,
+    bodyClass: bodyClass,
+    body: `
+    <section class="card campaign-hero">
+      <div class="campaign-hero-inner">
+        <div class="campaign-hero-text">
+          <h1>🎁 春日饗里活動</h1>
+          <p class="muted" style="margin-top:6px;">
+            OpenRice 春日饗里活動（LIFF 刮刮樂 + MGM 邀請加碼）的 6 個運營工具入口。
+          </p>
+          <div class="campaign-meta">
+            <span class="campaign-meta-pill">活動期間 2026-03-31 → 2026-04-30</span>
+            <span class="campaign-meta-pill campaign-meta-pill--ended">已結束</span>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <div class="campaign-tools-grid">
+      <a class="campaign-tool-card" href="/admin/reports">
+        <div class="ctc-icon">📊</div>
+        <div class="ctc-body">
+          <div class="ctc-title">活動成效報表</div>
+          <div class="ctc-desc">中獎人數、刮獎次數、邀請成功統計，含可疑刷量、刮獎明細分頁。</div>
+        </div>
+        <div class="ctc-chevron">›</div>
+      </a>
+      <a class="campaign-tool-card" href="/admin/prizes">
+        <div class="ctc-icon">🎰</div>
+        <div class="ctc-body">
+          <div class="ctc-title">獎品設定</div>
+          <div class="ctc-desc">新增 / 編輯 / 下架獎品，調整可發放數量；顯示目前命中率。</div>
+        </div>
+        <div class="ctc-chevron">›</div>
+      </a>
+      <a class="campaign-tool-card" href="/admin/campaign">
+        <div class="ctc-icon">📅</div>
+        <div class="ctc-body">
+          <div class="ctc-title">活動時間</div>
+          <div class="ctc-desc">設定活動的開始與結束時間（台灣時區輸入）。</div>
+        </div>
+        <div class="ctc-chevron">›</div>
+      </a>
+      <a class="campaign-tool-card" href="/admin/invite-reminders">
+        <div class="ctc-icon">👥</div>
+        <div class="ctc-body">
+          <div class="ctc-title">邀請提醒</div>
+          <div class="ctc-desc">對還沒拿滿加碼次數的會員發 LINE 提醒，鼓勵分享邀請連結。</div>
+        </div>
+        <div class="ctc-chevron">›</div>
+      </a>
+      <a class="campaign-tool-card" href="/admin/users/bonus">
+        <div class="ctc-icon">➕</div>
+        <div class="ctc-body">
+          <div class="ctc-title">手動補加碼</div>
+          <div class="ctc-desc">為一般會員手動補發刮刮樂次數（含同步調整 extra_draws）。</div>
+        </div>
+        <div class="ctc-chevron">›</div>
+      </a>
+      <a class="campaign-tool-card" href="/admin/users/bonus/logs">
+        <div class="ctc-icon">📝</div>
+        <div class="ctc-body">
+          <div class="ctc-title">補加碼紀錄</div>
+          <div class="ctc-desc">手動補加碼的稽核紀錄查詢與匯出。</div>
+        </div>
+        <div class="ctc-chevron">›</div>
+      </a>
+    </div>
+
+    <style>
+      .campaign-hero {
+        background: linear-gradient(135deg, #fffbeb 0%, #fef3c7 100%);
+        border: 1px solid #fde68a;
+      }
+      .campaign-hero h1 { margin: 0; font-size: 24px; }
+      .campaign-meta {
+        display: flex;
+        gap: 8px;
+        margin-top: 12px;
+        flex-wrap: wrap;
+      }
+      .campaign-meta-pill {
+        background: rgba(250, 204, 21, 0.25);
+        color: #92400e;
+        font-size: 13px;
+        padding: 4px 12px;
+        border-radius: 999px;
+        font-weight: 500;
+      }
+      .campaign-meta-pill--ended {
+        background: rgba(107, 114, 128, 0.15);
+        color: #4b5563;
+      }
+      .campaign-tools-grid {
+        display: grid;
+        grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
+        gap: 12px;
+        margin-top: 20px;
+      }
+      .campaign-tool-card {
+        display: flex;
+        align-items: center;
+        gap: 14px;
+        padding: 16px 18px;
+        background: #fff;
+        border: 1px solid #e5e7eb;
+        border-radius: 12px;
+        text-decoration: none;
+        color: inherit;
+        transition: transform 0.15s ease, box-shadow 0.15s ease, border-color 0.15s ease;
+      }
+      .campaign-tool-card:hover {
+        transform: translateY(-2px);
+        box-shadow: 0 6px 16px rgba(250, 204, 21, 0.2);
+        border-color: #facc15;
+        text-decoration: none;
+      }
+      .ctc-icon {
+        font-size: 30px;
+        flex-shrink: 0;
+        line-height: 1;
+        width: 44px;
+        height: 44px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        background: #fffbeb;
+        border-radius: 10px;
+      }
+      .ctc-body {
+        flex: 1;
+        min-width: 0;
+      }
+      .ctc-title {
+        font-weight: 600;
+        color: #1f2937;
+        font-size: 15px;
+        margin-bottom: 4px;
+      }
+      .ctc-desc {
+        color: #6b7280;
+        font-size: 13px;
+        line-height: 1.5;
+      }
+      .ctc-chevron {
+        color: #d1d5db;
+        font-size: 24px;
+        font-weight: 300;
+        flex-shrink: 0;
+      }
+      .campaign-tool-card:hover .ctc-chevron { color: #92400e; }
+    </style>
+    `
+  })
+%>
