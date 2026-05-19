@@ -20,7 +20,15 @@
       <div class="broadcast-grid">
         <div class="broadcast-form">
           <fieldset class="broadcast-step">
-            <legend><span class="step-pill">1</span> 收件人條件</legend>
+            <legend><span class="step-pill">1</span> 收件人</legend>
+
+            <div class="broadcast-tabs audience-tabs">
+              <button type="button" class="tab-btn active" data-audience="conditions">🔍 條件篩選</button>
+              <button type="button" class="tab-btn" data-audience="saved_list">📂 已儲存名單</button>
+              <button type="button" class="tab-btn" data-audience="upload">⬆️ 上傳新名單</button>
+            </div>
+
+            <div class="audience-pane" id="audience-pane-conditions">
 
             <div class="broadcast-field">
               <div class="broadcast-field-label">中過獎品（可多選）</div>
@@ -69,7 +77,49 @@
               </label>
             </div>
 
-            <div class="broadcast-action-row">
+            </div><!-- /audience-pane-conditions -->
+
+            <div class="audience-pane" id="audience-pane-saved_list" hidden>
+              <div class="broadcast-field">
+                <label>
+                  選擇已儲存名單
+                  <select id="saved-list-select">
+                    <option value="">— 載入中 —</option>
+                  </select>
+                </label>
+              </div>
+              <div class="broadcast-action-row" style="margin-top:6px;">
+                <button type="button" class="btn link-btn" id="btn-delete-saved-list" hidden style="color:#dc2626;">🗑 刪除這份名單</button>
+              </div>
+            </div>
+
+            <div class="audience-pane" id="audience-pane-upload" hidden>
+              <div class="broadcast-field">
+                <label>
+                  名單顯示名
+                  <input type="text" id="upload-list-name" maxlength="200" placeholder="例如：2026-05 Rice $100 中獎者" />
+                </label>
+              </div>
+              <div class="broadcast-field">
+                <label>
+                  說明（選填）
+                  <input type="text" id="upload-list-desc" maxlength="500" placeholder="這份名單從哪來、要做什麼用" />
+                </label>
+              </div>
+              <div class="broadcast-field">
+                <label>
+                  LINE userId 清單（一行一個 U + 32 hex；或貼 CSV，會自動忽略其他欄位／空白）
+                  <textarea id="upload-list-uids" rows="8" placeholder="Ua59ae887867bfe0a26c6a41616fa4f66&#10;U72b796db38442742d09386bc8d1ac524&#10;..." spellcheck="false" style="font-family:monospace;font-size:12px;"></textarea>
+                </label>
+                <div id="upload-list-counter" class="muted" style="font-size:12px;margin-top:4px;">已輸入 0 個 UID</div>
+              </div>
+              <div class="broadcast-action-row">
+                <button type="button" class="btn btn-warning" id="btn-upload-list">儲存名單</button>
+                <div id="upload-list-status" class="muted" style="font-size:13px;">尚未儲存</div>
+              </div>
+            </div>
+
+            <div class="broadcast-action-row" style="margin-top:14px;border-top:1px solid #fde68a;padding-top:12px;">
               <button type="button" class="btn btn-warning" id="btn-preview-audience">預覽收件人</button>
               <div id="audience-status" class="audience-status muted">尚未預覽</div>
             </div>
@@ -469,6 +519,17 @@
         display: flex;
         gap: 6px;
         margin-bottom: 10px;
+        flex-wrap: wrap;
+      }
+      .audience-pane {
+        padding: 4px 0;
+      }
+      .audience-tabs { margin-bottom: 14px; }
+      #upload-list-uids {
+        line-height: 1.5;
+      }
+      #saved-list-select {
+        font-size: 14px;
       }
       .tab-btn {
         background: #fff;

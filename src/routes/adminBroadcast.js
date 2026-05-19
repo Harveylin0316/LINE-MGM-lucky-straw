@@ -177,6 +177,147 @@ function registerAdminBroadcastRoutes(app, deps) {
     }
   );
 
+  // ---------- 2b. recipient-lists CRUD（已儲存名單） ----------
+  app.get('/admin/broadcast/recipient-lists', requireAdmin, async (_req, res) => {
+    try {
+      const rs = await query(
+        `SELECT id, name, description, total, created_by, created_at
+         FROM admin_recipient_lists
+         ORDER BY id DESC`
+      );
+      return res.json({ ok: true, lists: rs.rows });
+    } catch (err) {
+      console.error('list recipient lists error:', err);
+      return safeJsonError(res, 500, 'list_failed', { detail: err && err.message });
+    }
+  });
+
+  app.get('/admin/broadcast/recipient-lists/:id', requireAdmin, async (req, res) => {
+    const idStr = String(req.params.id || '').trim();
+    if (!isPositiveIntegerString(idStr)) return safeJsonError(res, 400, 'invalid_id');
+    try {
+      const listRs = await query(
+        `SELECT id, name, description, total, created_by, created_at
+         FROM admin_recipient_lists WHERE id = $1`,
+        [Number(idStr)]
+      );
+      if (listRs.rowCount === 0) return safeJsonError(res, 404, 'not_found');
+      const memRs = await query(
+        `SELECT m.id, m.line_user_id, u.line_display_name, u.username
+         FROM admin_recipient_list_members m
+         LEFT JOIN users u ON u.line_user_id = m.line_user_id
+         WHERE m.list_id = $1
+         ORDER BY m.id ASC
+         LIMIT 50`,
+        [Number(idStr)]
+      );
+      return res.json({ ok: true, list: listRs.rows[0], sample: memRs.rows });
+    } catch (err) {
+      console.error('get recipient list error:', err);
+      return safeJsonError(res, 500, 'get_failed', { detail: err && err.message });
+    }
+  });
+
+  app.post('/admin/broadcast/recipient-lists', requireAdmin, async (req, res) => {
+    try {
+      const body = req.body || {};
+      const name = String(body.name || '').trim().slice(0, 200);
+      const description = String(body.description || '').trim().slice(0, 500);
+      const rawIds = Array.isArray(body.lineUserIds) ? body.lineUserIds : [];
+
+      if (!name) return safeJsonError(res, 400, 'name_required');
+      // 清洗 / 去重 / 驗證
+      const valid = [];
+      const seen = new Set();
+      const invalid = [];
+      for (const raw of rawIds) {
+        const s = String(raw || '').trim();
+        if (!s) continue;
+        if (!/^U[0-9a-f]{32}$/i.test(s)) {
+          invalid.push(s.slice(0, 50));
+          continue;
+        }
+        const key = s.toLowerCase();
+        if (seen.has(key)) continue;
+        seen.add(key);
+        valid.push(s);
+      }
+      if (valid.length === 0) {
+        return safeJsonError(res, 400, 'no_valid_line_user_ids', {
+          detail: invalid.length > 0 ? '所有提供的 ID 都格式錯誤（需 U + 32 hex）' : '名單為空'
+        });
+      }
+      if (valid.length > 5000) {
+        return safeJsonError(res, 400, 'too_many_recipients', {
+          detail: '單一名單上限 5000 人（提供了 ' + valid.length + '）'
+        });
+      }
+
+      const createdBy = (req.authUser && (req.authUser.un || req.authUser.username)) || 'admin';
+
+      const client = await pool.connect();
+      try {
+        await client.query('BEGIN');
+        const insListRs = await client.query(
+          `INSERT INTO admin_recipient_lists (name, description, total, created_by)
+           VALUES ($1, $2, $3, $4)
+           RETURNING id, name, description, total, created_by, created_at`,
+          [name, description || null, valid.length, createdBy]
+        );
+        const listId = insListRs.rows[0].id;
+        // 分批 INSERT members
+        const BATCH = 500;
+        for (let i = 0; i < valid.length; i += BATCH) {
+          const slice = valid.slice(i, i + BATCH);
+          const values = [];
+          const params = [];
+          slice.forEach((uid, idx) => {
+            const base = idx * 2;
+            values.push(`($${base + 1}, $${base + 2})`);
+            params.push(listId, uid);
+          });
+          await client.query(
+            `INSERT INTO admin_recipient_list_members (list_id, line_user_id)
+             VALUES ${values.join(', ')}`,
+            params
+          );
+        }
+        await client.query('COMMIT');
+        return res.json({
+          ok: true,
+          list: insListRs.rows[0],
+          accepted: valid.length,
+          rejectedInvalid: invalid.length,
+          rejectedSample: invalid.slice(0, 5)
+        });
+      } catch (e) {
+        try { await client.query('ROLLBACK'); } catch (_rb) {}
+        throw e;
+      } finally {
+        client.release();
+      }
+    } catch (err) {
+      console.error('create recipient list error:', err);
+      return safeJsonError(res, 500, 'create_failed', { detail: err && err.message });
+    }
+  });
+
+  app.delete('/admin/broadcast/recipient-lists/:id', requireAdmin, async (req, res) => {
+    const idStr = String(req.params.id || '').trim();
+    if (!isPositiveIntegerString(idStr)) return safeJsonError(res, 400, 'invalid_id');
+    try {
+      const rs = await query(
+        'DELETE FROM admin_recipient_lists WHERE id = $1 RETURNING id',
+        [Number(idStr)]
+      );
+      if (rs.rowCount === 0) return safeJsonError(res, 404, 'not_found');
+      return res.json({ ok: true });
+    } catch (err) {
+      console.error('delete recipient list error:', err);
+      return safeJsonError(res, 500, 'delete_failed', { detail: err && err.message });
+    }
+  });
+
   // ---------- 3a. test-recipients CRUD ----------
   app.get('/admin/broadcast/test-recipients', requireAdmin, async (_req, res) => {
     try {

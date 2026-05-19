@@ -22,6 +22,7 @@
     mode: 'template',
     heroMediaId: null,
     heroUrl: null,
+    audienceSource: 'conditions',  // 'conditions' | 'saved_list' | 'upload'
     audiencePreviewedTotal: null,
     messagePreviewed: false,
     currentBroadcastId: null,
@@ -45,9 +46,36 @@
   });
 
   // ------------------------------------------------------------------
+  // 1b. audience tabs（條件 / 已儲存名單 / 上傳）
+  // ------------------------------------------------------------------
+  $$('.tab-btn[data-audience]').forEach(function (btn) {
+    btn.addEventListener('click', function () {
+      var src = btn.getAttribute('data-audience');
+      state.audienceSource = src;
+      $$('.tab-btn[data-audience]').forEach(function (b) {
+        b.classList.toggle('active', b === btn);
+      });
+      $('audience-pane-conditions').hidden = (src !== 'conditions');
+      $('audience-pane-saved_list').hidden = (src !== 'saved_list');
+      $('audience-pane-upload').hidden = (src !== 'upload');
+      state.audiencePreviewedTotal = null;
+      $('audience-status').textContent = '尚未預覽';
+      $('audience-sample').hidden = true;
+      updateSendButton();
+      if (src === 'saved_list') loadSavedLists();
+    });
+  });
+
+  // ------------------------------------------------------------------
   // 2. condition collection
   // ------------------------------------------------------------------
   function collectConditions() {
+    if (state.audienceSource === 'saved_list') {
+      var sel = $('saved-list-select').value;
+      var listId = parseInt(sel, 10);
+      return Number.isInteger(listId) && listId > 0 ? { savedListId: listId } : {};
+    }
+    // conditions（預設）
     var prizeNames = $$('input[name="prize_name"]:checked').map(function (el) { return el.value; });
     var prizeFilter = null;
     if (prizeNames.length > 0) {
@@ -767,6 +795,130 @@
   });
   var btnClearDraft = $('btn-clear-draft');
   if (btnClearDraft) btnClearDraft.addEventListener('click', clearDraft);
+
+  // ------------------------------------------------------------------
+  // 10. recipient lists（已儲存名單 + 上傳）
+  // ------------------------------------------------------------------
+  function loadSavedLists() {
+    var sel = $('saved-list-select');
+    sel.innerHTML = '<option value="">— 載入中 —</option>';
+    fetch('/admin/broadcast/recipient-lists')
+      .then(function (r) { return r.json(); })
+      .then(function (data) {
+        if (!data.ok || !data.lists || data.lists.length === 0) {
+          sel.innerHTML = '<option value="">— 尚無已儲存名單 —</option>';
+          $('btn-delete-saved-list').hidden = true;
+          return;
+        }
+        sel.innerHTML = '<option value="">— 請選擇 —</option>' +
+          data.lists.map(function (l) {
+            var label = l.name + '（' + l.total + ' 人）';
+            return '<option value="' + l.id + '">' + escapeHtml(label) + '</option>';
+          }).join('');
+      })
+      .catch(function () {
+        sel.innerHTML = '<option value="">— 載入失敗 —</option>';
+      });
+  }
+
+  $('saved-list-select').addEventListener('change', function () {
+    var hasVal = !!$('saved-list-select').value;
+    $('btn-delete-saved-list').hidden = !hasVal;
+    state.audiencePreviewedTotal = null;
+    $('audience-status').textContent = '尚未預覽';
+    $('audience-sample').hidden = true;
+    updateSendButton();
+  });
+
+  $('btn-delete-saved-list').addEventListener('click', function () {
+    var sel = $('saved-list-select');
+    var id = sel.value;
+    if (!id) return;
+    var label = sel.options[sel.selectedIndex].text;
+    if (!confirm('確定刪除「' + label + '」？這個動作無法復原。')) return;
+    fetch('/admin/broadcast/recipient-lists/' + id, { method: 'DELETE' })
+      .then(function (r) { return r.json(); })
+      .then(function (data) {
+        if (data.ok) {
+          loadSavedLists();
+          state.audiencePreviewedTotal = null;
+          $('audience-status').textContent = '已刪除';
+          $('audience-sample').hidden = true;
+          updateSendButton();
+        } else {
+          alert('刪除失敗：' + (data.error || ''));
+        }
+      });
+  });
+
+  function parseUidsFromText(text) {
+    var raw = String(text || '');
+    var tokens = raw.split(/[\s,;]+/).map(function (s) { return s.trim(); }).filter(Boolean);
+    var seen = {};
+    var valid = [];
+    var invalid = [];
+    tokens.forEach(function (t) {
+      var clean = t.replace(/^["']|["']$/g, '');
+      if (/^U[0-9a-f]{32}$/i.test(clean)) {
+        var key = clean.toLowerCase();
+        if (!seen[key]) {
+          seen[key] = true;
+          valid.push(clean);
+        }
+      } else if (clean) {
+        invalid.push(clean);
+      }
+    });
+    return { valid: valid, invalid: invalid };
+  }
+
+  $('upload-list-uids').addEventListener('input', function () {
+    var parsed = parseUidsFromText($('upload-list-uids').value);
+    var c = $('upload-list-counter');
+    if (parsed.invalid.length > 0) {
+      c.innerHTML = '已輸入 <strong>' + parsed.valid.length + '</strong> 個有效 UID ' +
+        '<span style="color:#b45309">（另有 ' + parsed.invalid.length + ' 個格式錯誤，上傳時會跳過）</span>';
+    } else {
+      c.textContent = '已輸入 ' + parsed.valid.length + ' 個有效 UID';
+    }
+  });
+
+  $('btn-upload-list').addEventListener('click', function () {
+    var statusEl = $('upload-list-status');
+    var name = $('upload-list-name').value.trim();
+    var desc = $('upload-list-desc').value.trim();
+    var parsed = parseUidsFromText($('upload-list-uids').value);
+    if (!name) { statusEl.textContent = '請填名單顯示名'; return; }
+    if (parsed.valid.length === 0) { statusEl.textContent = '無有效 UID（每個需 U + 32 hex）'; return; }
+    if (!confirm('將儲存名單「' + name + '」共 ' + parsed.valid.length + ' 人，確認？')) return;
+    statusEl.textContent = '儲存中…';
+    fetch('/admin/broadcast/recipient-lists', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ name: name, description: desc, lineUserIds: parsed.valid })
+    })
+      .then(function (r) { return r.json(); })
+      .then(function (data) {
+        if (!data.ok) {
+          statusEl.textContent = '失敗：' + (data.error || '') + (data.detail ? '｜' + data.detail : '');
+          return;
+        }
+        statusEl.innerHTML = '✓ 已儲存「<strong>' + escapeHtml(data.list.name) + '</strong>」' +
+          '（' + data.accepted + ' 人' +
+          (data.rejectedInvalid > 0 ? '；忽略 ' + data.rejectedInvalid + ' 個格式錯誤' : '') +
+          '）。已切到「📂 已儲存名單」並選好。';
+        $('upload-list-name').value = '';
+        $('upload-list-desc').value = '';
+        $('upload-list-uids').value = '';
+        $('upload-list-counter').textContent = '已輸入 0 個 UID';
+        var savedTabBtn = document.querySelector('.tab-btn[data-audience="saved_list"]');
+        if (savedTabBtn) savedTabBtn.click();
+        setTimeout(function () {
+          $('saved-list-select').value = String(data.list.id);
+          $('saved-list-select').dispatchEvent(new Event('change'));
+        }, 300);
+      });
+  });
 
   // 啟動：嘗試 restore 上次的草稿
   loadDraft();

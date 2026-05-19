@@ -16,7 +16,9 @@ const APP_PUBLIC_TABLES_WITH_RLS = [
   'admin_manual_bonus_logs',
   'admin_broadcasts',
   'admin_broadcast_recipients',
-  'admin_test_recipients'
+  'admin_test_recipients',
+  'admin_recipient_lists',
+  'admin_recipient_list_members'
 ];
 
 /**
@@ -114,6 +116,29 @@ async function initDb({ query, adminUsername, adminPassword, skipDdl = false }) 
     await query('ALTER TABLE admin_test_recipients ENABLE ROW LEVEL SECURITY');
     await query(
       'CREATE UNIQUE INDEX IF NOT EXISTS admin_test_recipients_line_user_id_unique ON admin_test_recipients (line_user_id)'
+    );
+    await query(`CREATE TABLE IF NOT EXISTS admin_recipient_lists (
+      id BIGSERIAL PRIMARY KEY,
+      name TEXT NOT NULL,
+      description TEXT,
+      total INTEGER NOT NULL DEFAULT 0,
+      created_by TEXT,
+      created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+      updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+    )`);
+    await query(`CREATE TABLE IF NOT EXISTS admin_recipient_list_members (
+      id BIGSERIAL PRIMARY KEY,
+      list_id BIGINT NOT NULL REFERENCES admin_recipient_lists(id) ON DELETE CASCADE,
+      line_user_id TEXT NOT NULL,
+      created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+    )`);
+    await query('ALTER TABLE admin_recipient_lists ENABLE ROW LEVEL SECURITY');
+    await query('ALTER TABLE admin_recipient_list_members ENABLE ROW LEVEL SECURITY');
+    await query(
+      'CREATE INDEX IF NOT EXISTS admin_recipient_list_members_list_id_idx ON admin_recipient_list_members (list_id)'
+    );
+    await query(
+      'CREATE UNIQUE INDEX IF NOT EXISTS admin_recipient_list_members_list_id_line_user_id_unique ON admin_recipient_list_members (list_id, line_user_id)'
     );
     await query(
       'CREATE INDEX IF NOT EXISTS admin_broadcasts_created_id_desc_idx ON admin_broadcasts (created_at DESC, id DESC)'
@@ -291,6 +316,23 @@ async function initDb({ query, adminUsername, adminPassword, skipDdl = false }) 
     created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
   )`);
 
+  await query(`CREATE TABLE IF NOT EXISTS admin_recipient_lists (
+    id BIGSERIAL PRIMARY KEY,
+    name TEXT NOT NULL,
+    description TEXT,
+    total INTEGER NOT NULL DEFAULT 0,
+    created_by TEXT,
+    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+  )`);
+
+  await query(`CREATE TABLE IF NOT EXISTS admin_recipient_list_members (
+    id BIGSERIAL PRIMARY KEY,
+    list_id BIGINT NOT NULL REFERENCES admin_recipient_lists(id) ON DELETE CASCADE,
+    line_user_id TEXT NOT NULL,
+    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+  )`);
+
   // Supabase exposes public schema via PostgREST by default.
   // Enable RLS on app tables to prevent direct external reads/writes.
   await query('ALTER TABLE users ENABLE ROW LEVEL SECURITY');
@@ -308,12 +350,23 @@ async function initDb({ query, adminUsername, adminPassword, skipDdl = false }) 
   await query('ALTER TABLE admin_broadcasts ENABLE ROW LEVEL SECURITY');
   await query('ALTER TABLE admin_broadcast_recipients ENABLE ROW LEVEL SECURITY');
   await query('ALTER TABLE admin_test_recipients ENABLE ROW LEVEL SECURITY');
+  await query('ALTER TABLE admin_recipient_lists ENABLE ROW LEVEL SECURITY');
+  await query('ALTER TABLE admin_recipient_list_members ENABLE ROW LEVEL SECURITY');
 
   await query(
     'CREATE INDEX IF NOT EXISTS admin_login_throttle_ip_created_idx ON admin_login_throttle (ip_key, created_at DESC)'
   );
   await query(
     'CREATE UNIQUE INDEX IF NOT EXISTS admin_test_recipients_line_user_id_unique ON admin_test_recipients (line_user_id)'
+  );
+  await query(
+    'CREATE INDEX IF NOT EXISTS admin_recipient_list_members_list_id_idx ON admin_recipient_list_members (list_id)'
+  );
+  await query(
+    'CREATE UNIQUE INDEX IF NOT EXISTS admin_recipient_list_members_list_id_line_user_id_unique ON admin_recipient_list_members (list_id, line_user_id)'
+  );
+  await query(
+    'CREATE INDEX IF NOT EXISTS admin_recipient_lists_created_id_desc_idx ON admin_recipient_lists (created_at DESC, id DESC)'
   );
   await query(
     'CREATE INDEX IF NOT EXISTS admin_broadcasts_created_id_desc_idx ON admin_broadcasts (created_at DESC, id DESC)'

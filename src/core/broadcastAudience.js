@@ -19,7 +19,12 @@ const PREVIEW_SAMPLE_LIMIT = 10;
 
 function normalizeConditions(raw) {
   const safe = raw && typeof raw === 'object' ? raw : {};
-  const out = { prizeFilter: null, inviteCompletedMin: null, drewInCampaign: null };
+  const out = {
+    prizeFilter: null,
+    inviteCompletedMin: null,
+    drewInCampaign: null,
+    savedListId: null
+  };
 
   if (safe.prizeFilter && typeof safe.prizeFilter === 'object') {
     const mode = ['any', 'all', 'none'].includes(safe.prizeFilter.mode) ? safe.prizeFilter.mode : 'any';
@@ -40,11 +45,21 @@ function normalizeConditions(raw) {
     out.drewInCampaign = safe.drewInCampaign;
   }
 
+  const listId = Number(safe.savedListId);
+  if (Number.isInteger(listId) && listId > 0) {
+    out.savedListId = listId;
+  }
+
   return out;
 }
 
 function hasAnyCondition(conds) {
-  return Boolean(conds.prizeFilter || conds.inviteCompletedMin !== null || conds.drewInCampaign !== null);
+  return Boolean(
+    conds.savedListId ||
+    conds.prizeFilter ||
+    conds.inviteCompletedMin !== null ||
+    conds.drewInCampaign !== null
+  );
 }
 
 function buildWhere(conds) {
@@ -96,8 +111,31 @@ function buildWhere(conds) {
 async function previewAudience(query, rawConditions) {
   const conds = normalizeConditions(rawConditions);
   if (!hasAnyCondition(conds)) {
-    return { total: 0, sample: [], conditions: conds, error: '請至少選一個條件，避免群發給所有用戶。' };
+    return { total: 0, sample: [], conditions: conds, error: '請至少選一個條件或選擇一份名單。' };
   }
+  // 來源：已儲存名單
+  if (conds.savedListId) {
+    const total = await query(
+      `SELECT COUNT(*)::int AS n FROM admin_recipient_list_members WHERE list_id = $1`,
+      [conds.savedListId]
+    );
+    const sampleRs = await query(
+      `SELECT m.id, m.line_user_id, u.line_display_name, u.username
+       FROM admin_recipient_list_members m
+       LEFT JOIN users u ON u.line_user_id = m.line_user_id
+       WHERE m.list_id = $1
+       ORDER BY m.id ASC
+       LIMIT $2`,
+      [conds.savedListId, PREVIEW_SAMPLE_LIMIT]
+    );
+    return {
+      total: Number(total.rows[0]?.n || 0),
+      sample: sampleRs.rows,
+      conditions: conds,
+      error: null
+    };
+  }
+  // 來源：條件篩選
   const { whereSql, params } = buildWhere(conds);
   const countSql = `SELECT COUNT(DISTINCT u.id) AS total FROM users u WHERE ${whereSql}`;
   const sampleParams = params.slice();
@@ -121,8 +159,22 @@ async function previewAudience(query, rawConditions) {
 async function fetchAudienceRecipients(query, rawConditions, { limit = MAX_RECIPIENTS_PER_BROADCAST } = {}) {
   const conds = normalizeConditions(rawConditions);
   if (!hasAnyCondition(conds)) return { conditions: conds, rows: [] };
-  const { whereSql, params } = buildWhere(conds);
   const cappedLimit = Math.min(Math.max(1, Number(limit) || MAX_RECIPIENTS_PER_BROADCAST), MAX_RECIPIENTS_PER_BROADCAST);
+  // 來源：已儲存名單
+  if (conds.savedListId) {
+    const rs = await query(
+      `SELECT u.id AS user_id, m.line_user_id
+       FROM admin_recipient_list_members m
+       LEFT JOIN users u ON u.line_user_id = m.line_user_id
+       WHERE m.list_id = $1
+       ORDER BY m.id ASC
+       LIMIT $2`,
+      [conds.savedListId, cappedLimit]
+    );
+    return { conditions: conds, rows: rs.rows };
+  }
+  // 來源：條件篩選
+  const { whereSql, params } = buildWhere(conds);
   params.push(cappedLimit);
   const sql = `
     SELECT u.id AS user_id, u.line_user_id
