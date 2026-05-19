@@ -160,6 +160,8 @@
         heroMediaId: state.heroMediaId || null,
         title: $('tpl-title').value.trim(),
         subtitle: $('tpl-subtitle').value.trim(),
+        couponCode: $('tpl-coupon-code').value.trim(),
+        disclaimer: $('tpl-disclaimer').value.trim(),
         ctaLabel: $('tpl-cta-label').value.trim(),
         ctaUrl: $('tpl-cta-url').value.trim(),
         altText: $('tpl-alt').value.trim()
@@ -238,10 +240,14 @@
     if (!c || typeof c !== 'object') return;
     if (c.type === 'text') {
       var t = document.createElement('div');
-      var isTitle = (c.weight === 'bold' && (c.size === 'xl' || c.size === 'xxl'));
+      var isTitle = (c.weight === 'bold' && c.size === 'xl');
       t.className = isTitle ? 'lm-title' : 'lm-subtitle';
       if (c.color) t.style.color = c.color;
       if (c.size && !isTitle) t.style.fontSize = mapFlexSize(c.size);
+      if (c.weight === 'bold' && !isTitle) t.style.fontWeight = '700';
+      if (c.align === 'center') t.style.textAlign = 'center';
+      if (c.margin) t.style.marginTop = mapFlexSpacing(c.margin);
+      if (c.lineSpacing) t.style.lineHeight = '1.55';
       t.textContent = String(c.text || '');
       parent.appendChild(t);
       return;
@@ -250,6 +256,7 @@
       var s = document.createElement('div');
       s.className = 'lm-separator';
       if (c.color) s.style.background = c.color;
+      if (c.margin) s.style.marginTop = mapFlexSpacing(c.margin);
       parent.appendChild(s);
       return;
     }
@@ -261,6 +268,7 @@
       a.target = '_blank';
       a.rel = 'noopener';
       if (c.backgroundColor) a.style.background = c.backgroundColor;
+      if (c.margin) a.style.marginTop = mapFlexSpacing(c.margin);
       // 取第一個 text content 作為 label
       var label = '';
       if (Array.isArray(c.contents)) {
@@ -284,20 +292,43 @@
       b.rel = 'noopener';
       b.textContent = (c.action && c.action.label) || 'OPEN';
       if (c.color) b.style.background = c.color;
+      if (c.margin) b.style.marginTop = mapFlexSpacing(c.margin);
       parent.appendChild(b);
       return;
     }
     if (c.type === 'box' && Array.isArray(c.contents)) {
       var sub = document.createElement('div');
+      sub.className = 'lm-box';
       if (c.backgroundColor) sub.style.background = c.backgroundColor;
+      if (c.borderWidth && c.borderColor) sub.style.border = c.borderWidth + ' solid ' + c.borderColor;
+      else if (c.borderColor) sub.style.border = '1px solid ' + c.borderColor;
+      if (c.cornerRadius) {
+        sub.style.borderRadius =
+          typeof c.cornerRadius === 'string' && /px$/.test(c.cornerRadius) ? c.cornerRadius : '8px';
+      }
+      if (c.paddingTop) sub.style.paddingTop = mapFlexSpacing(c.paddingTop);
+      if (c.paddingBottom) sub.style.paddingBottom = mapFlexSpacing(c.paddingBottom);
+      if (c.paddingStart) sub.style.paddingLeft = mapFlexSpacing(c.paddingStart);
+      if (c.paddingEnd) sub.style.paddingRight = mapFlexSpacing(c.paddingEnd);
+      if (c.paddingAll) {
+        var pad = mapFlexSpacing(c.paddingAll);
+        sub.style.padding = pad;
+      }
+      if (c.margin) sub.style.marginTop = mapFlexSpacing(c.margin);
       c.contents.forEach(function (cc) { renderFlexComponent(cc, sub); });
       parent.appendChild(sub);
     }
   }
 
   function mapFlexSize(s) {
-    var m = { xs: '11px', sm: '13px', md: '14px', lg: '16px', xl: '18px', xxl: '20px', '3xl': '24px' };
+    var m = { xs: '11px', sm: '13px', md: '14px', lg: '17px', xl: '19px', xxl: '24px', '3xl': '28px' };
     return m[s] || '14px';
+  }
+
+  function mapFlexSpacing(s) {
+    if (typeof s === 'string' && /px$/.test(s)) return s;
+    var m = { none: '0', xs: '4px', sm: '8px', md: '12px', lg: '18px', xl: '24px', xxl: '32px' };
+    return m[s] || '0';
   }
 
   function escapeHtml(s) {

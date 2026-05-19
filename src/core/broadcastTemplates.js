@@ -11,16 +11,23 @@
 const FIELD_LIMITS = {
   title: 100,
   subtitle: 500,
+  couponCode: 60,
+  disclaimer: 300,
   ctaLabel: 40,
   ctaUrl: 1000,
   altText: 400
 };
 
 const COLORS = {
-  cardBg: '#FFFFFF',     // 卡片底（白）
-  separator: '#FDE68A',  // amber-200（在白底上夠醒目）
-  buttonBg: '#FACC15',   // amber-400 主黃
-  buttonText: '#1F2937', // gray-800（黃底深字）
+  cardBg: '#FFFFFF',         // 卡片底（白）
+  couponBoxBg: '#FFFBEB',    // 優惠碼框淺黃底
+  couponBorder: '#FACC15',   // 優惠碼框黃邊
+  couponLabel: '#92400E',    // amber-800 (優惠碼的「優惠碼」小標)
+  couponCode: '#1F2937',
+  disclaimerText: '#9CA3AF', // gray-400 注意事項
+  separator: '#FDE68A',
+  buttonBg: '#FACC15',
+  buttonText: '#1F2937',
   titleText: '#1F2937',
   subtitleText: '#4B5563'
 };
@@ -45,6 +52,8 @@ function normalizeTemplateInput(raw) {
   const safe = raw && typeof raw === 'object' ? raw : {};
   const title = clip(String(safe.title || '').trim(), FIELD_LIMITS.title);
   const subtitle = clip(String(safe.subtitle || '').trim(), FIELD_LIMITS.subtitle);
+  const couponCode = clip(String(safe.couponCode || '').trim(), FIELD_LIMITS.couponCode);
+  const disclaimer = clip(String(safe.disclaimer || '').trim(), FIELD_LIMITS.disclaimer);
   const ctaLabel = clip(String(safe.ctaLabel || '').trim(), FIELD_LIMITS.ctaLabel);
   const ctaUrl = clip(String(safe.ctaUrl || '').trim(), FIELD_LIMITS.ctaUrl);
   const altText = clip(String(safe.altText || '').trim(), FIELD_LIMITS.altText);
@@ -53,13 +62,13 @@ function normalizeTemplateInput(raw) {
     /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(safe.heroMediaId.trim())
       ? safe.heroMediaId.trim()
       : null;
-  return { title, subtitle, ctaLabel, ctaUrl, altText, heroMediaId };
+  return { title, subtitle, couponCode, disclaimer, ctaLabel, ctaUrl, altText, heroMediaId };
 }
 
 function validateTemplateInput(input) {
   const t = normalizeTemplateInput(input);
-  if (!t.title && !t.heroMediaId && !t.subtitle) {
-    return { ok: false, error: '請至少填入標題、副標題或上傳一張 Hero 圖。' };
+  if (!t.title && !t.heroMediaId && !t.subtitle && !t.couponCode) {
+    return { ok: false, error: '請至少填入標題、副標題、優惠碼或上傳一張 Hero 圖。' };
   }
   if ((t.ctaLabel && !t.ctaUrl) || (!t.ctaLabel && t.ctaUrl)) {
     return { ok: false, error: 'CTA 按鈕的文字與連結需同時填寫，或同時留空。' };
@@ -90,17 +99,58 @@ function buildYellowFlexFromTemplate(t, { heroImageUrl } = {}) {
       size: 'md',
       color: COLORS.subtitleText,
       wrap: true,
-      margin: 'md'
+      margin: 'md',
+      lineSpacing: '6px'
     });
   }
-  if (t.ctaLabel && t.ctaUrl) {
-    if (bodyContents.length > 0) {
-      bodyContents.push({ type: 'separator', margin: 'lg', color: COLORS.separator });
-    }
+  if (t.couponCode) {
     bodyContents.push({
       type: 'box',
       layout: 'vertical',
       margin: 'lg',
+      paddingTop: 'md',
+      paddingBottom: 'md',
+      paddingStart: 'lg',
+      paddingEnd: 'lg',
+      cornerRadius: '8px',
+      borderWidth: '1px',
+      borderColor: COLORS.couponBorder,
+      backgroundColor: COLORS.couponBoxBg,
+      contents: [
+        {
+          type: 'text',
+          text: '優惠碼',
+          size: 'xs',
+          color: COLORS.couponLabel,
+          align: 'center'
+        },
+        {
+          type: 'text',
+          text: t.couponCode,
+          size: 'xxl',
+          weight: 'bold',
+          color: COLORS.couponCode,
+          align: 'center',
+          margin: 'sm'
+        }
+      ]
+    });
+  }
+  if (t.disclaimer) {
+    bodyContents.push({
+      type: 'text',
+      text: t.disclaimer,
+      size: 'xs',
+      color: COLORS.disclaimerText,
+      wrap: true,
+      margin: 'lg'
+    });
+  }
+  if (t.ctaLabel && t.ctaUrl) {
+    bodyContents.push({
+      type: 'box',
+      layout: 'vertical',
+      margin: 'xl',
       backgroundColor: COLORS.buttonBg,
       cornerRadius: '8px',
       paddingTop: 'md',
