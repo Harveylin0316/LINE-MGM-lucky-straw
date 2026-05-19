@@ -1491,60 +1491,25 @@ body.admin-shell main.container {
 }
 
 .topbar.topbar--admin .topbar-nav > a {
-  color: #e5e7eb;
+  color: #d1d5db;
   margin-left: 0;
-  padding: 8px 12px;
-  border-radius: 8px;
+  padding: 6px 2px;
+  border-radius: 0;
   font-size: 14px;
   font-weight: 500;
   text-decoration: none;
-  background: rgba(255, 255, 255, 0.06);
-  border: 1px solid transparent;
-  transition: background 0.15s ease, border-color 0.15s ease;
+  background: transparent;
+  border: none;
+  border-bottom: 2px solid transparent;
+  transition: color 0.15s ease, border-color 0.15s ease;
 }
 
-.topbar.topbar--admin .topbar-nav > a:hover {
-  background: rgba(255, 255, 255, 0.12);
-  border-color: rgba(255, 255, 255, 0.12);
+.topbar.topbar--admin .topbar-nav > a:hover,
+.topbar.topbar--admin .topbar-nav > a.nav-active {
+  color: #ffffff;
+  border-bottom-color: #ffffff;
   text-decoration: none;
-}
-
-.topbar.topbar--admin .topbar-nav > a.nav-primary {
-  background: rgba(250, 204, 21, 0.18);
-  border-color: rgba(250, 204, 21, 0.35);
-  color: #fef3c7;
-  font-weight: 600;
-}
-
-.topbar.topbar--admin .topbar-nav > a.nav-primary:hover {
-  background: rgba(250, 204, 21, 0.28);
-  border-color: rgba(250, 204, 21, 0.55);
-}
-
-.topbar.topbar--admin .topbar-nav .nav-divider {
-  color: rgba(255, 255, 255, 0.18);
-  padding: 0 4px;
-  font-weight: 300;
-  user-select: none;
-}
-
-.topbar.topbar--admin .topbar-nav .nav-section-label {
-  font-size: 11px;
-  letter-spacing: 0.5px;
-  color: #9ca3af;
-  text-transform: uppercase;
-  padding: 0 2px 0 4px;
-  white-space: nowrap;
-}
-
-.topbar.topbar--admin .topbar-nav > a.nav-campaign {
-  background: rgba(146, 64, 14, 0.18);
-  border-color: rgba(146, 64, 14, 0.3);
-  color: #fde68a;
-}
-.topbar.topbar--admin .topbar-nav > a.nav-campaign:hover {
-  background: rgba(146, 64, 14, 0.28);
-  border-color: rgba(146, 64, 14, 0.5);
+  background: transparent;
 }
 
 .topbar.topbar--admin .welcome {

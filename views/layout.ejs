@@ -21,10 +21,8 @@
           <% if (user) { %>
           <span class="welcome">嗨，<%= user %></span>
           <% if (isAdmin) { %>
-          <a href="/admin/broadcast" class="nav-primary">📨 群發訊息</a>
-          <a href="/admin/line/webhooks" class="nav-primary">📡 Webhook 診斷</a>
-          <span class="nav-divider" aria-hidden="true">|</span>
-          <a href="/admin/campaigns/spring" class="nav-campaign">🎁 春日饗里活動</a>
+          <a href="/admin/broadcast" class="nav-item">群發訊息</a>
+          <a href="/admin/campaigns/spring" class="nav-item">春日饗里活動</a>
           <% } %>
           <form action="/logout" method="post" class="inline-form topbar-logout">
             <button type="submit">登出</button>

@@ -23,9 +23,9 @@
             <legend><span class="step-pill">1</span> 收件人</legend>
 
             <div class="broadcast-tabs audience-tabs">
-              <button type="button" class="tab-btn active" data-audience="conditions">🔍 條件篩選</button>
-              <button type="button" class="tab-btn" data-audience="saved_list">📂 已儲存名單</button>
-              <button type="button" class="tab-btn" data-audience="upload">⬆️ 上傳新名單</button>
+              <button type="button" class="tab-btn active" data-audience="conditions">條件篩選</button>
+              <button type="button" class="tab-btn" data-audience="saved_list">已儲存名單</button>
+              <button type="button" class="tab-btn" data-audience="upload">上傳新名單</button>
             </div>
 
             <div class="audience-pane" id="audience-pane-conditions">
@@ -130,7 +130,7 @@
             <legend><span class="step-pill">2</span> 訊息內容</legend>
 
             <div class="draft-bar">
-              <span class="draft-bar-hint">💾 自動草稿：你在這區塊填的內容會記住，下次回來自動帶回</span>
+              <span class="draft-bar-hint">草稿自動儲存：這區塊填的內容會記住，下次回來自動帶回</span>
               <span id="draft-status-time" class="muted">尚未儲存</span>
               <button type="button" id="btn-clear-draft" class="link-btn">清除草稿</button>
             </div>
@@ -209,19 +209,19 @@
             </div>
 
             <div class="broadcast-field test-push-block">
-              <div class="broadcast-field-label">📨 發測試訊息（建議批次送前先試）</div>
+              <div class="broadcast-field-label">發測試訊息（建議批次送前先試）</div>
 
               <div class="test-recipient-list" id="test-recipient-list">
                 <div class="muted" style="font-size:12px;">載入中…</div>
               </div>
 
               <div class="broadcast-action-row" style="margin-top:10px;">
-                <button type="button" class="btn btn-warning" id="btn-test-push-all">🚀 發給全部測試人員</button>
+                <button type="button" class="btn btn-warning" id="btn-test-push-all">發給全部測試人員</button>
                 <span id="test-push-status" class="muted" style="font-size:13px;">尚未送出</span>
               </div>
 
               <details class="add-test-recipient" style="margin-top:12px;">
-                <summary>＋ 新增 / 用其他 LINE userId 臨時發送</summary>
+                <summary>新增 / 用其他 LINE userId 臨時發送</summary>
                 <div style="margin-top:10px; display:grid; gap:10px;">
                   <div>
                     <div class="broadcast-field-label" style="font-size:12px;">臨時發給單一收件人（不會加入清單）</div>
@@ -266,6 +266,42 @@
           </div>
         </aside>
       </div>
+    </section>
+
+    <section class="card system-tools-card">
+      <h2>進階工具</h2>
+      <a class="system-tool-link" href="/admin/line/webhooks">
+        <div class="stl-body">
+          <div class="stl-title">LINE Webhook 事件診斷</div>
+          <div class="stl-desc">查 follow / unfollow / message 事件入站紀錄與處理結果。目前主要用於排查邀請加碼是否正確觸發。</div>
+        </div>
+        <div class="stl-chevron">›</div>
+      </a>
+      <style>
+        .system-tools-card { background: #fafafa; }
+        .system-tool-link {
+          display: flex;
+          align-items: center;
+          gap: 14px;
+          padding: 14px 18px;
+          background: #fff;
+          border: 1px solid #e5e7eb;
+          border-radius: 8px;
+          text-decoration: none;
+          color: inherit;
+          transition: border-color 0.15s, background 0.15s;
+          margin-top: 8px;
+        }
+        .system-tool-link:hover {
+          border-color: #1f2937;
+          background: #fafafa;
+          text-decoration: none;
+        }
+        .stl-body { flex: 1; min-width: 0; }
+        .stl-title { font-weight: 600; color: #1f2937; font-size: 14px; margin-bottom: 2px; }
+        .stl-desc { color: #6b7280; font-size: 12px; line-height: 1.5; }
+        .stl-chevron { color: #9ca3af; font-size: 22px; font-weight: 300; }
+      </style>
     </section>
 
     <section class="card">
