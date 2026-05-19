@@ -310,6 +310,59 @@
   }
 
   // ------------------------------------------------------------------
+  // 7b. test push（單筆，真的打 LINE API）
+  // ------------------------------------------------------------------
+  $('btn-test-push').addEventListener('click', function () {
+    if (!INIT.hasLineToken) {
+      alert('尚未設定 LINE_CHANNEL_ACCESS_TOKEN，無法送出。');
+      return;
+    }
+    var statusEl = $('test-push-status');
+    var recipient = $('test-recipient').value.trim();
+    var cfg = collectMessageConfig();
+    if (cfg.mode === 'flex_json' && cfg.flex === null) {
+      statusEl.textContent = 'JSON 格式錯誤：' + cfg._parseError;
+      return;
+    }
+    statusEl.textContent = '送出中…';
+    var body = { message_config: cfg };
+    if (recipient) {
+      if (/^U[0-9a-f]{32}$/i.test(recipient)) {
+        body.test_line_user_id = recipient;
+      } else {
+        body.test_member_name = recipient;
+      }
+    }
+    fetch('/admin/broadcast/test-push', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(body)
+    })
+      .then(function (r) { return r.json(); })
+      .then(function (data) {
+        if (data.ok) {
+          statusEl.innerHTML = '✓ 已送出到 <code style="font-size:12px">' + escapeHtml(data.sentTo || '') + '</code>';
+        } else {
+          var msg = errorMap(data.error);
+          statusEl.textContent = '失敗：' + msg;
+        }
+      })
+      .catch(function (e) { statusEl.textContent = '網路錯誤：' + e.message; });
+  });
+
+  function errorMap(code) {
+    var map = {
+      no_line_channel_access_token: '未設定 LINE token',
+      invalid_line_user_id: 'LINE userId 格式錯（需 U + 32 hex）',
+      name_not_found: '找不到該會員顯示名稱或帳號',
+      name_ambiguous: '有多人符合，請改填 LINE userId',
+      no_recipient: '送給自己時你的帳號未綁定 LINE，請填入收件人',
+      push_failed: 'LINE push 失敗（請至 line_push_logs 查 detail）'
+    };
+    return map[code] || code || 'unknown';
+  }
+
+  // ------------------------------------------------------------------
   // 8. send / process-chunk loop
   // ------------------------------------------------------------------
   function updateSendButton() {

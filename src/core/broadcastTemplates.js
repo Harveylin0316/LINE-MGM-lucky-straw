@@ -17,8 +17,8 @@ const FIELD_LIMITS = {
 };
 
 const COLORS = {
-  cardBg: '#FFFBEB',     // amber-50
-  separator: '#FDE68A',  // amber-200
+  cardBg: '#FFFFFF',     // 卡片底（白）
+  separator: '#FDE68A',  // amber-200（在白底上夠醒目）
   buttonBg: '#FACC15',   // amber-400 主黃
   buttonText: '#1F2937', // gray-800（黃底深字）
   titleText: '#1F2937',

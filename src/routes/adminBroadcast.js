@@ -177,6 +177,66 @@ function registerAdminBroadcastRoutes(app, deps) {
     }
   );
 
+  // ---------- 3b. test push（單筆，真的打 LINE API） ----------
+  app.post('/admin/broadcast/test-push', requireAdmin, async (req, res) => {
+    if (!lineChannelAccessToken) {
+      return safeJsonError(res, 400, 'no_line_channel_access_token');
+    }
+    try {
+      const body = req.body || {};
+      const rawTestId = String(body.test_line_user_id || '').trim();
+      const rawMember = String(body.test_member_name || '').trim().slice(0, 200);
+      const messageConfig = body.message_config;
+
+      const origin = publicOriginOrEmpty(req);
+      const builtMsg = buildLineMessages(messageConfig, { heroImageBaseUrl: origin });
+      if (!builtMsg.ok) return safeJsonError(res, 400, builtMsg.error);
+
+      let lineTo = '';
+      let targetUserId = null;
+
+      if (rawTestId) {
+        if (!/^U[0-9a-f]{32}$/i.test(rawTestId)) {
+          return safeJsonError(res, 400, 'invalid_line_user_id');
+        }
+        lineTo = rawTestId;
+      } else if (rawMember) {
+        const nameRs = await query(
+          `SELECT id, line_user_id FROM users
+           WHERE COALESCE(BTRIM(line_user_id), '') <> ''
+             AND (
+               LOWER(TRIM(COALESCE(line_display_name, ''))) = LOWER(TRIM($1::text))
+               OR LOWER(TRIM(username)) = LOWER(TRIM($1::text))
+             )
+           ORDER BY id ASC
+           LIMIT 2`,
+          [rawMember]
+        );
+        if (nameRs.rowCount === 0) return safeJsonError(res, 400, 'name_not_found');
+        if (nameRs.rowCount > 1) return safeJsonError(res, 400, 'name_ambiguous');
+        lineTo = String(nameRs.rows[0].line_user_id || '').trim();
+        targetUserId = nameRs.rows[0].id;
+      } else {
+        // 預設送給自己
+        const uRs = await query('SELECT line_user_id FROM users WHERE id = $1', [req.authUser.uid]);
+        lineTo = String(uRs.rows[0]?.line_user_id || '').trim();
+        targetUserId = req.authUser.uid;
+      }
+
+      if (!lineTo) return safeJsonError(res, 400, 'no_recipient');
+
+      const pushed = await linePush.pushLineMessages(lineTo, builtMsg.messages, {
+        userId: targetUserId,
+        pushType: 'admin_broadcast_test'
+      });
+      if (!pushed) return safeJsonError(res, 500, 'push_failed');
+      return res.json({ ok: true, sentTo: lineTo });
+    } catch (err) {
+      console.error('test-push error:', err.message);
+      return safeJsonError(res, 500, 'test_push_failed');
+    }
+  });
+
   // ---------- 4. message preview ----------
   app.post('/admin/broadcast/preview-message', requireAdmin, async (req, res) => {
     try {

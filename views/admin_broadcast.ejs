@@ -139,6 +139,15 @@
               <button type="button" class="btn btn-warning" id="btn-preview-msg">預覽訊息</button>
               <div id="msg-status" class="muted">尚未預覽</div>
             </div>
+
+            <div class="broadcast-field test-push-block">
+              <div class="broadcast-field-label">先發測試訊息（真的打 LINE API，建議批次送之前先試）</div>
+              <div class="broadcast-inline-field">
+                <input type="text" id="test-recipient" placeholder="留空 = 送給自己｜或填 LINE userId (U+32 hex)｜或會員顯示名稱/帳號" style="flex:1;min-width:300px;" />
+                <button type="button" class="btn" id="btn-test-push">發測試訊息</button>
+              </div>
+              <div id="test-push-status" class="muted" style="margin-top:6px;font-size:13px;">尚未送出</div>
+            </div>
           </fieldset>
 
           <fieldset class="broadcast-step">
@@ -321,6 +330,13 @@
       .audience-sample table { width: 100%; font-size: 12px; }
       .audience-sample th { text-align: left; color: #6b7280; font-weight: 500; padding: 2px 6px 4px; }
       .audience-sample td { padding: 2px 6px; vertical-align: top; }
+      .test-push-block {
+        margin-top: 14px;
+        padding: 12px 14px;
+        background: #fffdf5;
+        border: 1px dashed #fde68a;
+        border-radius: 10px;
+      }
       .broadcast-tabs {
         display: flex;
         gap: 6px;
@@ -377,7 +393,7 @@
         font-size: 13px;
       }
       .line-mock .lm-hero img { display: block; width: 100%; height: auto; }
-      .line-mock .lm-body { padding: 16px; background: #fffbeb; }
+      .line-mock .lm-body { padding: 16px; background: #ffffff; }
       .line-mock .lm-title { font-size: 18px; font-weight: 700; color: #1f2937; margin: 0 0 6px; word-wrap: break-word; }
       .line-mock .lm-subtitle { font-size: 14px; color: #4b5563; white-space: pre-wrap; word-wrap: break-word; }
       .line-mock .lm-separator { height: 1px; background: #fde68a; margin: 14px 0; }
