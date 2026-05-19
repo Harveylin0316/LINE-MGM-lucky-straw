@@ -240,7 +240,7 @@
     if (!c || typeof c !== 'object') return;
     if (c.type === 'text') {
       var t = document.createElement('div');
-      var isTitle = (c.weight === 'bold' && c.size === 'xl');
+      var isTitle = (c.weight === 'bold' && (c.size === 'xl' || c.size === 'xxl'));
       t.className = isTitle ? 'lm-title' : 'lm-subtitle';
       if (c.color) t.style.color = c.color;
       if (c.size && !isTitle) t.style.fontSize = mapFlexSize(c.size);

@@ -87,7 +87,7 @@ function buildYellowFlexFromTemplate(t, { heroImageUrl } = {}) {
       type: 'text',
       text: t.title,
       weight: 'bold',
-      size: 'xl',
+      size: 'xxl',
       color: COLORS.titleText,
       wrap: true
     });
@@ -96,23 +96,23 @@ function buildYellowFlexFromTemplate(t, { heroImageUrl } = {}) {
     bodyContents.push({
       type: 'text',
       text: t.subtitle,
-      size: 'md',
+      size: 'lg',
       color: COLORS.subtitleText,
       wrap: true,
-      margin: 'md',
-      lineSpacing: '6px'
+      margin: 'lg',
+      lineSpacing: '8px'
     });
   }
   if (t.couponCode) {
     bodyContents.push({
       type: 'box',
       layout: 'vertical',
-      margin: 'lg',
-      paddingTop: 'md',
-      paddingBottom: 'md',
-      paddingStart: 'lg',
-      paddingEnd: 'lg',
-      cornerRadius: '8px',
+      margin: 'xl',
+      paddingTop: 'lg',
+      paddingBottom: 'lg',
+      paddingStart: 'xl',
+      paddingEnd: 'xl',
+      cornerRadius: '10px',
       borderWidth: '1px',
       borderColor: COLORS.couponBorder,
       backgroundColor: COLORS.couponBoxBg,
@@ -120,14 +120,14 @@ function buildYellowFlexFromTemplate(t, { heroImageUrl } = {}) {
         {
           type: 'text',
           text: '優惠碼',
-          size: 'xs',
+          size: 'sm',
           color: COLORS.couponLabel,
           align: 'center'
         },
         {
           type: 'text',
           text: t.couponCode,
-          size: 'xxl',
+          size: '3xl',
           weight: 'bold',
           color: COLORS.couponCode,
           align: 'center',
@@ -152,9 +152,9 @@ function buildYellowFlexFromTemplate(t, { heroImageUrl } = {}) {
       layout: 'vertical',
       margin: 'xl',
       backgroundColor: COLORS.buttonBg,
-      cornerRadius: '8px',
-      paddingTop: 'md',
-      paddingBottom: 'md',
+      cornerRadius: '10px',
+      paddingTop: 'lg',
+      paddingBottom: 'lg',
       paddingStart: 'lg',
       paddingEnd: 'lg',
       action: { type: 'uri', label: t.ctaLabel, uri: t.ctaUrl },
@@ -164,7 +164,7 @@ function buildYellowFlexFromTemplate(t, { heroImageUrl } = {}) {
           text: t.ctaLabel,
           color: COLORS.buttonText,
           weight: 'bold',
-          size: 'md',
+          size: 'lg',
           align: 'center',
           wrap: false
         }
@@ -184,7 +184,7 @@ function buildYellowFlexFromTemplate(t, { heroImageUrl } = {}) {
       type: 'box',
       layout: 'vertical',
       spacing: 'sm',
-      paddingAll: 'lg',
+      paddingAll: 'xl',
       backgroundColor: COLORS.cardBg,
       contents: bodyContents
     }
