@@ -23,7 +23,7 @@ async function logPrizeChange(client, payload) {
   );
 }
 
-function normalizeNextPath(rawNextPath, fallbackPath = '/admin/prizes') {
+function normalizeNextPath(rawNextPath, fallbackPath = '/admin/broadcast') {
   if (typeof rawNextPath !== 'string') return fallbackPath;
   if (!rawNextPath.startsWith('/admin')) return fallbackPath;
   if (rawNextPath.startsWith('//')) return fallbackPath;
@@ -211,7 +211,7 @@ function registerWebRoutes(app, deps) {
     }
   });
 
-  function renderAdminLogin(res, error = null, nextPath = '/admin/prizes') {
+  function renderAdminLogin(res, error = null, nextPath = '/admin/broadcast') {
     return res.render('login', {
       error,
       isAdmin: false,
@@ -223,7 +223,7 @@ function registerWebRoutes(app, deps) {
   }
 
   app.get('/', (req, res) => {
-    if (req.authUser && req.authUser.adm) return res.redirect('/admin/prizes');
+    if (req.authUser && req.authUser.adm) return res.redirect('/admin/broadcast');
     return res.status(404).send('Not found');
   });
 
@@ -236,7 +236,7 @@ function registerWebRoutes(app, deps) {
   });
 
   app.get(hiddenAdminLoginPath, (req, res) => {
-    const nextPath = normalizeNextPath(req.query.next, '/admin/prizes');
+    const nextPath = normalizeNextPath(req.query.next, '/admin/broadcast');
     return renderAdminLogin(res, null, nextPath);
   });
 
@@ -249,7 +249,7 @@ function registerWebRoutes(app, deps) {
   });
 
   async function handleAdminLogin(req, res, next) {
-    const nextPath = normalizeNextPath(req.body.nextPath, '/admin/prizes');
+    const nextPath = normalizeNextPath(req.body.nextPath, '/admin/broadcast');
     try {
       const ipKey = adminLoginThrottle.ipKeyFromReq(req);
       if (await adminLoginThrottle.isBlocked(ipKey)) {
