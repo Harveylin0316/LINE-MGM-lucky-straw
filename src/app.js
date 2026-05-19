@@ -355,8 +355,19 @@ registerLiffRoutes(app, {
   liffCampaignPageUrl: LIFF_CAMPAIGN_PAGE_URL
 });
 
-app.use((err, _req, res, _next) => {
-  console.error('Unhandled error:', err.message);
+app.use((err, req, res, _next) => {
+  console.error('Unhandled error:', err && (err.stack || err.message));
+  // 對 fetch API 的 endpoint 回 JSON，避免前端拿到 "Server error" plain text 無法解析
+  const wantsJson =
+    (req.headers && (req.headers['accept'] || '').includes('application/json')) ||
+    (req.path && req.path.startsWith('/admin/broadcast/'));
+  if (wantsJson) {
+    return res.status(500).json({
+      ok: false,
+      error: 'server_error',
+      detail: err && err.message ? String(err.message).slice(0, 500) : 'unknown'
+    });
+  }
   res.status(500).send('Server error');
 });
 

@@ -179,10 +179,10 @@ function registerAdminBroadcastRoutes(app, deps) {
 
   // ---------- 3b. test push（單筆，真的打 LINE API） ----------
   app.post('/admin/broadcast/test-push', requireAdmin, async (req, res) => {
-    if (!lineChannelAccessToken) {
-      return safeJsonError(res, 400, 'no_line_channel_access_token');
-    }
     try {
+      if (!lineChannelAccessToken) {
+        return safeJsonError(res, 400, 'no_line_channel_access_token');
+      }
       const body = req.body || {};
       const rawTestId = String(body.test_line_user_id || '').trim();
       const rawMember = String(body.test_member_name || '').trim().slice(0, 200);
@@ -232,8 +232,10 @@ function registerAdminBroadcastRoutes(app, deps) {
       if (!pushed) return safeJsonError(res, 500, 'push_failed');
       return res.json({ ok: true, sentTo: lineTo });
     } catch (err) {
-      console.error('test-push error:', err.message);
-      return safeJsonError(res, 500, 'test_push_failed');
+      console.error('test-push error:', err && (err.stack || err.message));
+      return safeJsonError(res, 500, 'test_push_failed', {
+        detail: err && err.message ? String(err.message).slice(0, 500) : ''
+      });
     }
   });
 

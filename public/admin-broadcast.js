@@ -375,6 +375,7 @@
           statusEl.innerHTML = '✓ 已送出到 <code style="font-size:12px">' + escapeHtml(data.sentTo || '') + '</code>';
         } else {
           var msg = errorMap(data.error);
+          if (data.detail) msg += '｜' + data.detail;
           statusEl.textContent = '失敗：' + msg;
         }
       })
