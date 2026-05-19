@@ -163,7 +163,7 @@
         if (!data.ok) { statusEl.textContent = '失敗：' + (data.error || ''); return; }
         state.heroMediaId = data.mediaId;
         state.heroUrl = data.url;
-        statusEl.innerHTML = '已上傳 ✓ <a href="' + data.url + '" target="_blank" rel="noopener">查看</a>';
+        statusEl.innerHTML = '已上傳 <a href="' + data.url + '" target="_blank" rel="noopener">查看</a>';
         state.messagePreviewed = false;
         updateSendButton();
         saveDraft();
@@ -228,7 +228,7 @@
         }
         renderFlexMock(data.messages[0], previewEl);
         state.messagePreviewed = true;
-        statusEl.textContent = '預覽 OK ✓';
+        statusEl.textContent = '預覽完成';
         updateSendButton();
       })
       .catch(function (e) { statusEl.textContent = '網路錯誤：' + e.message; });
@@ -402,7 +402,7 @@
       .then(function (r) { return r.json(); })
       .then(function (data) {
         if (data.ok) {
-          statusEl.innerHTML = '✓ 已送出到 <code style="font-size:12px">' + escapeHtml(data.sentTo || '') + '</code>';
+          statusEl.innerHTML = '已送出到 <code style="font-size:12px">' + escapeHtml(data.sentTo || '') + '</code>';
         } else {
           var msg = errorMap(data.error);
           if (data.detail) msg += '｜' + data.detail;
@@ -489,7 +489,7 @@
       .then(function (r) { return r.json(); })
       .then(function (data) {
         if (data.ok) {
-          statusEl.innerHTML = '✓ 已送給 <strong>' + escapeHtml(label) + '</strong>';
+          statusEl.innerHTML = '已送給 <strong>' + escapeHtml(label) + '</strong>';
         } else {
           var msg = errorMap(data.error);
           if (data.detail) msg += '｜' + data.detail;
@@ -532,7 +532,7 @@
         var fail = 0;
         function next() {
           if (idx >= list.length) {
-            statusEl.innerHTML = '✓ 完成：成功 <strong>' + ok + '</strong> ／ 失敗 <strong>' + fail + '</strong>';
+            statusEl.innerHTML = '完成：成功 <strong>' + ok + '</strong> ／ 失敗 <strong>' + fail + '</strong>';
             return;
           }
           var r = list[idx++];
@@ -566,7 +566,7 @@
       .then(function (r) { return r.json(); })
       .then(function (data) {
         if (data.ok) {
-          statusEl.textContent = '✓ 已加入：' + label;
+          statusEl.textContent = '已加入：' + label;
           $('new-tr-label').value = '';
           $('new-tr-uid').value = '';
           loadTestRecipients();
@@ -663,7 +663,7 @@
           if (data.status === 'cancelled') {
             meta.textContent += '。已取消。';
           } else {
-            meta.textContent = '完成 ✓ 共處理 ' + newProcessed + ' 人。請至「近期批次」查看詳細。';
+            meta.textContent = '完成。共處理 ' + newProcessed + ' 人。請至「近期批次」查看詳細。';
           }
           state.sending = false;
           $('btn-cancel').hidden = true;
@@ -753,7 +753,7 @@
         var hs = $('hero-status');
         if (hs) {
           if (d.hero.url) {
-            hs.innerHTML = '已上傳（草稿）✓ <a href="' + d.hero.url +
+            hs.innerHTML = '已上傳（草稿） <a href="' + d.hero.url +
               '" target="_blank" rel="noopener">查看</a>';
           } else {
             hs.textContent = '已存草稿 (mediaId: ' + d.hero.mediaId.slice(0, 8) + '…)';
@@ -903,10 +903,10 @@
           statusEl.textContent = '失敗：' + (data.error || '') + (data.detail ? '｜' + data.detail : '');
           return;
         }
-        statusEl.innerHTML = '✓ 已儲存「<strong>' + escapeHtml(data.list.name) + '</strong>」' +
+        statusEl.innerHTML = '已儲存「<strong>' + escapeHtml(data.list.name) + '</strong>」' +
           '（' + data.accepted + ' 人' +
           (data.rejectedInvalid > 0 ? '；忽略 ' + data.rejectedInvalid + ' 個格式錯誤' : '') +
-          '）。已切到「📂 已儲存名單」並選好。';
+          '）。已切到「已儲存名單」並選好。';
         $('upload-list-name').value = '';
         $('upload-list-desc').value = '';
         $('upload-list-uids').value = '';
