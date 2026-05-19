@@ -13,7 +13,9 @@ const APP_PUBLIC_TABLES_WITH_RLS = [
   'admin_login_throttle',
   'line_push_media',
   'admin_push_settings',
-  'admin_manual_bonus_logs'
+  'admin_manual_bonus_logs',
+  'admin_broadcasts',
+  'admin_broadcast_recipients'
 ];
 
 /**
@@ -73,6 +75,43 @@ async function initDb({ query, adminUsername, adminPassword, skipDdl = false }) 
       extra_draws_after INTEGER NOT NULL
     )`);
     await query('ALTER TABLE admin_manual_bonus_logs ENABLE ROW LEVEL SECURITY');
+    await query(`CREATE TABLE IF NOT EXISTS admin_broadcasts (
+      id BIGSERIAL PRIMARY KEY,
+      created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+      updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+      status TEXT NOT NULL DEFAULT 'draft',
+      scheduled_at TIMESTAMPTZ,
+      started_at TIMESTAMPTZ,
+      finished_at TIMESTAMPTZ,
+      admin_username TEXT NOT NULL,
+      audience_config JSONB NOT NULL,
+      message_config JSONB NOT NULL,
+      recipient_total INTEGER NOT NULL DEFAULT 0,
+      recipient_ok INTEGER NOT NULL DEFAULT 0,
+      recipient_fail INTEGER NOT NULL DEFAULT 0,
+      recipient_skip INTEGER NOT NULL DEFAULT 0
+    )`);
+    await query('ALTER TABLE admin_broadcasts ENABLE ROW LEVEL SECURITY');
+    await query(`CREATE TABLE IF NOT EXISTS admin_broadcast_recipients (
+      id BIGSERIAL PRIMARY KEY,
+      broadcast_id BIGINT NOT NULL REFERENCES admin_broadcasts(id) ON DELETE CASCADE,
+      user_id INTEGER,
+      line_user_id TEXT NOT NULL,
+      status TEXT NOT NULL DEFAULT 'pending',
+      pushed_at TIMESTAMPTZ,
+      error TEXT,
+      created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+    )`);
+    await query('ALTER TABLE admin_broadcast_recipients ENABLE ROW LEVEL SECURITY');
+    await query(
+      'CREATE INDEX IF NOT EXISTS admin_broadcasts_created_id_desc_idx ON admin_broadcasts (created_at DESC, id DESC)'
+    );
+    await query(
+      'CREATE INDEX IF NOT EXISTS admin_broadcasts_status_idx ON admin_broadcasts (status)'
+    );
+    await query(
+      'CREATE INDEX IF NOT EXISTS admin_broadcast_recipients_broadcast_status_idx ON admin_broadcast_recipients (broadcast_id, status)'
+    );
     await ensureAppServerRlsPolicies(query);
     await query('ALTER TABLE admin_push_settings ADD COLUMN IF NOT EXISTS flex_json JSONB');
     return;
@@ -204,6 +243,34 @@ async function initDb({ query, adminUsername, adminPassword, skipDdl = false }) 
     extra_draws_after INTEGER NOT NULL
   )`);
 
+  await query(`CREATE TABLE IF NOT EXISTS admin_broadcasts (
+    id BIGSERIAL PRIMARY KEY,
+    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    status TEXT NOT NULL DEFAULT 'draft',
+    scheduled_at TIMESTAMPTZ,
+    started_at TIMESTAMPTZ,
+    finished_at TIMESTAMPTZ,
+    admin_username TEXT NOT NULL,
+    audience_config JSONB NOT NULL,
+    message_config JSONB NOT NULL,
+    recipient_total INTEGER NOT NULL DEFAULT 0,
+    recipient_ok INTEGER NOT NULL DEFAULT 0,
+    recipient_fail INTEGER NOT NULL DEFAULT 0,
+    recipient_skip INTEGER NOT NULL DEFAULT 0
+  )`);
+
+  await query(`CREATE TABLE IF NOT EXISTS admin_broadcast_recipients (
+    id BIGSERIAL PRIMARY KEY,
+    broadcast_id BIGINT NOT NULL REFERENCES admin_broadcasts(id) ON DELETE CASCADE,
+    user_id INTEGER,
+    line_user_id TEXT NOT NULL,
+    status TEXT NOT NULL DEFAULT 'pending',
+    pushed_at TIMESTAMPTZ,
+    error TEXT,
+    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+  )`);
+
   // Supabase exposes public schema via PostgREST by default.
   // Enable RLS on app tables to prevent direct external reads/writes.
   await query('ALTER TABLE users ENABLE ROW LEVEL SECURITY');
@@ -218,9 +285,20 @@ async function initDb({ query, adminUsername, adminPassword, skipDdl = false }) 
   await query('ALTER TABLE line_push_media ENABLE ROW LEVEL SECURITY');
   await query('ALTER TABLE admin_push_settings ENABLE ROW LEVEL SECURITY');
   await query('ALTER TABLE admin_manual_bonus_logs ENABLE ROW LEVEL SECURITY');
+  await query('ALTER TABLE admin_broadcasts ENABLE ROW LEVEL SECURITY');
+  await query('ALTER TABLE admin_broadcast_recipients ENABLE ROW LEVEL SECURITY');
 
   await query(
     'CREATE INDEX IF NOT EXISTS admin_login_throttle_ip_created_idx ON admin_login_throttle (ip_key, created_at DESC)'
+  );
+  await query(
+    'CREATE INDEX IF NOT EXISTS admin_broadcasts_created_id_desc_idx ON admin_broadcasts (created_at DESC, id DESC)'
+  );
+  await query(
+    'CREATE INDEX IF NOT EXISTS admin_broadcasts_status_idx ON admin_broadcasts (status)'
+  );
+  await query(
+    'CREATE INDEX IF NOT EXISTS admin_broadcast_recipients_broadcast_status_idx ON admin_broadcast_recipients (broadcast_id, status)'
   );
 
   await query('CREATE INDEX IF NOT EXISTS draw_logs_user_id_id_desc_idx ON draw_logs(user_id, id DESC)');

@@ -13,6 +13,7 @@ const { initDb } = require('./core/dbInit');
 const { createAdminLoginThrottle } = require('./core/adminLoginThrottle');
 const { registerWebRoutes } = require('./routes/web');
 const { registerLiffRoutes } = require('./routes/liff');
+const { registerAdminBroadcastRoutes } = require('./routes/adminBroadcast');
 const { buildLiffPermanentUrl } = require('./core/liffPermalink');
 const { buildPushImageBaseCandidates } = require('./core/linePushImageResolve');
 const { createLineWebhookHandler } = require('./routes/lineWebhook');
@@ -325,6 +326,15 @@ registerWebRoutes(app, {
   inviteFriendsPerDraw: LIFF_INVITE_FRIENDS_PER_DRAW,
   liffLotteryPushUrl: LIFF_LOTTERY_PUSH_URL,
   linePushImageBaseCandidates: LINE_PUSH_IMAGE_BASE_CANDIDATES,
+  resolvePublicSiteOrigin
+});
+
+registerAdminBroadcastRoutes(app, {
+  query,
+  pool,
+  authCore,
+  linePush,
+  lineChannelAccessToken: LINE_CHANNEL_ACCESS_TOKEN,
   resolvePublicSiteOrigin
 });
 

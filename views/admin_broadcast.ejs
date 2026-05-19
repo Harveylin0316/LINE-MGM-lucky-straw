@@ -1,0 +1,419 @@
+<%-
+  include('layout', {
+    user: user,
+    isAdmin: isAdmin,
+    bodyClass: bodyClass,
+    body: `
+    <section class="card broadcast-card">
+      <h1>群發訊息</h1>
+      <p class="muted" style="margin-bottom:12px;">
+        依條件挑收件人，搭配黃色 Flex 模板（或自訂 Flex JSON），透過 LINE Push 一次發給多位用戶。
+        Phase 1 僅支援「立即送」；排程功能規劃於後續釋出。
+      </p>
+
+      ${
+        !hasLineToken
+          ? `<p class="error-banner">尚未設定 <code>LINE_CHANNEL_ACCESS_TOKEN</code>，無法實際送出訊息。可先預覽人數與訊息樣式。</p>`
+          : ''
+      }
+
+      <div class="broadcast-grid">
+        <div class="broadcast-form">
+          <fieldset class="broadcast-step">
+            <legend><span class="step-pill">1</span> 收件人條件</legend>
+
+            <div class="broadcast-field">
+              <div class="broadcast-field-label">中過獎品（可多選）</div>
+              <div class="prize-checkbox-list">
+                ${
+                  Array.isArray(prizes) && prizes.length > 0
+                    ? prizes
+                        .map(
+                          p => `<label class="chip-checkbox">
+                            <input type="checkbox" name="prize_name" value="${p.name.replace(/"/g, '&quot;')}" />
+                            <span>${p.name}</span>
+                          </label>`
+                        )
+                        .join('')
+                    : '<span class="muted">目前沒有可選獎品</span>'
+                }
+              </div>
+              <div class="broadcast-inline-field">
+                <label>
+                  比對方式
+                  <select name="prize_mode" id="prize-mode">
+                    <option value="any">中過其中至少一項</option>
+                    <option value="all">中過全部勾選的獎品</option>
+                    <option value="none">沒中過任何勾選的獎品</option>
+                  </select>
+                </label>
+              </div>
+            </div>
+
+            <div class="broadcast-field">
+              <label class="broadcast-inline-field">
+                <span>邀請好友成功數 ≥</span>
+                <input type="number" id="invite-min" min="0" max="1000" placeholder="留空 = 不限" style="width:120px;" />
+                <span class="muted">（line_invites.status = rewarded）</span>
+              </label>
+            </div>
+
+            <div class="broadcast-field">
+              <label class="broadcast-inline-field">
+                <span>活動期間刮獎狀況</span>
+                <select id="drew-in-campaign">
+                  <option value="">不限</option>
+                  <option value="true">有刮過獎</option>
+                  <option value="false">從未刮過</option>
+                </select>
+              </label>
+            </div>
+
+            <div class="broadcast-action-row">
+              <button type="button" class="btn btn-warning" id="btn-preview-audience">預覽收件人</button>
+              <div id="audience-status" class="audience-status muted">尚未預覽</div>
+            </div>
+            <div id="audience-sample" class="audience-sample" hidden></div>
+          </fieldset>
+
+          <fieldset class="broadcast-step">
+            <legend><span class="step-pill">2</span> 訊息內容</legend>
+
+            <div class="broadcast-tabs">
+              <button type="button" class="tab-btn active" data-mode="template">黃色模板</button>
+              <button type="button" class="tab-btn" data-mode="flex_json">進階 Flex JSON</button>
+            </div>
+
+            <div class="broadcast-tab-pane" id="pane-template">
+              <div class="broadcast-field">
+                <div class="broadcast-field-label">Hero 圖（選填，PNG/JPEG，≤2MB）</div>
+                <div class="broadcast-inline-field">
+                  <input type="file" id="hero-file" accept="image/png,image/jpeg" />
+                  <button type="button" class="btn" id="btn-hero-upload">上傳</button>
+                  <span id="hero-status" class="muted">未上傳</span>
+                </div>
+              </div>
+
+              <div class="broadcast-field">
+                <label>
+                  標題
+                  <input type="text" id="tpl-title" maxlength="100" placeholder="例如：OpenRice 春日饗里活動更新" />
+                </label>
+              </div>
+              <div class="broadcast-field">
+                <label>
+                  副標題（可換行）
+                  <textarea id="tpl-subtitle" maxlength="500" rows="3" placeholder="活動細節說明 / 注意事項"></textarea>
+                </label>
+              </div>
+              <div class="broadcast-field">
+                <label>
+                  CTA 按鈕文字（≤40 字）
+                  <input type="text" id="tpl-cta-label" maxlength="40" placeholder="例如：立即查看活動" />
+                </label>
+              </div>
+              <div class="broadcast-field">
+                <label>
+                  CTA 連結（https:// 開頭）
+                  <input type="url" id="tpl-cta-url" placeholder="https://tw.openrice.com/..." />
+                </label>
+              </div>
+              <div class="broadcast-field">
+                <label>
+                  altText（LINE 通知列／聊天列表顯示，留空自動用標題）
+                  <input type="text" id="tpl-alt" maxlength="400" placeholder="留空用標題" />
+                </label>
+              </div>
+            </div>
+
+            <div class="broadcast-tab-pane" id="pane-flex-json" hidden>
+              <div class="broadcast-field">
+                <label>
+                  Flex JSON（root 必含 type:"flex", altText, contents）
+                  <textarea id="flex-json" rows="14" placeholder='{ "type": "flex", "altText": "...", "contents": { "type": "bubble", ... } }' spellcheck="false"></textarea>
+                </label>
+              </div>
+            </div>
+
+            <div class="broadcast-action-row">
+              <button type="button" class="btn btn-warning" id="btn-preview-msg">預覽訊息</button>
+              <div id="msg-status" class="muted">尚未預覽</div>
+            </div>
+          </fieldset>
+
+          <fieldset class="broadcast-step">
+            <legend><span class="step-pill">3</span> 送出</legend>
+            <p class="muted" style="margin-bottom:10px;">確認預覽 OK 後再送。送出後將分批處理，前端持續輪詢進度直到結束。</p>
+            <div class="broadcast-action-row">
+              <button type="button" class="btn btn-warning btn-large" id="btn-send" disabled>立即送出</button>
+              <button type="button" class="btn" id="btn-cancel" hidden>取消這個批次</button>
+            </div>
+            <div id="send-progress" class="send-progress" hidden>
+              <div class="progress-bar"><div class="progress-bar-inner" id="progress-bar-inner"></div></div>
+              <div class="progress-meta" id="progress-meta">等待開始…</div>
+            </div>
+          </fieldset>
+        </div>
+
+        <aside class="broadcast-preview-side">
+          <h2 class="preview-heading">訊息預覽</h2>
+          <p class="muted" style="font-size:13px;">下方為實際送出的 LINE 卡片視覺（樣式仿 LINE 行動裝置）</p>
+          <div id="msg-preview-wrap" class="line-mock-wrap">
+            <div id="msg-preview" class="line-mock empty">尚未預覽，請先在左邊填好內容後點「預覽訊息」</div>
+          </div>
+        </aside>
+      </div>
+    </section>
+
+    <section class="card">
+      <h2>近期批次（最新 10 筆）</h2>
+      ${
+        Array.isArray(recent) && recent.length > 0
+          ? `<div class="table-responsive"><table class="prize-table">
+              <thead>
+                <tr>
+                  <th>ID</th>
+                  <th>建立時間</th>
+                  <th>建立者</th>
+                  <th>狀態</th>
+                  <th>總數</th>
+                  <th>成功</th>
+                  <th>失敗</th>
+                  <th>跳過</th>
+                </tr>
+              </thead>
+              <tbody>
+                ${recent
+                  .map(
+                    r => `<tr>
+                      <td>${r.id}</td>
+                      <td>${(r.created_at ? new Date(r.created_at).toISOString().replace('T', ' ').slice(0, 19) : '')}</td>
+                      <td>${(r.admin_username || '').replace(/</g, '&lt;')}</td>
+                      <td><span class="status-pill status-${r.status}">${r.status}</span></td>
+                      <td>${r.recipient_total}</td>
+                      <td>${r.recipient_ok}</td>
+                      <td>${r.recipient_fail}</td>
+                      <td>${r.recipient_skip}</td>
+                    </tr>`
+                  )
+                  .join('')}
+              </tbody>
+            </table></div>`
+          : '<p class="muted">尚無紀錄</p>'
+      }
+    </section>
+
+    <style>
+      .broadcast-card { padding-bottom: 12px; }
+      .broadcast-grid {
+        display: grid;
+        grid-template-columns: minmax(0, 1fr) minmax(280px, 360px);
+        gap: 24px;
+        margin-top: 12px;
+      }
+      @media (max-width: 900px) {
+        .broadcast-grid { grid-template-columns: 1fr; }
+      }
+      .broadcast-step {
+        border: 1px solid #fde68a;
+        background: #fffdf5;
+        border-radius: 12px;
+        padding: 16px 18px 18px;
+        margin: 0 0 16px;
+      }
+      .broadcast-step legend {
+        font-weight: 600;
+        color: #1f2937;
+        padding: 0 8px;
+        display: inline-flex;
+        align-items: center;
+        gap: 8px;
+      }
+      .step-pill {
+        background: #facc15;
+        color: #1f2937;
+        font-weight: 700;
+        width: 24px;
+        height: 24px;
+        border-radius: 999px;
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        font-size: 13px;
+      }
+      .broadcast-field { margin-bottom: 12px; }
+      .broadcast-field-label {
+        font-size: 13px;
+        color: #374151;
+        margin-bottom: 6px;
+        font-weight: 500;
+      }
+      .broadcast-field label { display: block; font-size: 13px; color: #374151; }
+      .broadcast-field input[type="text"],
+      .broadcast-field input[type="url"],
+      .broadcast-field input[type="number"],
+      .broadcast-field textarea,
+      .broadcast-field select {
+        width: 100%;
+        margin-top: 4px;
+        padding: 8px 10px;
+        border: 1px solid #d1d5db;
+        border-radius: 8px;
+        font-size: 14px;
+        background: white;
+      }
+      .broadcast-field textarea { font-family: inherit; resize: vertical; }
+      .broadcast-inline-field {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        flex-wrap: wrap;
+      }
+      .broadcast-inline-field label { display: inline-flex; align-items: center; gap: 6px; }
+      .broadcast-inline-field input,
+      .broadcast-inline-field select {
+        width: auto !important;
+        margin-top: 0 !important;
+      }
+      .prize-checkbox-list {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 6px;
+        margin: 4px 0 10px;
+      }
+      .chip-checkbox {
+        display: inline-flex;
+        align-items: center;
+        gap: 6px;
+        padding: 6px 10px;
+        border: 1px solid #fde68a;
+        background: #fffbeb;
+        border-radius: 999px;
+        font-size: 13px;
+        cursor: pointer;
+      }
+      .chip-checkbox input { accent-color: #d97706; }
+      .chip-checkbox:has(input:checked) {
+        background: #facc15;
+        border-color: #d97706;
+        color: #111827;
+        font-weight: 600;
+      }
+      .broadcast-action-row {
+        display: flex;
+        gap: 12px;
+        align-items: center;
+        flex-wrap: wrap;
+        margin-top: 8px;
+      }
+      .audience-status,
+      .audience-sample,
+      .send-progress { font-size: 13px; }
+      .audience-sample {
+        background: white;
+        border: 1px solid #e5e7eb;
+        border-radius: 8px;
+        padding: 8px 12px;
+        margin-top: 8px;
+        max-height: 200px;
+        overflow: auto;
+      }
+      .audience-sample table { width: 100%; font-size: 12px; }
+      .audience-sample th { text-align: left; color: #6b7280; font-weight: 500; padding: 2px 6px 4px; }
+      .audience-sample td { padding: 2px 6px; vertical-align: top; }
+      .broadcast-tabs {
+        display: flex;
+        gap: 6px;
+        margin-bottom: 10px;
+      }
+      .tab-btn {
+        background: #fff;
+        border: 1px solid #d1d5db;
+        padding: 6px 14px;
+        border-radius: 999px;
+        cursor: pointer;
+        font-size: 13px;
+        color: #374151;
+      }
+      .tab-btn.active {
+        background: #facc15;
+        border-color: #d97706;
+        color: #111827;
+        font-weight: 600;
+      }
+      .btn-large { padding: 12px 24px; font-size: 15px; }
+      .send-progress { margin-top: 12px; }
+      .progress-bar {
+        background: #fde68a;
+        border-radius: 999px;
+        height: 10px;
+        overflow: hidden;
+      }
+      .progress-bar-inner {
+        background: linear-gradient(90deg, #facc15, #f59e0b);
+        height: 100%;
+        width: 0%;
+        transition: width 0.3s;
+      }
+      .progress-meta { margin-top: 6px; color: #4b5563; font-size: 13px; }
+      .preview-heading { margin: 0 0 6px; }
+      .line-mock-wrap {
+        background: #f3f4f6;
+        border-radius: 16px;
+        padding: 14px;
+        margin-top: 8px;
+      }
+      .line-mock {
+        background: white;
+        border-radius: 12px;
+        overflow: hidden;
+        box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+        min-height: 120px;
+      }
+      .line-mock.empty {
+        padding: 28px 16px;
+        color: #9ca3af;
+        text-align: center;
+        font-size: 13px;
+      }
+      .line-mock .lm-hero img { display: block; width: 100%; height: auto; }
+      .line-mock .lm-body { padding: 16px; background: #fffbeb; }
+      .line-mock .lm-title { font-size: 18px; font-weight: 700; color: #1f2937; margin: 0 0 6px; word-wrap: break-word; }
+      .line-mock .lm-subtitle { font-size: 14px; color: #4b5563; white-space: pre-wrap; word-wrap: break-word; }
+      .line-mock .lm-separator { height: 1px; background: #fde68a; margin: 14px 0; }
+      .line-mock .lm-cta {
+        display: block;
+        background: #facc15;
+        color: #1f2937;
+        font-weight: 700;
+        text-align: center;
+        padding: 12px;
+        border-radius: 8px;
+        text-decoration: none;
+        word-wrap: break-word;
+      }
+      .status-pill {
+        display: inline-block;
+        padding: 2px 8px;
+        border-radius: 999px;
+        font-size: 12px;
+        background: #e5e7eb;
+        color: #374151;
+      }
+      .status-pill.status-running { background: #fde68a; color: #92400e; }
+      .status-pill.status-done { background: #d1fae5; color: #065f46; }
+      .status-pill.status-cancelled,
+      .status-pill.status-failed { background: #fee2e2; color: #991b1b; }
+    </style>
+
+    <script id="broadcast-init-data" type="application/json">${JSON.stringify({
+      hasLineToken: Boolean(hasLineToken),
+      maxRecipients: maxRecipients,
+      chunkSize: chunkSize,
+      fieldLimits: fieldLimits
+    }).replace(/</g, '\\u003c')}</script>
+
+    <script src="/admin-broadcast.js" defer></script>
+    `
+  })
+%>

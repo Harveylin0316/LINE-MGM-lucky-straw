@@ -1,0 +1,145 @@
+/**
+ * 群發訊息「收件人條件」查詢 builder
+ *
+ * 條件結構（JSON）：
+ * {
+ *   prizeFilter: {
+ *     mode: 'any' | 'all' | 'none',     // 中過任一 / 中過全部 / 從未中過這些獎
+ *     prizeNames: string[]               // 用 prize_name 字串比對（與 draw_logs 一致）
+ *   } | null,
+ *   inviteCompletedMin: number | null,  // 邀請成功 rewarded 數 ≥ N
+ *   drewInCampaign: boolean | null      // true = 活動期間刮過; false = 從未刮過
+ * }
+ *
+ * 共用過濾：line_user_id 非空、非管理員。
+ */
+
+const MAX_RECIPIENTS_PER_BROADCAST = 5000;
+const PREVIEW_SAMPLE_LIMIT = 10;
+
+function normalizeConditions(raw) {
+  const safe = raw && typeof raw === 'object' ? raw : {};
+  const out = { prizeFilter: null, inviteCompletedMin: null, drewInCampaign: null };
+
+  if (safe.prizeFilter && typeof safe.prizeFilter === 'object') {
+    const mode = ['any', 'all', 'none'].includes(safe.prizeFilter.mode) ? safe.prizeFilter.mode : 'any';
+    const prizeNames = Array.isArray(safe.prizeFilter.prizeNames)
+      ? [...new Set(safe.prizeFilter.prizeNames.map(n => String(n || '').trim()).filter(Boolean))]
+      : [];
+    if (prizeNames.length > 0) {
+      out.prizeFilter = { mode, prizeNames };
+    }
+  }
+
+  const n = Number(safe.inviteCompletedMin);
+  if (Number.isInteger(n) && n > 0 && n <= 1000) {
+    out.inviteCompletedMin = n;
+  }
+
+  if (safe.drewInCampaign === true || safe.drewInCampaign === false) {
+    out.drewInCampaign = safe.drewInCampaign;
+  }
+
+  return out;
+}
+
+function hasAnyCondition(conds) {
+  return Boolean(conds.prizeFilter || conds.inviteCompletedMin !== null || conds.drewInCampaign !== null);
+}
+
+function buildWhere(conds) {
+  const params = [];
+  const where = [
+    'u.line_user_id IS NOT NULL',
+    "BTRIM(u.line_user_id) <> ''",
+    "u.is_admin = false"
+  ];
+
+  if (conds.prizeFilter) {
+    params.push(conds.prizeFilter.prizeNames);
+    const p = `$${params.length}::text[]`;
+    if (conds.prizeFilter.mode === 'any') {
+      where.push(`EXISTS (
+        SELECT 1 FROM draw_logs d
+        WHERE d.user_id = u.id AND d.is_win = true AND d.prize_name = ANY(${p})
+      )`);
+    } else if (conds.prizeFilter.mode === 'all') {
+      where.push(`(
+        SELECT COUNT(DISTINCT d.prize_name) FROM draw_logs d
+        WHERE d.user_id = u.id AND d.is_win = true AND d.prize_name = ANY(${p})
+      ) = ${conds.prizeFilter.prizeNames.length}`);
+    } else if (conds.prizeFilter.mode === 'none') {
+      where.push(`NOT EXISTS (
+        SELECT 1 FROM draw_logs d
+        WHERE d.user_id = u.id AND d.is_win = true AND d.prize_name = ANY(${p})
+      )`);
+    }
+  }
+
+  if (conds.inviteCompletedMin !== null) {
+    params.push(conds.inviteCompletedMin);
+    where.push(`(
+      SELECT COUNT(*) FROM line_invites li
+      WHERE li.inviter_user_id = u.id AND li.status = 'rewarded'
+    ) >= $${params.length}`);
+  }
+
+  if (conds.drewInCampaign === true) {
+    where.push(`EXISTS (SELECT 1 FROM draw_logs d WHERE d.user_id = u.id)`);
+  } else if (conds.drewInCampaign === false) {
+    where.push(`NOT EXISTS (SELECT 1 FROM draw_logs d WHERE d.user_id = u.id)`);
+  }
+
+  return { whereSql: where.join(' AND '), params };
+}
+
+async function previewAudience(query, rawConditions) {
+  const conds = normalizeConditions(rawConditions);
+  if (!hasAnyCondition(conds)) {
+    return { total: 0, sample: [], conditions: conds, error: '請至少選一個條件，避免群發給所有用戶。' };
+  }
+  const { whereSql, params } = buildWhere(conds);
+  const countSql = `SELECT COUNT(DISTINCT u.id) AS total FROM users u WHERE ${whereSql}`;
+  const sampleParams = params.slice();
+  sampleParams.push(PREVIEW_SAMPLE_LIMIT);
+  const sampleSql = `
+    SELECT u.id, u.line_user_id, u.line_display_name, u.username
+    FROM users u
+    WHERE ${whereSql}
+    ORDER BY u.id ASC
+    LIMIT $${sampleParams.length}
+  `;
+  const [c, s] = await Promise.all([query(countSql, params), query(sampleSql, sampleParams)]);
+  return {
+    total: Number(c.rows[0]?.total || 0),
+    sample: s.rows,
+    conditions: conds,
+    error: null
+  };
+}
+
+async function fetchAudienceRecipients(query, rawConditions, { limit = MAX_RECIPIENTS_PER_BROADCAST } = {}) {
+  const conds = normalizeConditions(rawConditions);
+  if (!hasAnyCondition(conds)) return { conditions: conds, rows: [] };
+  const { whereSql, params } = buildWhere(conds);
+  const cappedLimit = Math.min(Math.max(1, Number(limit) || MAX_RECIPIENTS_PER_BROADCAST), MAX_RECIPIENTS_PER_BROADCAST);
+  params.push(cappedLimit);
+  const sql = `
+    SELECT u.id AS user_id, u.line_user_id
+    FROM users u
+    WHERE ${whereSql}
+    ORDER BY u.id ASC
+    LIMIT $${params.length}
+  `;
+  const rs = await query(sql, params);
+  return { conditions: conds, rows: rs.rows };
+}
+
+module.exports = {
+  MAX_RECIPIENTS_PER_BROADCAST,
+  PREVIEW_SAMPLE_LIMIT,
+  normalizeConditions,
+  hasAnyCondition,
+  previewAudience,
+  fetchAudienceRecipients
+};
