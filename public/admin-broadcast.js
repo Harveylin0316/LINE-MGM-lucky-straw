@@ -164,7 +164,7 @@
         if (!data.ok) { statusEl.textContent = '失敗：' + (data.error || ''); return; }
         state.heroMediaId = data.mediaId;
         state.heroUrl = data.url;
-        statusEl.innerHTML = '已上傳 <a href="' + data.url + '" target="_blank" rel="noopener">查看</a>';
+        renderHeroStatus(false);
         state.messagePreviewed = false;
         updateSendButton();
         saveDraft();
@@ -824,15 +824,7 @@
       if (d.hero && d.hero.mediaId) {
         state.heroMediaId = d.hero.mediaId;
         state.heroUrl = d.hero.url || null;
-        var hs = $('hero-status');
-        if (hs) {
-          if (d.hero.url) {
-            hs.innerHTML = '已上傳（草稿） <a href="' + d.hero.url +
-              '" target="_blank" rel="noopener">查看</a>';
-          } else {
-            hs.textContent = '已存草稿 (mediaId: ' + d.hero.mediaId.slice(0, 8) + '…)';
-          }
-        }
+        renderHeroStatus(true);
       }
       if (d.mode === 'flex_json') {
         var jsonBtn = document.querySelector('.tab-btn[data-mode="flex_json"]');
@@ -857,10 +849,44 @@
     });
     state.heroMediaId = null;
     state.heroUrl = null;
-    var hs = $('hero-status');
-    if (hs) hs.textContent = '未上傳';
+    var fi = $('hero-file');
+    if (fi) fi.value = '';
+    renderHeroStatus(false);
     var ds = $('draft-status-time');
     if (ds) ds.textContent = '已清除草稿';
+  }
+
+  // ----- hero status 渲染（含「移除」link）-----
+  function renderHeroStatus(isFromDraft) {
+    var hs = $('hero-status');
+    if (!hs) return;
+    if (state.heroMediaId && state.heroUrl) {
+      hs.innerHTML =
+        (isFromDraft ? '已上傳（草稿）' : '已上傳') +
+        ' <a href="' + state.heroUrl + '" target="_blank" rel="noopener">查看</a>' +
+        ' <button type="button" class="link-btn btn-hero-remove" style="color:#dc2626;margin-left:8px;">移除</button>';
+      var rmBtn = hs.querySelector('.btn-hero-remove');
+      if (rmBtn) rmBtn.addEventListener('click', clearHero);
+    } else if (state.heroMediaId) {
+      hs.innerHTML =
+        '已存草稿 (mediaId: ' + state.heroMediaId.slice(0, 8) + '…)' +
+        ' <button type="button" class="link-btn btn-hero-remove" style="color:#dc2626;margin-left:8px;">移除</button>';
+      var rmBtn2 = hs.querySelector('.btn-hero-remove');
+      if (rmBtn2) rmBtn2.addEventListener('click', clearHero);
+    } else {
+      hs.textContent = '未上傳';
+    }
+  }
+
+  function clearHero() {
+    state.heroMediaId = null;
+    state.heroUrl = null;
+    state.messagePreviewed = false;
+    var fi = $('hero-file');
+    if (fi) fi.value = '';
+    renderHeroStatus(false);
+    updateSendButton();
+    saveDraft();
   }
 
   DRAFT_FIELDS.forEach(function (id) {
