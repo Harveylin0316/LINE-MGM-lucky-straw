@@ -8,6 +8,16 @@
  * - 接受 messageConfig.mode = 'template' | 'flex_json' 兩種模式。
  */
 
+/**
+ * 預先存在 line_push_media 的「OpenRice 黃色品牌 bar」(1200x80 純色 PNG)。
+ * 沒有 user 上傳 hero 時，自動套這個 bar 當 hero — 達成兩個目的：
+ *   1. 品牌一致（每則訊息都有 OpenRice 黃 header）
+ *   2. 開信率追蹤（hero 圖被 fetch → server 寫 view log）
+ * Migration: see add_admin_broadcast_views（同時期 seed 這張圖）。
+ */
+const DEFAULT_BRAND_BAR_MEDIA_ID = 'fcc72600-0000-4000-8000-000000000001';
+const DEFAULT_BRAND_BAR_ASPECT_RATIO = '15:1';
+
 const FIELD_LIMITS = {
   title: 100,
   subtitle: 500,
@@ -79,7 +89,7 @@ function validateTemplateInput(input) {
   return { ok: true, value: t };
 }
 
-function buildYellowFlexFromTemplate(t, { heroImageUrl } = {}) {
+function buildYellowFlexFromTemplate(t, { heroImageUrl, heroIsBrandBar } = {}) {
   const bodyContents = [];
 
   if (t.title) {
@@ -200,7 +210,7 @@ function buildYellowFlexFromTemplate(t, { heroImageUrl } = {}) {
       type: 'image',
       url: heroImageUrl,
       size: 'full',
-      aspectRatio: '20:13',
+      aspectRatio: heroIsBrandBar ? DEFAULT_BRAND_BAR_ASPECT_RATIO : '20:13',
       aspectMode: 'cover'
     };
   }
@@ -245,14 +255,20 @@ function buildLineMessages(messageConfig, { heroImageBaseUrl, broadcastId } = {}
   const v = validateTemplateInput(t);
   if (!v.ok) return { ok: false, error: v.error };
 
+  // Hero 圖選擇邏輯：
+  //   user 上傳 → 用 user 的
+  //   user 沒上傳 → 套 OpenRice 黃色品牌 bar 當 default（細條，能追蹤開信率）
   let heroImageUrl = '';
-  if (t.heroMediaId && heroImageBaseUrl && /^https:\/\//i.test(heroImageBaseUrl)) {
+  let heroIsBrandBar = false;
+  const effectiveHeroMediaId = t.heroMediaId || DEFAULT_BRAND_BAR_MEDIA_ID;
+  if (effectiveHeroMediaId && heroImageBaseUrl && /^https:\/\//i.test(heroImageBaseUrl)) {
     const origin = heroImageBaseUrl.replace(/\/+$/, '');
+    if (!t.heroMediaId) heroIsBrandBar = true;
     // 有 broadcastId → 用 /v/b/<id>/<mediaId> 中介 endpoint，server 寫 view log（開信率 proxy）
     // 無 broadcastId（譬如 test-push、後台預覽）→ 原本 /p/line-media/<id>，不追蹤
     heroImageUrl = broadcastId
-      ? `${origin}/v/b/${broadcastId}/${t.heroMediaId}`
-      : `${origin}/p/line-media/${t.heroMediaId}`;
+      ? `${origin}/v/b/${broadcastId}/${effectiveHeroMediaId}`
+      : `${origin}/p/line-media/${effectiveHeroMediaId}`;
   }
 
   // 點擊追蹤：把模板 CTA URL 包成中介 redirect endpoint
@@ -269,13 +285,15 @@ function buildLineMessages(messageConfig, { heroImageBaseUrl, broadcastId } = {}
     tForBuild.ctaUrl = `${origin}/r/b/${broadcastId}`;
   }
 
-  const flex = buildYellowFlexFromTemplate(tForBuild, { heroImageUrl });
+  const flex = buildYellowFlexFromTemplate(tForBuild, { heroImageUrl, heroIsBrandBar });
   return { ok: true, messages: [flex] };
 }
 
 module.exports = {
   FIELD_LIMITS,
   COLORS,
+  DEFAULT_BRAND_BAR_MEDIA_ID,
+  DEFAULT_BRAND_BAR_ASPECT_RATIO,
   isValidHttpUrl,
   normalizeTemplateInput,
   validateTemplateInput,
