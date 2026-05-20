@@ -231,12 +231,15 @@
                 </div>
                 <div id="json-url-list"></div>
               </div>
-              <div class="broadcast-field">
-                <label>
-                  Flex JSON（root 必含 type:"flex", altText, contents）
-                  <textarea id="flex-json" rows="14" placeholder='{ "type": "flex", "altText": "...", "contents": { "type": "bubble", ... } }' spellcheck="false"></textarea>
-                </label>
-              </div>
+              <details class="json-textarea-block">
+                <summary>進階：直接編輯 Flex JSON（一般不需要動，填完上方助手即可）</summary>
+                <div class="broadcast-field">
+                  <label>
+                    Flex JSON（root 必含 type:"flex", altText, contents）
+                    <textarea id="flex-json" rows="14" placeholder='{ "type": "flex", "altText": "...", "contents": { "type": "bubble", ... } }' spellcheck="false"></textarea>
+                  </label>
+                </div>
+              </details>
             </div>
 
             <!-- A/B variant B 編輯區（啟用 A/B test 才顯示） -->
@@ -722,6 +725,32 @@
         background: #fff;
       }
       .jur-status { font-size: 12px; color: #92400e; flex: 0 0 auto; }
+      .jir-context, .jur-context {
+        display: inline-block;
+        font-weight: 600;
+        color: #1f2937;
+        margin-right: 6px;
+      }
+      .jir-ph, .jur-ph {
+        font-size: 10px;
+        color: #9ca3af;
+        font-family: monospace;
+      }
+      .json-textarea-block {
+        margin-top: 10px;
+        background: #f9fafb;
+        border: 1px solid #e5e7eb;
+        border-radius: 8px;
+        padding: 6px 10px;
+      }
+      .json-textarea-block > summary {
+        cursor: pointer;
+        font-size: 12px;
+        color: #6b7280;
+        padding: 4px 0;
+      }
+      .json-textarea-block > summary:hover { color: #1f2937; }
+      .json-textarea-block[open] > summary { margin-bottom: 8px; }
       .jir-remove {
         background: none;
         border: none;

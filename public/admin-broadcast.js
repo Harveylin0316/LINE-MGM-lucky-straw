@@ -1336,6 +1336,106 @@
     /(?:p\/line-media|v\/b\/[^/'"\\s]+)\/([0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}|REPLACE_[A-Z0-9_]+)/gi;
   // 純 placeholder（給 URL form 用）
   var JSON_URL_PLACEHOLDER_RE = /\b(REPLACE_[A-Z0-9_]+)\b/g;
+  var ANY_REPLACE_RE = /REPLACE_[A-Z0-9_]+/;
+  var MEDIA_ID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
+  // ----- 智慧 context 偵測：parse JSON 後找出每個 placeholder 對應的訊息位置 -----
+  function findFirstText(arr) {
+    if (!Array.isArray(arr)) return '';
+    for (var i = 0; i < arr.length; i++) {
+      var item = arr[i];
+      if (item && item.type === 'text' && typeof item.text === 'string' && item.text.trim()) {
+        return item.text.trim();
+      }
+      if (item && item.type === 'box' && Array.isArray(item.contents)) {
+        var sub = findFirstText(item.contents);
+        if (sub) return sub;
+      }
+    }
+    return '';
+  }
+
+  function extractBubbleLabel(bubble) {
+    if (!bubble || typeof bubble !== 'object') return '';
+    // 優先順序：header 第一個 text > body 第一個 text > footer 第一個 text
+    var sources = [];
+    if (bubble.header && Array.isArray(bubble.header.contents)) sources.push(bubble.header.contents);
+    if (bubble.body && Array.isArray(bubble.body.contents)) sources.push(bubble.body.contents);
+    if (bubble.footer && Array.isArray(bubble.footer.contents)) sources.push(bubble.footer.contents);
+    for (var i = 0; i < sources.length; i++) {
+      var t = findFirstText(sources[i]);
+      if (t) return t;
+    }
+    return '';
+  }
+
+  function extractActionLabel(node) {
+    if (!node || typeof node !== 'object') return '';
+    // 1. action.label
+    if (node.action && typeof node.action.label === 'string' && node.action.label.trim()) {
+      var lbl = node.action.label.trim();
+      // 忽略過於通用的 default
+      if (lbl !== 'OPEN' && lbl !== '查看' && lbl !== '詳情' && lbl !== '修改') {
+        return lbl;
+      }
+    }
+    // 2. node 是 text → 用 text 本身
+    if (node.type === 'text' && typeof node.text === 'string' && node.text.trim()) {
+      return node.text.trim();
+    }
+    // 3. node 是 box → 找 contents 內第一個 text
+    if (node.type === 'box' && Array.isArray(node.contents)) {
+      var t = findFirstText(node.contents);
+      if (t) return t;
+    }
+    // 4. 退回 action.label（即使是通用詞）
+    if (node.action && typeof node.action.label === 'string') return node.action.label;
+    return '';
+  }
+
+  function walkContext(node, ctx, ancestorBubbleLabel) {
+    if (!node || typeof node !== 'object') return;
+    var bubbleLabel = ancestorBubbleLabel;
+    if (node.type === 'bubble') {
+      bubbleLabel = extractBubbleLabel(node);
+    }
+    // image with REPLACE_ 或 mediaId UUID in url
+    if (node.type === 'image' && typeof node.url === 'string') {
+      var mi = node.url.match(/\/(?:p\/line-media|v\/b\/[^/'"\\s]+)\/([0-9a-f-]{36}|REPLACE_[A-Z0-9_]+)/i);
+      if (mi) {
+        var imgKey = mi[1];
+        ctx.image[imgKey] = { label: bubbleLabel || '' };
+      }
+    }
+    // action.uri with REPLACE_
+    if (node.action && node.action.type === 'uri' && typeof node.action.uri === 'string') {
+      var mu = node.action.uri.match(ANY_REPLACE_RE);
+      if (mu) {
+        ctx.url[mu[0]] = { label: extractActionLabel(node) };
+      }
+    }
+    // 走 children
+    Object.keys(node).forEach(function (k) {
+      var v = node[k];
+      if (Array.isArray(v)) {
+        v.forEach(function (item) { walkContext(item, ctx, bubbleLabel); });
+      } else if (v && typeof v === 'object') {
+        walkContext(v, ctx, bubbleLabel);
+      }
+    });
+  }
+
+  function scanJsonContext() {
+    var raw = $('flex-json').value || '';
+    var ctx = { image: {}, url: {} };
+    try {
+      var parsed = JSON.parse(raw);
+      walkContext(parsed, ctx, '');
+    } catch (e) {
+      // ignore — JSON 半輸入狀態，沒 context 也 OK
+    }
+    return ctx;
+  }
 
   // image scan：永遠 rebuild image list，每個 URL 顯示一個 row（含已綁定 mediaId 的）
   function scanJsonImages() {
@@ -1347,7 +1447,8 @@
     while ((m = JSON_IMAGE_URL_RE.exec(raw)) !== null) {
       if (!seen[m[1]]) { seen[m[1]] = true; list.push(m[1]); }
     }
-    renderJsonImageRows(list);
+    var ctx = scanJsonContext();
+    renderJsonImageRows(list, ctx.image);
   }
 
   // URL scan：rebuild URL list 只列尚未套用的 REPLACE_* placeholder
@@ -1372,16 +1473,13 @@
     $$('.json-url-row').forEach(function (r) {
       existing[r.getAttribute('data-id')] = r;
     });
-    // 全新出現的 placeholder → append；舊的（含已套用）keep；不存在的 placeholder
-    // 但 row 也不在 DOM → 也不會出現
     var combined = [];
-    // existing rows（含已套用 URL）排前面
     Object.keys(existing).forEach(function (k) { combined.push(k); });
-    // 新發現的 placeholder
     newPlaceholders.forEach(function (p) {
       if (!existing[p]) combined.push(p);
     });
-    renderJsonUrlRows(combined, existing);
+    var ctx = scanJsonContext();
+    renderJsonUrlRows(combined, existing, ctx.url);
   }
 
   // 同時 scan image + URL（給 tab 切換 / 模板載入 / 手動掃描用）
@@ -1390,7 +1488,7 @@
     scanJsonUrls();
   }
 
-  function renderJsonUrlRows(rowAnchors, preservedRows) {
+  function renderJsonUrlRows(rowAnchors, preservedRows, contextMap) {
     var helper = $('json-url-helper');
     var list = $('json-url-list');
     if (rowAnchors.length === 0) {
@@ -1405,16 +1503,26 @@
       var statusHtml = '未套用';
       var labelHtml;
       var isApplied = existing && existing.getAttribute('data-applied') === '1';
+      // 取 context label — 已套用 row 取自 data-context；未套用 row 取自當前 ctx
+      var ctxLabel = '';
+      if (isApplied && existing) {
+        ctxLabel = existing.getAttribute('data-context') || '';
+      } else if (contextMap && contextMap[anchor]) {
+        ctxLabel = contextMap[anchor].label || '';
+      }
+      var contextHtml = ctxLabel
+        ? '<span class="jur-context">「' + escapeHtml(ctxLabel) + '」</span>'
+        : '';
       if (isApplied) {
-        // 之前已套用過，anchor 是已替換的 URL（或 placeholder）
         inputVal = anchor;
         statusHtml = '<span style="color:#065f46;">已套用</span>';
-        labelHtml = 'URL ' + (i + 1) + '：<span class="muted" style="font-size:11px;">（已綁定）</span>';
+        labelHtml = 'URL ' + (i + 1) + '：' + contextHtml + '<span class="muted" style="font-size:11px;">（已綁定）</span>';
       } else {
-        labelHtml = 'URL ' + (i + 1) + '：<code>' + anchor + '</code>';
+        labelHtml = 'URL ' + (i + 1) + '：' + contextHtml + '<span class="jur-ph">' + anchor + '</span>';
       }
       return '<div class="json-url-row" data-id="' + anchor + '"' +
-        (isApplied ? ' data-applied="1"' : '') + '>' +
+        (isApplied ? ' data-applied="1"' : '') +
+        (ctxLabel ? ' data-context="' + escapeHtml(ctxLabel) + '"' : '') + '>' +
         '<div class="jur-label">' + labelHtml + '</div>' +
         '<input type="url" class="jur-input" placeholder="https://..." value="' + inputVal.replace(/"/g, '&quot;') + '" />' +
         '<button type="button" class="btn jur-apply">' + (isApplied ? '再套用' : '套用') + '</button>' +
@@ -1460,7 +1568,7 @@
     return /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(String(id || ''));
   }
 
-  function renderJsonImageRows(ids) {
+  function renderJsonImageRows(ids, contextMap) {
     var helper = $('json-image-helper');
     var list = $('json-image-list');
     if (ids.length === 0) {
@@ -1471,11 +1579,14 @@
     helper.hidden = false;
     list.innerHTML = ids.map(function (id, i) {
       var bound = isMediaIdLike(id);
-      var labelHtml = '圖片 ' + (i + 1) + '：' + (
-        bound
-          ? '<span style="color:#065f46;font-weight:600;">已綁定</span> <code>' + id.slice(0, 8) + '…</code>'
-          : '<code>' + id + '</code>'
-      );
+      var ctx = (contextMap && contextMap[id]) || null;
+      var contextHtml = ctx && ctx.label
+        ? '<span class="jir-context">「' + escapeHtml(ctx.label) + '」</span>'
+        : '';
+      var idHint = bound
+        ? '<span style="color:#065f46;font-weight:600;">已綁定</span> <code>' + id.slice(0, 8) + '…</code>'
+        : '<span class="jir-ph">' + id + '</span>';
+      var labelHtml = '圖 ' + (i + 1) + '：' + contextHtml + idHint;
       var btnLabel = bound ? '更換' : '上傳';
       return '<div class="json-image-row" data-id="' + id + '">' +
         '<div class="jir-label">' + labelHtml + '</div>' +
