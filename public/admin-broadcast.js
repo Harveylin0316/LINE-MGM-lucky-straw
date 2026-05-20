@@ -347,7 +347,7 @@
   });
 
   // ------------------------------------------------------------------
-  // 7. render Flex mock (簡化版客戶端 mock，僅針對我們的模板結構)
+  // 7. render Flex mock (支援 bubble 跟 carousel，含 header/hero/body/footer)
   // ------------------------------------------------------------------
   function renderFlexMock(flexMsg, container) {
     container.classList.remove('empty');
@@ -357,7 +357,35 @@
       container.textContent = '無法預覽（非 Flex 訊息）';
       return;
     }
-    var bubble = flexMsg.contents;
+    var contents = flexMsg.contents;
+    if (contents.type === 'carousel' && Array.isArray(contents.contents)) {
+      var carouselDiv = document.createElement('div');
+      carouselDiv.className = 'lm-carousel';
+      contents.contents.forEach(function (bubble) {
+        var bubbleDiv = document.createElement('div');
+        bubbleDiv.className = 'lm-bubble-in-carousel';
+        renderBubble(bubble, bubbleDiv);
+        carouselDiv.appendChild(bubbleDiv);
+      });
+      container.appendChild(carouselDiv);
+      return;
+    }
+    renderBubble(contents, container);
+  }
+
+  function renderBubble(bubble, container) {
+    if (!bubble || typeof bubble !== 'object') return;
+    // header
+    if (bubble.header && Array.isArray(bubble.header.contents)) {
+      var headerDiv = document.createElement('div');
+      headerDiv.className = 'lm-header';
+      applyBoxStyle(bubble.header, headerDiv);
+      bubble.header.contents.forEach(function (c) {
+        renderFlexComponent(c, headerDiv);
+      });
+      container.appendChild(headerDiv);
+    }
+    // hero
     if (bubble.hero && bubble.hero.url) {
       var heroDiv = document.createElement('div');
       heroDiv.className = 'lm-hero';
@@ -367,14 +395,50 @@
       heroDiv.appendChild(img);
       container.appendChild(heroDiv);
     }
-    var body = bubble.body;
-    if (body && Array.isArray(body.contents)) {
+    // body
+    if (bubble.body && Array.isArray(bubble.body.contents)) {
       var bodyDiv = document.createElement('div');
       bodyDiv.className = 'lm-body';
-      body.contents.forEach(function (c) {
+      applyBoxStyle(bubble.body, bodyDiv);
+      bubble.body.contents.forEach(function (c) {
         renderFlexComponent(c, bodyDiv);
       });
       container.appendChild(bodyDiv);
+    }
+    // footer
+    if (bubble.footer && Array.isArray(bubble.footer.contents)) {
+      var footerDiv = document.createElement('div');
+      footerDiv.className = 'lm-footer';
+      applyBoxStyle(bubble.footer, footerDiv);
+      bubble.footer.contents.forEach(function (c) {
+        renderFlexComponent(c, footerDiv);
+      });
+      container.appendChild(footerDiv);
+    }
+  }
+
+  function applyBoxStyle(box, el) {
+    if (!box) return;
+    if (box.backgroundColor) el.style.background = box.backgroundColor;
+    if (box.borderWidth && box.borderColor) {
+      el.style.border = box.borderWidth + ' solid ' + box.borderColor;
+    }
+    if (box.cornerRadius) {
+      el.style.borderRadius =
+        typeof box.cornerRadius === 'string' && /px$/.test(box.cornerRadius)
+          ? box.cornerRadius
+          : '8px';
+    }
+    if (box.paddingAll != null) el.style.padding = mapFlexSpacing(box.paddingAll);
+    if (box.paddingTop != null) el.style.paddingTop = mapFlexSpacing(box.paddingTop);
+    if (box.paddingBottom != null) el.style.paddingBottom = mapFlexSpacing(box.paddingBottom);
+    if (box.paddingStart != null) el.style.paddingLeft = mapFlexSpacing(box.paddingStart);
+    if (box.paddingEnd != null) el.style.paddingRight = mapFlexSpacing(box.paddingEnd);
+    if (box.layout === 'horizontal' || box.layout === 'baseline') {
+      el.style.display = 'flex';
+      el.style.flexDirection = 'row';
+      if (box.layout === 'baseline') el.style.alignItems = 'baseline';
+      if (box.spacing) el.style.gap = mapFlexSpacing(box.spacing);
     }
   }
 
@@ -382,15 +446,22 @@
     if (!c || typeof c !== 'object') return;
     if (c.type === 'text') {
       var t = document.createElement('div');
-      var isTitle = (c.weight === 'bold' && c.size === 'xl');
+      var isTitle = (c.weight === 'bold' && (c.size === 'xl' || c.size === 'xxl'));
       t.className = isTitle ? 'lm-title' : 'lm-subtitle';
       if (c.color) t.style.color = c.color;
-      if (c.size && !isTitle) t.style.fontSize = mapFlexSize(c.size);
-      if (c.weight === 'bold' && !isTitle) t.style.fontWeight = '700';
+      if (c.size) t.style.fontSize = mapFlexSize(c.size);
+      if (c.weight === 'bold') t.style.fontWeight = '700';
       if (c.align === 'center') t.style.textAlign = 'center';
       if (c.margin) t.style.marginTop = mapFlexSpacing(c.margin);
       if (c.lineSpacing) t.style.lineHeight = '1.55';
+      if (c.wrap) t.style.whiteSpace = 'pre-wrap';
+      if (c.flex !== undefined) t.style.flex = String(c.flex);
       t.textContent = String(c.text || '');
+      if (c.action && c.action.type === 'uri' && c.action.uri) {
+        t.style.cursor = 'pointer';
+        t.style.textDecoration = 'underline';
+        t.addEventListener('click', function () { window.open(c.action.uri, '_blank'); });
+      }
       parent.appendChild(t);
       return;
     }
@@ -441,22 +512,9 @@
     if (c.type === 'box' && Array.isArray(c.contents)) {
       var sub = document.createElement('div');
       sub.className = 'lm-box';
-      if (c.backgroundColor) sub.style.background = c.backgroundColor;
-      if (c.borderWidth && c.borderColor) sub.style.border = c.borderWidth + ' solid ' + c.borderColor;
-      else if (c.borderColor) sub.style.border = '1px solid ' + c.borderColor;
-      if (c.cornerRadius) {
-        sub.style.borderRadius =
-          typeof c.cornerRadius === 'string' && /px$/.test(c.cornerRadius) ? c.cornerRadius : '8px';
-      }
-      if (c.paddingTop) sub.style.paddingTop = mapFlexSpacing(c.paddingTop);
-      if (c.paddingBottom) sub.style.paddingBottom = mapFlexSpacing(c.paddingBottom);
-      if (c.paddingStart) sub.style.paddingLeft = mapFlexSpacing(c.paddingStart);
-      if (c.paddingEnd) sub.style.paddingRight = mapFlexSpacing(c.paddingEnd);
-      if (c.paddingAll) {
-        var pad = mapFlexSpacing(c.paddingAll);
-        sub.style.padding = pad;
-      }
+      applyBoxStyle(c, sub);
       if (c.margin) sub.style.marginTop = mapFlexSpacing(c.margin);
+      if (c.flex !== undefined) sub.style.flex = String(c.flex);
       c.contents.forEach(function (cc) { renderFlexComponent(cc, sub); });
       parent.appendChild(sub);
     }
