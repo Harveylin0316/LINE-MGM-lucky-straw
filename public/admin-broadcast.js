@@ -792,7 +792,8 @@
       if (messageConfig.flex) {
         $('flex-json').value = JSON.stringify(messageConfig.flex, null, 2);
       }
-      // 模板模式不在這 tab 但也填回，避免切換時資料丟
+      // 觸發圖片助手 scan
+      setTimeout(scanJsonImagesAndUrls, 100);
       return;
     }
     // template mode
@@ -1327,6 +1328,124 @@
       });
   });
 
+  // ------------------------------------------------------------------
+  // 11. JSON 圖片上傳助手（友善：自動偵測 REPLACE_* placeholder + UI 上傳）
+  // ------------------------------------------------------------------
+  // 偵測：URL 路徑為 /p/line-media/<PH> 或 /v/b/<id>/<PH> 的 placeholder
+  var JSON_IMAGE_PLACEHOLDER_RE =
+    /(?:p\/line-media|v\/b\/[^/'"\\s]+)\/(REPLACE_[A-Z0-9_]+)/g;
+  // 偵測其他 URL 內的 placeholder（用於提示「還有 X 個要手動填」）
+  var JSON_URL_PLACEHOLDER_RE = /\b(REPLACE_[A-Z0-9_]+)\b/g;
+
+  function scanJsonImagesAndUrls() {
+    var raw = $('flex-json').value || '';
+    // 1. image placeholders
+    var imgSet = {};
+    var imgList = [];
+    var m;
+    JSON_IMAGE_PLACEHOLDER_RE.lastIndex = 0;
+    while ((m = JSON_IMAGE_PLACEHOLDER_RE.exec(raw)) !== null) {
+      if (!imgSet[m[1]]) { imgSet[m[1]] = true; imgList.push(m[1]); }
+    }
+    renderJsonImageRows(imgList);
+
+    // 2. 其他 URL placeholder（排除已是 image 的）
+    var allSet = {};
+    var allList = [];
+    JSON_URL_PLACEHOLDER_RE.lastIndex = 0;
+    while ((m = JSON_URL_PLACEHOLDER_RE.exec(raw)) !== null) {
+      if (!allSet[m[1]] && !imgSet[m[1]]) {
+        allSet[m[1]] = true;
+        allList.push(m[1]);
+      }
+    }
+    var urlHelper = $('json-url-helper');
+    if (allList.length === 0) {
+      urlHelper.hidden = true;
+    } else {
+      urlHelper.hidden = false;
+      $('json-url-count').textContent = String(allList.length);
+      $('json-url-list').innerHTML = allList.map(function (p) {
+        return '<code style="background:#fff;padding:1px 5px;border-radius:3px;margin-left:4px;">' + p + '</code>';
+      }).join('');
+    }
+  }
+
+  function renderJsonImageRows(placeholders) {
+    var helper = $('json-image-helper');
+    var list = $('json-image-list');
+    if (placeholders.length === 0) {
+      helper.hidden = true;
+      list.innerHTML = '';
+      return;
+    }
+    helper.hidden = false;
+    list.innerHTML = placeholders.map(function (ph, i) {
+      return '<div class="json-image-row" data-placeholder="' + ph + '">' +
+        '<div class="jir-label">圖片 ' + (i + 1) + '：<code>' + ph + '</code></div>' +
+        '<input type="file" class="jir-file" accept="image/png,image/jpeg" />' +
+        '<button type="button" class="btn jir-upload">上傳</button>' +
+        '<span class="jir-status">未上傳</span>' +
+        '</div>';
+    }).join('');
+    $$('.jir-upload', list).forEach(function (btn) {
+      btn.addEventListener('click', function () {
+        var row = btn.closest('.json-image-row');
+        uploadJsonImage(row);
+      });
+    });
+  }
+
+  function uploadJsonImage(row) {
+    var ph = row.getAttribute('data-placeholder');
+    var fi = row.querySelector('.jir-file');
+    var statusEl = row.querySelector('.jir-status');
+    if (!fi.files || fi.files.length === 0) {
+      statusEl.textContent = '請先選圖';
+      return;
+    }
+    var file = fi.files[0];
+    if (file.size > 2 * 1024 * 1024) { statusEl.textContent = '檔案 > 2MB'; return; }
+    statusEl.textContent = '上傳中…';
+    var fd = new FormData();
+    fd.append('hero', file);
+    fetch('/admin/broadcast/hero/upload', { method: 'POST', body: fd })
+      .then(function (r) { return r.json(); })
+      .then(function (data) {
+        if (!data.ok) { statusEl.textContent = '失敗：' + (data.error || ''); return; }
+        // 把 textarea 內所有該 placeholder 換成 mediaId
+        var textarea = $('flex-json');
+        textarea.value = textarea.value.split(ph).join(data.mediaId);
+        statusEl.innerHTML = '已套用 <code style="background:#fff;padding:1px 4px;border-radius:3px;">' +
+          data.mediaId.slice(0, 8) + '…</code>';
+        state.messagePreviewed = false;
+        updateSendButton();
+        saveDraft();
+        // 重新 scan（少了這個 placeholder）
+        scanJsonImagesAndUrls();
+      })
+      .catch(function (e) { statusEl.textContent = '錯誤：' + e.message; });
+  }
+
+  // 觸發 scan 的 3 個時機
+  var scanTimer = null;
+  function scheduleScan() {
+    if (scanTimer) clearTimeout(scanTimer);
+    scanTimer = setTimeout(scanJsonImagesAndUrls, 300);
+  }
+  $('flex-json').addEventListener('input', scheduleScan);
+  $('btn-scan-json-images').addEventListener('click', scanJsonImagesAndUrls);
+  // tab 切換 → 也 scan 一次
+  $$('.tab-btn[data-mode]').forEach(function (btn) {
+    btn.addEventListener('click', function () {
+      if (btn.getAttribute('data-mode') === 'flex_json') {
+        setTimeout(scanJsonImagesAndUrls, 50);
+      }
+    });
+  });
+
   // 啟動：嘗試 restore 上次的草稿
   loadDraft();
+  // 草稿載入或 template 套用後 JSON 已就位 → scan
+  setTimeout(scanJsonImagesAndUrls, 500);
 })();
