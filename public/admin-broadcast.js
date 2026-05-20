@@ -36,21 +36,22 @@
   // ------------------------------------------------------------------
   // 1. tabs
   // ------------------------------------------------------------------
-  $$('.tab-btn[data-mode]').forEach(function (btn) {
-    btn.addEventListener('click', function () {
-      var mode = btn.getAttribute('data-mode');
-      state.mode = mode;
-      $$('.tab-btn[data-mode]').forEach(function (b) { b.classList.toggle('active', b === btn); });
-      $('pane-template').hidden = (mode !== 'template');
-      $('pane-flex-json').hidden = (mode !== 'flex_json');
-      // variant B 跟 variant A 共用 mode
-      $('pane-b-template').hidden = (mode !== 'template');
-      $('pane-b-flex-json').hidden = (mode !== 'flex_json');
+  // 模式切換：details 展開 = flex_json mode；折疊 = template mode
+  var advancedJsonBlock = document.getElementById('advanced-json-block');
+  if (advancedJsonBlock) {
+    advancedJsonBlock.addEventListener('toggle', function () {
+      var open = advancedJsonBlock.open;
+      state.mode = open ? 'flex_json' : 'template';
+      // 黃色模板區跟 JSON 區互斥（一次只顯示一種）
+      $('pane-template').hidden = open;
+      $('pane-b-template').hidden = open;
+      $('pane-b-flex-json').hidden = !open;
       state.messagePreviewed = false;
       updateSendButton();
       saveDraft();
+      schedulePreview();
     });
-  });
+  }
 
   // A/B test toggle
   $('ab-test-enable').addEventListener('change', function () {
@@ -60,6 +61,7 @@
     state.messagePreviewed = false;
     updateSendButton();
     saveDraft();
+    schedulePreview();
   });
 
   // ------------------------------------------------------------------
@@ -188,6 +190,7 @@
           state.messagePreviewed = false;
           updateSendButton();
           saveDraft();
+          schedulePreview();
         })
         .catch(function (e) { statusEl.textContent = '錯誤：' + e.message; });
     };
@@ -227,6 +230,7 @@
     renderBHeroStatus(false);
     updateSendButton();
     saveDraft();
+    schedulePreview();
   }
 
   // ------------------------------------------------------------------
@@ -285,7 +289,14 @@
   // ------------------------------------------------------------------
   // 6. message preview
   // ------------------------------------------------------------------
-  $('btn-preview-msg').addEventListener('click', function () {
+  // 自動預覽（debounce 500ms）— user 編欄位、切 mode、上傳、套用 URL 都觸發
+  var previewTimer = null;
+  function schedulePreview() {
+    if (previewTimer) clearTimeout(previewTimer);
+    previewTimer = setTimeout(runPreview, 500);
+  }
+
+  function runPreview() {
     var statusEl = $('msg-status');
     var previewEl = $('msg-preview');
     var cfg = collectMessageConfig();
@@ -299,7 +310,6 @@
       return;
     }
 
-    statusEl.textContent = '預覽中…';
     var fetches = [
       fetch('/admin/broadcast/preview-message', {
         method: 'POST', headers: { 'Content-Type': 'application/json' },
@@ -320,10 +330,17 @@
         var dataB = results[1];
         if (!dataA.ok || (state.abTestEnabled && !dataB.ok)) {
           var err = !dataA.ok ? dataA.error : dataB.error;
-          statusEl.textContent = '錯誤：' + (err || '');
+          // 訊息還沒填夠 → 不顯示為 error，只 keep 預覽空白
+          if (/請至少填|altText/.test(err || '')) {
+            statusEl.textContent = '預覽會在你填內容時自動更新';
+            previewEl.classList.add('empty');
+            previewEl.innerHTML = '請從上方「訊息模板」選一個 / 或開始編輯訊息';
+          } else {
+            statusEl.textContent = '錯誤：' + (err || '');
+            previewEl.classList.add('empty');
+            previewEl.innerHTML = '預覽失敗：' + escapeHtml(err || '');
+          }
           state.messagePreviewed = false;
-          previewEl.classList.add('empty');
-          previewEl.innerHTML = '預覽失敗：' + escapeHtml(err || '');
           updateSendButton();
           return;
         }
@@ -340,10 +357,21 @@
           renderFlexMock(dataA.messages[0], previewEl);
         }
         state.messagePreviewed = true;
-        statusEl.textContent = '預覽完成';
+        statusEl.textContent = '預覽已更新（' + new Date().toLocaleTimeString('zh-TW') + '）';
         updateSendButton();
       })
       .catch(function (e) { statusEl.textContent = '網路錯誤：' + e.message; });
+  }
+
+  // 所有訊息相關欄位變動 → schedulePreview
+  [
+    'tpl-title', 'tpl-subtitle', 'tpl-coupon-code', 'tpl-disclaimer',
+    'tpl-cta-label', 'tpl-cta-url', 'tpl-alt', 'flex-json',
+    'b-tpl-title', 'b-tpl-subtitle', 'b-tpl-coupon-code', 'b-tpl-disclaimer',
+    'b-tpl-cta-label', 'b-tpl-cta-url', 'b-tpl-alt', 'b-flex-json'
+  ].forEach(function (id) {
+    var el = $(id);
+    if (el) el.addEventListener('input', schedulePreview);
   });
 
   // ------------------------------------------------------------------
@@ -841,9 +869,11 @@
   function applyMessageConfigToForm(messageConfig) {
     if (!messageConfig || typeof messageConfig !== 'object') return;
     if (messageConfig.mode === 'flex_json') {
-      // 切到進階 JSON tab
-      var jsonBtn = document.querySelector('.tab-btn[data-mode="flex_json"]');
-      if (jsonBtn) jsonBtn.click();
+      // 自動展開「進階模式」details + 切到 flex_json mode
+      var advBlock = document.getElementById('advanced-json-block');
+      if (advBlock && !advBlock.open) advBlock.open = true;
+      state.mode = 'flex_json';
+      $('pane-template').hidden = true;
       if (messageConfig.flex) {
         $('flex-json').value = JSON.stringify(messageConfig.flex, null, 2);
       }
@@ -852,13 +882,18 @@
       var imgList = $('json-image-list');
       if (urlList) urlList.innerHTML = '';
       if (imgList) imgList.innerHTML = '';
-      // 觸發圖片+URL 助手 scan
-      setTimeout(scanJsonImagesAndUrls, 100);
+      // 觸發圖片+URL 助手 scan + 預覽
+      setTimeout(function () {
+        scanJsonImagesAndUrls();
+        schedulePreview();
+      }, 100);
       return;
     }
-    // template mode
-    var tplBtn = document.querySelector('.tab-btn[data-mode="template"]');
-    if (tplBtn) tplBtn.click();
+    // template mode：折疊進階區、顯示黃色模板
+    var advBlock2 = document.getElementById('advanced-json-block');
+    if (advBlock2 && advBlock2.open) advBlock2.open = false;
+    state.mode = 'template';
+    $('pane-template').hidden = false;
     var t = messageConfig.template || {};
     $('tpl-title').value = t.title || '';
     $('tpl-subtitle').value = t.subtitle || '';
@@ -876,6 +911,7 @@
       state.heroUrl = null;
     }
     renderHeroStatus(false);
+    schedulePreview();
   }
 
   $('template-select').addEventListener('change', function () {
@@ -975,7 +1011,7 @@
       return { ok: false, reason: '收件人為 0，請調整條件或選不同名單', focusEl: 'btn-preview-audience' };
     }
     if (!state.messagePreviewed) {
-      return { ok: false, reason: '請先在步驟 2 點「預覽訊息」按鈕確認訊息樣式', focusEl: 'btn-preview-msg' };
+      return { ok: false, reason: '預覽尚未產生 — 請編輯訊息或從訊息模板選一個，等預覽顯示後再送', focusEl: 'msg-preview' };
     }
     if (state.sendMode === 'scheduled') {
       var dtStr = $('schedule-datetime').value;
@@ -1255,6 +1291,7 @@
     renderHeroStatus(false);
     updateSendButton();
     saveDraft();
+    schedulePreview();
   }
 
   DRAFT_FIELDS.forEach(function (id) {
@@ -1621,6 +1658,7 @@
     saveDraft();
     // 不 re-scan URL，row 維持
     scanJsonImages();
+    schedulePreview();
   }
 
   // 判斷 ID 是 mediaId UUID 還是 placeholder
@@ -1692,6 +1730,7 @@
     updateSendButton();
     saveDraft();
     scanJsonImages();
+    schedulePreview();
   }
 
   function walkAndRemoveImage(obj, ph) {
@@ -1750,6 +1789,7 @@
         saveDraft();
         // 重新 scan image（row 會 rebuild，但仍有 row，這次 ID 是新 mediaId）
         scanJsonImages();
+        schedulePreview();
       })
       .catch(function (e) { statusEl.textContent = '錯誤：' + e.message; });
   }

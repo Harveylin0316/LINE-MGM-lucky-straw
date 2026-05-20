@@ -144,18 +144,6 @@
               <button type="button" id="btn-clear-draft" class="link-btn">清除草稿</button>
             </div>
 
-            <div class="ab-test-toggle-bar">
-              <label class="ab-toggle-label">
-                <input type="checkbox" id="ab-test-enable" />
-                <span>啟用 A/B test — 收件人隨機分成兩半，各收一版訊息，方便對比成效</span>
-              </label>
-            </div>
-
-            <div class="broadcast-tabs">
-              <button type="button" class="tab-btn active" data-mode="template">黃色模板</button>
-              <button type="button" class="tab-btn" data-mode="flex_json">進階 Flex JSON</button>
-            </div>
-
             <div class="ab-variant-label" id="variant-a-label" hidden>
               <strong>版本 A</strong>（50% 收件人）
             </div>
@@ -217,7 +205,9 @@
               </div>
             </div>
 
-            <div class="broadcast-tab-pane" id="pane-flex-json" hidden>
+            <details class="advanced-json-block" id="advanced-json-block">
+              <summary>進階模式：直接編輯 Flex JSON（給工程師用 / 內建模板會自動切到這裡）</summary>
+              <div class="broadcast-tab-pane" id="pane-flex-json">
               <div id="json-image-helper" class="json-image-helper" hidden>
                 <div class="json-image-helper-head">
                   <span>圖片上傳助手（自動偵測 JSON 內 <code>REPLACE_*</code> 圖片位置）</span>
@@ -232,7 +222,7 @@
                 <div id="json-url-list"></div>
               </div>
               <details class="json-textarea-block">
-                <summary>進階：直接編輯 Flex JSON（一般不需要動，填完上方助手即可）</summary>
+                <summary>直接編輯 Flex JSON（一般不需要動，填完上方助手即可）</summary>
                 <div class="broadcast-field">
                   <label>
                     Flex JSON（root 必含 type:"flex", altText, contents）
@@ -240,8 +230,17 @@
                   </label>
                 </div>
               </details>
-            </div>
+              </div>
+            </details>
 
+            <details class="advanced-settings-block">
+              <summary>進階設定：A/B test 分組發送</summary>
+              <div class="ab-test-toggle-bar">
+                <label class="ab-toggle-label">
+                  <input type="checkbox" id="ab-test-enable" />
+                  <span>啟用 A/B test — 收件人隨機分成兩半，各收一版訊息，方便對比成效</span>
+                </label>
+              </div>
             <!-- A/B variant B 編輯區（啟用 A/B test 才顯示） -->
             <div id="variant-b-pane" hidden>
               <div class="ab-variant-label">
@@ -272,10 +271,10 @@
                 </div>
               </div>
             </div>
+            </details>
 
-            <div class="broadcast-action-row">
-              <button type="button" class="btn btn-warning" id="btn-preview-msg">預覽訊息</button>
-              <div id="msg-status" class="muted">尚未預覽</div>
+            <div class="broadcast-action-row" id="msg-status-row">
+              <div id="msg-status" class="muted" style="font-size:12px;">右側預覽會在你編輯時自動更新</div>
             </div>
 
             <div class="broadcast-field test-push-block">
@@ -751,6 +750,37 @@
       }
       .json-textarea-block > summary:hover { color: #1f2937; }
       .json-textarea-block[open] > summary { margin-bottom: 8px; }
+      .advanced-json-block,
+      .advanced-settings-block {
+        margin-top: 14px;
+        background: #fafafa;
+        border: 1px solid #e5e7eb;
+        border-radius: 8px;
+        padding: 8px 12px;
+      }
+      .advanced-json-block > summary,
+      .advanced-settings-block > summary {
+        cursor: pointer;
+        font-size: 13px;
+        color: #4b5563;
+        font-weight: 500;
+        padding: 4px 0;
+        list-style: none;
+      }
+      .advanced-json-block > summary::before,
+      .advanced-settings-block > summary::before {
+        content: '▸ ';
+        font-size: 11px;
+        color: #9ca3af;
+      }
+      .advanced-json-block[open] > summary::before,
+      .advanced-settings-block[open] > summary::before {
+        content: '▾ ';
+      }
+      .advanced-json-block > summary:hover,
+      .advanced-settings-block > summary:hover { color: #1f2937; }
+      .advanced-json-block[open] > summary,
+      .advanced-settings-block[open] > summary { margin-bottom: 10px; }
       .jir-remove {
         background: none;
         border: none;
