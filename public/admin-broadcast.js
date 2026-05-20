@@ -22,28 +22,44 @@
     mode: 'template',
     heroMediaId: null,
     heroUrl: null,
+    bHeroMediaId: null,
+    bHeroUrl: null,
     audienceSource: 'conditions',  // 'conditions' | 'saved_list' | 'upload'
     audiencePreviewedTotal: null,
     messagePreviewed: false,
     currentBroadcastId: null,
     sending: false,
-    sendMode: 'immediate'  // 'immediate' | 'scheduled'
+    sendMode: 'immediate',  // 'immediate' | 'scheduled'
+    abTestEnabled: false
   };
 
   // ------------------------------------------------------------------
   // 1. tabs
   // ------------------------------------------------------------------
-  $$('.tab-btn').forEach(function (btn) {
+  $$('.tab-btn[data-mode]').forEach(function (btn) {
     btn.addEventListener('click', function () {
       var mode = btn.getAttribute('data-mode');
       state.mode = mode;
-      $$('.tab-btn').forEach(function (b) { b.classList.toggle('active', b === btn); });
+      $$('.tab-btn[data-mode]').forEach(function (b) { b.classList.toggle('active', b === btn); });
       $('pane-template').hidden = (mode !== 'template');
       $('pane-flex-json').hidden = (mode !== 'flex_json');
+      // variant B 跟 variant A 共用 mode
+      $('pane-b-template').hidden = (mode !== 'template');
+      $('pane-b-flex-json').hidden = (mode !== 'flex_json');
       state.messagePreviewed = false;
       updateSendButton();
       saveDraft();
     });
+  });
+
+  // A/B test toggle
+  $('ab-test-enable').addEventListener('change', function () {
+    state.abTestEnabled = $('ab-test-enable').checked;
+    $('variant-b-pane').hidden = !state.abTestEnabled;
+    $('variant-a-label').hidden = !state.abTestEnabled;
+    state.messagePreviewed = false;
+    updateSendButton();
+    saveDraft();
   });
 
   // ------------------------------------------------------------------
@@ -141,36 +157,77 @@
   });
 
   // ------------------------------------------------------------------
-  // 4. hero upload
+  // 4. hero upload (A 跟 B 兩組共用 handler)
   // ------------------------------------------------------------------
-  $('btn-hero-upload').addEventListener('click', function () {
-    var fileInput = $('hero-file');
-    var statusEl = $('hero-status');
-    if (!fileInput.files || fileInput.files.length === 0) {
-      statusEl.textContent = '請先選擇圖片';
-      return;
+  function makeHeroUploadHandler(opts) {
+    return function () {
+      var fileInput = $(opts.fileInputId);
+      var statusEl = $(opts.statusElId);
+      if (!fileInput.files || fileInput.files.length === 0) {
+        statusEl.textContent = '請先選擇圖片';
+        return;
+      }
+      var file = fileInput.files[0];
+      if (file.size > 2 * 1024 * 1024) { statusEl.textContent = '檔案 > 2MB'; return; }
+      statusEl.textContent = '上傳中…';
+      var fd = new FormData();
+      fd.append('hero', file);
+      fetch('/admin/broadcast/hero/upload', { method: 'POST', body: fd })
+        .then(function (r) { return r.json(); })
+        .then(function (data) {
+          if (!data.ok) { statusEl.textContent = '失敗：' + (data.error || ''); return; }
+          if (opts.variant === 'b') {
+            state.bHeroMediaId = data.mediaId;
+            state.bHeroUrl = data.url;
+            renderBHeroStatus(false);
+          } else {
+            state.heroMediaId = data.mediaId;
+            state.heroUrl = data.url;
+            renderHeroStatus(false);
+          }
+          state.messagePreviewed = false;
+          updateSendButton();
+          saveDraft();
+        })
+        .catch(function (e) { statusEl.textContent = '錯誤：' + e.message; });
+    };
+  }
+
+  $('btn-hero-upload').addEventListener('click', makeHeroUploadHandler({
+    fileInputId: 'hero-file', statusElId: 'hero-status', variant: 'a'
+  }));
+  $('btn-b-hero-upload').addEventListener('click', makeHeroUploadHandler({
+    fileInputId: 'b-hero-file', statusElId: 'b-hero-status', variant: 'b'
+  }));
+
+  function renderBHeroStatus(isFromDraft) {
+    var hs = $('b-hero-status');
+    if (!hs) return;
+    if (state.bHeroMediaId && state.bHeroUrl) {
+      hs.innerHTML =
+        (isFromDraft ? '已上傳（草稿）' : '已上傳') +
+        ' <a href="' + state.bHeroUrl + '" target="_blank" rel="noopener">查看</a>' +
+        ' <button type="button" class="link-btn btn-b-hero-remove" style="color:#dc2626;margin-left:8px;">移除</button>';
+      var rmBtn = hs.querySelector('.btn-b-hero-remove');
+      if (rmBtn) rmBtn.addEventListener('click', clearBHero);
+    } else if (state.bHeroMediaId) {
+      hs.innerHTML = '已存草稿 (mediaId: ' + state.bHeroMediaId.slice(0, 8) + '…) <button type="button" class="link-btn btn-b-hero-remove" style="color:#dc2626;margin-left:8px;">移除</button>';
+      var rmBtn2 = hs.querySelector('.btn-b-hero-remove');
+      if (rmBtn2) rmBtn2.addEventListener('click', clearBHero);
+    } else {
+      hs.textContent = '未上傳';
     }
-    var file = fileInput.files[0];
-    if (file.size > 2 * 1024 * 1024) {
-      statusEl.textContent = '檔案 > 2MB';
-      return;
-    }
-    statusEl.textContent = '上傳中…';
-    var fd = new FormData();
-    fd.append('hero', file);
-    fetch('/admin/broadcast/hero/upload', { method: 'POST', body: fd })
-      .then(function (r) { return r.json(); })
-      .then(function (data) {
-        if (!data.ok) { statusEl.textContent = '失敗：' + (data.error || ''); return; }
-        state.heroMediaId = data.mediaId;
-        state.heroUrl = data.url;
-        renderHeroStatus(false);
-        state.messagePreviewed = false;
-        updateSendButton();
-        saveDraft();
-      })
-      .catch(function (e) { statusEl.textContent = '錯誤：' + e.message; });
-  });
+  }
+  function clearBHero() {
+    state.bHeroMediaId = null;
+    state.bHeroUrl = null;
+    state.messagePreviewed = false;
+    var fi = $('b-hero-file');
+    if (fi) fi.value = '';
+    renderBHeroStatus(false);
+    updateSendButton();
+    saveDraft();
+  }
 
   // ------------------------------------------------------------------
   // 5. collect message config
@@ -200,6 +257,31 @@
     };
   }
 
+  function collectVariantBMessageConfig() {
+    if (state.mode === 'flex_json') {
+      var raw = $('b-flex-json').value;
+      try {
+        var parsed = JSON.parse(raw);
+        return { mode: 'flex_json', flex: parsed };
+      } catch (e) {
+        return { mode: 'flex_json', flex: null, _parseError: e.message };
+      }
+    }
+    return {
+      mode: 'template',
+      template: {
+        heroMediaId: state.bHeroMediaId || null,
+        title: $('b-tpl-title').value.trim(),
+        subtitle: $('b-tpl-subtitle').value.trim(),
+        couponCode: $('b-tpl-coupon-code').value.trim(),
+        disclaimer: $('b-tpl-disclaimer').value.trim(),
+        ctaLabel: $('b-tpl-cta-label').value.trim(),
+        ctaUrl: $('b-tpl-cta-url').value.trim(),
+        altText: $('b-tpl-alt').value.trim()
+      }
+    };
+  }
+
   // ------------------------------------------------------------------
   // 6. message preview
   // ------------------------------------------------------------------
@@ -211,23 +293,52 @@
       statusEl.textContent = 'JSON 格式錯誤：' + cfg._parseError;
       return;
     }
+    var cfgB = state.abTestEnabled ? collectVariantBMessageConfig() : null;
+    if (state.abTestEnabled && cfgB.mode === 'flex_json' && cfgB.flex === null) {
+      statusEl.textContent = '版本 B JSON 格式錯誤：' + cfgB._parseError;
+      return;
+    }
+
     statusEl.textContent = '預覽中…';
-    fetch('/admin/broadcast/preview-message', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ message_config: cfg })
-    })
-      .then(function (r) { return r.json(); })
-      .then(function (data) {
-        if (!data.ok) {
-          statusEl.textContent = '錯誤：' + (data.error || '');
+    var fetches = [
+      fetch('/admin/broadcast/preview-message', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ message_config: cfg })
+      }).then(function (r) { return r.json(); })
+    ];
+    if (state.abTestEnabled) {
+      fetches.push(
+        fetch('/admin/broadcast/preview-message', {
+          method: 'POST', headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ message_config: cfgB })
+        }).then(function (r) { return r.json(); })
+      );
+    }
+    Promise.all(fetches)
+      .then(function (results) {
+        var dataA = results[0];
+        var dataB = results[1];
+        if (!dataA.ok || (state.abTestEnabled && !dataB.ok)) {
+          var err = !dataA.ok ? dataA.error : dataB.error;
+          statusEl.textContent = '錯誤：' + (err || '');
           state.messagePreviewed = false;
           previewEl.classList.add('empty');
-          previewEl.innerHTML = '預覽失敗：' + escapeHtml(data.error || '');
+          previewEl.innerHTML = '預覽失敗：' + escapeHtml(err || '');
           updateSendButton();
           return;
         }
-        renderFlexMock(data.messages[0], previewEl);
+        if (state.abTestEnabled) {
+          previewEl.classList.remove('empty');
+          previewEl.innerHTML =
+            '<div style="margin-bottom:6px;font-size:12px;font-weight:600;color:#1d4ed8;">版本 A</div>' +
+            '<div class="ab-preview-card" id="ab-preview-a"></div>' +
+            '<div style="margin:14px 0 6px;font-size:12px;font-weight:600;color:#1d4ed8;">版本 B</div>' +
+            '<div class="ab-preview-card" id="ab-preview-b"></div>';
+          renderFlexMock(dataA.messages[0], $('ab-preview-a'));
+          renderFlexMock(dataB.messages[0], $('ab-preview-b'));
+        } else {
+          renderFlexMock(dataA.messages[0], previewEl);
+        }
         state.messagePreviewed = true;
         statusEl.textContent = '預覽完成';
         updateSendButton();
@@ -797,6 +908,10 @@
     };
     if (state.sendMode === 'scheduled') {
       createBody.scheduled_at = $('schedule-datetime').value;
+    }
+    if (state.abTestEnabled) {
+      createBody.ab_test = true;
+      createBody.variant_b_message_config = collectVariantBMessageConfig();
     }
     fetch('/admin/broadcast/create', {
       method: 'POST',

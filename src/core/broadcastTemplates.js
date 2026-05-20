@@ -231,8 +231,11 @@ function buildYellowFlexFromTemplate(t, { heroImageUrl, heroIsBrandBar } = {}) {
  * heroImageBaseUrl: 用來組 hero 圖的 https 公開網址（line_push_media）
  * broadcastId: 若提供且 template 模式有 CTA，會把 CTA URL 包成 /r/b/<id> 中介 redirect
  *              （給點擊追蹤用）。flex_json 模式不包，由 user 自行用 utm 追蹤。
+ * variant: 'a' | 'b' | undefined — A/B test 時帶入；URL 會加 ?v=<variant> 標記，
+ *          給 redirect / view endpoint 寫進對應的 variant 欄位。
  */
-function buildLineMessages(messageConfig, { heroImageBaseUrl, broadcastId } = {}) {
+function buildLineMessages(messageConfig, { heroImageBaseUrl, broadcastId, variant } = {}) {
+  const variantSuffix = variant === 'a' || variant === 'b' ? `?v=${variant}` : '';
   if (!messageConfig || typeof messageConfig !== 'object') {
     return { ok: false, error: '訊息設定缺失' };
   }
@@ -267,7 +270,7 @@ function buildLineMessages(messageConfig, { heroImageBaseUrl, broadcastId } = {}
     // 有 broadcastId → 用 /v/b/<id>/<mediaId> 中介 endpoint，server 寫 view log（開信率 proxy）
     // 無 broadcastId（譬如 test-push、後台預覽）→ 原本 /p/line-media/<id>，不追蹤
     heroImageUrl = broadcastId
-      ? `${origin}/v/b/${broadcastId}/${effectiveHeroMediaId}`
+      ? `${origin}/v/b/${broadcastId}/${effectiveHeroMediaId}${variantSuffix}`
       : `${origin}/p/line-media/${effectiveHeroMediaId}`;
   }
 
@@ -282,7 +285,7 @@ function buildLineMessages(messageConfig, { heroImageBaseUrl, broadcastId } = {}
     tForBuild.ctaLabel
   ) {
     const origin = heroImageBaseUrl.replace(/\/+$/, '');
-    tForBuild.ctaUrl = `${origin}/r/b/${broadcastId}`;
+    tForBuild.ctaUrl = `${origin}/r/b/${broadcastId}${variantSuffix}`;
   }
 
   const flex = buildYellowFlexFromTemplate(tForBuild, { heroImageUrl, heroIsBrandBar });

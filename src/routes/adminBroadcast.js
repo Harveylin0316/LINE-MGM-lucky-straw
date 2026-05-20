@@ -109,6 +109,7 @@ function registerAdminBroadcastRoutes(app, deps) {
       return res.status(404).type('text/plain').send('Not found');
     }
     const broadcastId = Number(bIdStr);
+    const variant = req.query.v === 'a' || req.query.v === 'b' ? req.query.v : null;
     try {
       const rs = await query(
         'SELECT mime_type, body FROM line_push_media WHERE id = $1',
@@ -117,8 +118,8 @@ function registerAdminBroadcastRoutes(app, deps) {
       if (rs.rowCount === 0) return res.status(404).type('text/plain').send('Not found');
       // 寫 view log（不阻塞回 image）
       query(
-        `INSERT INTO admin_broadcast_views (broadcast_id, user_agent) VALUES ($1, $2)`,
-        [broadcastId, (req.get('user-agent') || '').slice(0, 500)]
+        `INSERT INTO admin_broadcast_views (broadcast_id, user_agent, variant) VALUES ($1, $2, $3)`,
+        [broadcastId, (req.get('user-agent') || '').slice(0, 500), variant]
       ).catch(err => console.error('view log failed:', err.message));
       const row = rs.rows[0];
       const buf = Buffer.isBuffer(row.body) ? row.body : Buffer.from(row.body);
@@ -140,13 +141,14 @@ function registerAdminBroadcastRoutes(app, deps) {
     const idStr = String(req.params.broadcastId || '').trim();
     if (!isPositiveIntegerString(idStr)) return res.status(404).type('text/plain').send('Not found');
     const broadcastId = Number(idStr);
+    const variant = req.query.v === 'a' || req.query.v === 'b' ? req.query.v : null;
     try {
       const rs = await query(
-        `SELECT message_config FROM admin_broadcasts WHERE id = $1`,
+        `SELECT message_config, variant_b_message_config FROM admin_broadcasts WHERE id = $1`,
         [broadcastId]
       );
       if (rs.rowCount === 0) return res.status(404).type('text/plain').send('Not found');
-      const cfg = rs.rows[0].message_config || {};
+      const cfg = (variant === 'b' ? rs.rows[0].variant_b_message_config : rs.rows[0].message_config) || {};
       let targetUrl = '';
       if (cfg.mode === 'template' && cfg.template && typeof cfg.template.ctaUrl === 'string') {
         targetUrl = cfg.template.ctaUrl.trim();
@@ -157,13 +159,14 @@ function registerAdminBroadcastRoutes(app, deps) {
       }
       // 寫 click log（不阻塞 redirect）
       query(
-        `INSERT INTO admin_broadcast_clicks (broadcast_id, target_url, user_agent, referer)
-         VALUES ($1, $2, $3, $4)`,
+        `INSERT INTO admin_broadcast_clicks (broadcast_id, target_url, user_agent, referer, variant)
+         VALUES ($1, $2, $3, $4, $5)`,
         [
           broadcastId,
           targetUrl,
           (req.get('user-agent') || '').slice(0, 500),
-          (req.get('referer') || '').slice(0, 500)
+          (req.get('referer') || '').slice(0, 500),
+          variant
         ]
       ).catch(err => console.error('click log failed:', err.message));
       return res.redirect(302, targetUrl);
@@ -652,6 +655,19 @@ function registerAdminBroadcastRoutes(app, deps) {
         return safeJsonError(res, 400, builtMsg.error);
       }
 
+      // A/B test：可選的 variant B
+      const isAbTest = body.ab_test === true || body.ab_test === 'true';
+      const variantBConfig = isAbTest ? body.variant_b_message_config : null;
+      if (isAbTest) {
+        if (!variantBConfig || typeof variantBConfig !== 'object') {
+          return safeJsonError(res, 400, 'variant_b_message_config_required');
+        }
+        const builtB = buildLineMessages(variantBConfig, { heroImageBaseUrl: origin });
+        if (!builtB.ok) {
+          return safeJsonError(res, 400, 'variant_b_invalid:' + builtB.error);
+        }
+      }
+
       const conditions = normalizeConditions(rawConditions);
       if (!hasAnyCondition(conditions)) {
         return safeJsonError(res, 400, 'no_conditions_selected');
@@ -660,6 +676,24 @@ function registerAdminBroadcastRoutes(app, deps) {
       const { rows: recipients } = await fetchAudienceRecipients(query, conditions);
       if (recipients.length === 0) {
         return safeJsonError(res, 400, 'no_matching_recipients');
+      }
+      if (isAbTest && recipients.length < 2) {
+        return safeJsonError(res, 400, 'ab_test_needs_min_2_recipients');
+      }
+
+      // A/B test：隨機 shuffle + 對半分 variant
+      let assignedVariants = null;
+      if (isAbTest) {
+        const indices = recipients.map((_, i) => i);
+        for (let i = indices.length - 1; i > 0; i--) {
+          const j = Math.floor(Math.random() * (i + 1));
+          [indices[i], indices[j]] = [indices[j], indices[i]];
+        }
+        assignedVariants = new Array(recipients.length).fill('a');
+        const halfIdx = Math.floor(recipients.length / 2);
+        for (let k = 0; k < halfIdx; k++) {
+          assignedVariants[indices[k]] = 'b';
+        }
       }
 
       const adminUsername =
@@ -671,26 +705,32 @@ function registerAdminBroadcastRoutes(app, deps) {
         const insRs = scheduledAt
           ? await client.query(
               `INSERT INTO admin_broadcasts
-                (status, scheduled_at, admin_username, audience_config, message_config, recipient_total)
-               VALUES ('scheduled', $1, $2, $3::jsonb, $4::jsonb, $5)
+                (status, scheduled_at, admin_username, audience_config, message_config,
+                 variant_b_message_config, is_ab_test, recipient_total)
+               VALUES ('scheduled', $1, $2, $3::jsonb, $4::jsonb, $5::jsonb, $6, $7)
                RETURNING id`,
               [
                 scheduledAt.toISOString(),
                 adminUsername,
                 JSON.stringify({ conditions }),
                 JSON.stringify(messageConfig || {}),
+                isAbTest ? JSON.stringify(variantBConfig) : null,
+                isAbTest,
                 recipients.length
               ]
             )
           : await client.query(
               `INSERT INTO admin_broadcasts
-                (status, started_at, admin_username, audience_config, message_config, recipient_total)
-               VALUES ('running', NOW(), $1, $2::jsonb, $3::jsonb, $4)
+                (status, started_at, admin_username, audience_config, message_config,
+                 variant_b_message_config, is_ab_test, recipient_total)
+               VALUES ('running', NOW(), $1, $2::jsonb, $3::jsonb, $4::jsonb, $5, $6)
                RETURNING id`,
               [
                 adminUsername,
                 JSON.stringify({ conditions }),
                 JSON.stringify(messageConfig || {}),
+                isAbTest ? JSON.stringify(variantBConfig) : null,
+                isAbTest,
                 recipients.length
               ]
             );
@@ -703,12 +743,18 @@ function registerAdminBroadcastRoutes(app, deps) {
           const values = [];
           const params = [];
           slice.forEach((r, idx) => {
-            const base = idx * 3;
-            values.push(`($${base + 1}, $${base + 2}, $${base + 3})`);
-            params.push(broadcastId, r.user_id, r.line_user_id);
+            const globalIdx = i + idx;
+            const base = idx * 4;
+            values.push(`($${base + 1}, $${base + 2}, $${base + 3}, $${base + 4})`);
+            params.push(
+              broadcastId,
+              r.user_id,
+              r.line_user_id,
+              isAbTest ? assignedVariants[globalIdx] : 'a'
+            );
           });
           await client.query(
-            `INSERT INTO admin_broadcast_recipients (broadcast_id, user_id, line_user_id)
+            `INSERT INTO admin_broadcast_recipients (broadcast_id, user_id, line_user_id, variant)
              VALUES ${values.join(', ')}`,
             params
           );
@@ -719,7 +765,11 @@ function registerAdminBroadcastRoutes(app, deps) {
           broadcastId,
           total: recipients.length,
           scheduled: Boolean(scheduledAt),
-          scheduledAt: scheduledAt ? scheduledAt.toISOString() : null
+          scheduledAt: scheduledAt ? scheduledAt.toISOString() : null,
+          isAbTest,
+          variantCounts: isAbTest
+            ? assignedVariants.reduce((acc, v) => { acc[v] = (acc[v] || 0) + 1; return acc; }, {})
+            : null
         });
       } catch (e) {
         try { await client.query('ROLLBACK'); } catch (_rb) {}
@@ -776,7 +826,7 @@ function registerAdminBroadcastRoutes(app, deps) {
              LIMIT $2
              FOR UPDATE SKIP LOCKED
            )
-           RETURNING id, user_id, line_user_id`,
+           RETURNING id, user_id, line_user_id, variant`,
           [broadcastId, chunkSize]
         );
         await client.query('COMMIT');
@@ -791,12 +841,23 @@ function registerAdminBroadcastRoutes(app, deps) {
 
       // 構造 messages（每個 chunk 重新建一次，避免長時間運行訊息設定變動）
       // 傳 broadcastId → CTA 會包成 /r/b/<id> 中介 redirect 做點擊追蹤
+      // A/B test：依 recipient.variant 選 message_config 並帶 variant 標記到 URL
       const origin = publicOriginOrEmpty(req);
-      const builtMsg = buildLineMessages(b.message_config, {
-        heroImageBaseUrl: origin,
-        broadcastId
-      });
-      if (!builtMsg.ok) {
+      const isAbTest = Boolean(b.is_ab_test);
+
+      function buildMsgForVariant(variant) {
+        const cfg = (isAbTest && variant === 'b') ? b.variant_b_message_config : b.message_config;
+        return buildLineMessages(cfg, {
+          heroImageBaseUrl: origin,
+          broadcastId,
+          variant: isAbTest ? variant : undefined
+        });
+      }
+
+      // 預先 build 兩個 variant（一次 chunk 內訊息設定不變）
+      const builtA = buildMsgForVariant('a');
+      const builtB = isAbTest ? buildMsgForVariant('b') : null;
+      if (!builtA.ok || (isAbTest && !builtB.ok)) {
         // 訊息無效：把 claimed 退回 pending
         if (claimed.length > 0) {
           await query(
@@ -805,7 +866,8 @@ function registerAdminBroadcastRoutes(app, deps) {
             [claimed.map(r => r.id)]
           );
         }
-        return safeJsonError(res, 400, 'message_invalid:' + builtMsg.error);
+        const err = !builtA.ok ? builtA.error : builtB.error;
+        return safeJsonError(res, 400, 'message_invalid:' + err);
       }
 
       let okCount = 0;
@@ -824,7 +886,8 @@ function registerAdminBroadcastRoutes(app, deps) {
           skipCount += 1;
           continue;
         }
-        const pushed = await linePush.pushLineMessages(lineUid, builtMsg.messages, {
+        const useBuilt = (isAbTest && r.variant === 'b') ? builtB : builtA;
+        const pushed = await linePush.pushLineMessages(lineUid, useBuilt.messages, {
           userId: r.user_id,
           pushType: 'admin_broadcast'
         });
@@ -912,7 +975,7 @@ function registerAdminBroadcastRoutes(app, deps) {
 
       // Step 2: 撈所有 running broadcasts（含剛剛 start 的）
       const runningRs = await query(
-        `SELECT id, message_config FROM admin_broadcasts
+        `SELECT id, message_config, variant_b_message_config, is_ab_test FROM admin_broadcasts
          WHERE status = 'running'
          ORDER BY id ASC
          LIMIT 10`
@@ -923,12 +986,22 @@ function registerAdminBroadcastRoutes(app, deps) {
       const results = [];
       for (const row of runningRs.rows) {
         const bId = row.id;
-        const builtMsg = buildLineMessages(row.message_config, {
+        const isAbTest = Boolean(row.is_ab_test);
+        const builtA = buildLineMessages(row.message_config, {
           heroImageBaseUrl: cleanOrigin,
-          broadcastId: bId
+          broadcastId: bId,
+          variant: isAbTest ? 'a' : undefined
         });
-        if (!builtMsg.ok) {
-          results.push({ broadcastId: bId, skipped: 'message_invalid', detail: builtMsg.error });
+        const builtB = isAbTest
+          ? buildLineMessages(row.variant_b_message_config, {
+              heroImageBaseUrl: cleanOrigin,
+              broadcastId: bId,
+              variant: 'b'
+            })
+          : null;
+        if (!builtA.ok || (isAbTest && !builtB.ok)) {
+          const err = !builtA.ok ? builtA.error : builtB.error;
+          results.push({ broadcastId: bId, skipped: 'message_invalid', detail: err });
           continue;
         }
 
@@ -945,7 +1018,7 @@ function registerAdminBroadcastRoutes(app, deps) {
                WHERE broadcast_id = $1 AND status = 'pending'
                ORDER BY id ASC LIMIT $2 FOR UPDATE SKIP LOCKED
              )
-             RETURNING id, user_id, line_user_id`,
+             RETURNING id, user_id, line_user_id, variant`,
             [bId, 50]
           );
           await client.query('COMMIT');
@@ -970,7 +1043,8 @@ function registerAdminBroadcastRoutes(app, deps) {
             skipCount++;
             continue;
           }
-          const pushed = await linePush.pushLineMessages(lineUid, builtMsg.messages, {
+          const useBuilt = (isAbTest && r.variant === 'b') ? builtB : builtA;
+          const pushed = await linePush.pushLineMessages(lineUid, useBuilt.messages, {
             userId: r.user_id,
             pushType: 'admin_broadcast'
           });
@@ -1123,6 +1197,45 @@ function registerAdminBroadcastRoutes(app, deps) {
         [broadcastId]
       );
 
+      // A/B 對比統計（is_ab_test=true 時才有意義）
+      let abStat = null;
+      if (b.is_ab_test) {
+        const abRs = await query(
+          `SELECT
+            variant,
+            COUNT(*)::int AS sent_total,
+            COUNT(*) FILTER (WHERE status = 'sent')::int AS sent_ok,
+            COUNT(*) FILTER (WHERE status = 'failed')::int AS sent_fail
+           FROM admin_broadcast_recipients
+           WHERE broadcast_id = $1
+           GROUP BY variant
+           ORDER BY variant`,
+          [broadcastId]
+        );
+        const viewByVariant = await query(
+          `SELECT variant, COUNT(*)::int AS n FROM admin_broadcast_views
+           WHERE broadcast_id = $1 GROUP BY variant`,
+          [broadcastId]
+        );
+        const clickByVariant = await query(
+          `SELECT variant, COUNT(*)::int AS n FROM admin_broadcast_clicks
+           WHERE broadcast_id = $1 GROUP BY variant`,
+          [broadcastId]
+        );
+        const viewMap = {};
+        viewByVariant.rows.forEach(r => { viewMap[r.variant || ''] = r.n; });
+        const clickMap = {};
+        clickByVariant.rows.forEach(r => { clickMap[r.variant || ''] = r.n; });
+        abStat = abRs.rows.map(r => ({
+          variant: r.variant,
+          sent_total: r.sent_total,
+          sent_ok: r.sent_ok,
+          sent_fail: r.sent_fail,
+          views: viewMap[r.variant] || 0,
+          clicks: clickMap[r.variant] || 0
+        }));
+      }
+
       // 最近點擊 sample
       const clickRecentRs = await query(
         `SELECT clicked_at, user_agent
@@ -1144,7 +1257,8 @@ function registerAdminBroadcastRoutes(app, deps) {
         recentSample: recentSampleRs.rows,
         clickStat: clickStatRs.rows[0] || { clicks: 0, unique_ua: 0 },
         clickRecent: clickRecentRs.rows,
-        viewStat: viewStatRs.rows[0] || { views: 0, first_view: null, last_view: null }
+        viewStat: viewStatRs.rows[0] || { views: 0, first_view: null, last_view: null },
+        abStat
       });
     } catch (err) {
       next(err);

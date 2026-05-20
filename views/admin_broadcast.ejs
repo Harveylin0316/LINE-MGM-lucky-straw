@@ -144,9 +144,20 @@
               <button type="button" id="btn-clear-draft" class="link-btn">清除草稿</button>
             </div>
 
+            <div class="ab-test-toggle-bar">
+              <label class="ab-toggle-label">
+                <input type="checkbox" id="ab-test-enable" />
+                <span>啟用 A/B test — 收件人隨機分成兩半，各收一版訊息，方便對比成效</span>
+              </label>
+            </div>
+
             <div class="broadcast-tabs">
               <button type="button" class="tab-btn active" data-mode="template">黃色模板</button>
               <button type="button" class="tab-btn" data-mode="flex_json">進階 Flex JSON</button>
+            </div>
+
+            <div class="ab-variant-label" id="variant-a-label" hidden>
+              <strong>版本 A</strong>（50% 收件人）
             </div>
 
             <div class="broadcast-tab-pane" id="pane-template">
@@ -212,6 +223,37 @@
                   Flex JSON（root 必含 type:"flex", altText, contents）
                   <textarea id="flex-json" rows="14" placeholder='{ "type": "flex", "altText": "...", "contents": { "type": "bubble", ... } }' spellcheck="false"></textarea>
                 </label>
+              </div>
+            </div>
+
+            <!-- A/B variant B 編輯區（啟用 A/B test 才顯示） -->
+            <div id="variant-b-pane" hidden>
+              <div class="ab-variant-label">
+                <strong>版本 B</strong>（50% 收件人）
+              </div>
+              <div class="broadcast-tab-pane" id="pane-b-template">
+                <div class="broadcast-field">
+                  <div class="broadcast-field-label">Hero 圖（選填）</div>
+                  <div class="broadcast-inline-field">
+                    <input type="file" id="b-hero-file" accept="image/png,image/jpeg" />
+                    <button type="button" class="btn" id="btn-b-hero-upload">上傳</button>
+                    <span id="b-hero-status" class="muted">未上傳</span>
+                  </div>
+                </div>
+                <div class="broadcast-field"><label>標題<input type="text" id="b-tpl-title" maxlength="100" /></label></div>
+                <div class="broadcast-field"><label>副標題<textarea id="b-tpl-subtitle" maxlength="500" rows="3"></textarea></label></div>
+                <div class="broadcast-field"><label>優惠碼<input type="text" id="b-tpl-coupon-code" maxlength="60" /></label></div>
+                <div class="broadcast-field"><label>注意事項<input type="text" id="b-tpl-disclaimer" maxlength="300" /></label></div>
+                <div class="broadcast-field"><label>CTA 按鈕文字<input type="text" id="b-tpl-cta-label" maxlength="40" /></label></div>
+                <div class="broadcast-field"><label>CTA 連結 (https://)<input type="url" id="b-tpl-cta-url" /></label></div>
+                <div class="broadcast-field"><label>altText<input type="text" id="b-tpl-alt" maxlength="400" /></label></div>
+              </div>
+              <div class="broadcast-tab-pane" id="pane-b-flex-json" hidden>
+                <div class="broadcast-field">
+                  <label>版本 B 的 Flex JSON
+                    <textarea id="b-flex-json" rows="14" spellcheck="false"></textarea>
+                  </label>
+                </div>
               </div>
             </div>
 
@@ -521,6 +563,35 @@
         border: 1px solid #d1d5db;
         border-radius: 6px;
         background: #fff;
+      }
+      .ab-test-toggle-bar {
+        margin-bottom: 10px;
+        padding: 8px 12px;
+        background: #eff6ff;
+        border: 1px solid #bfdbfe;
+        border-radius: 8px;
+      }
+      .ab-toggle-label {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        font-size: 13px;
+        color: #1e40af;
+        cursor: pointer;
+      }
+      .ab-toggle-label input { accent-color: #1d4ed8; }
+      .ab-variant-label {
+        margin: 14px 0 8px;
+        padding: 6px 10px;
+        background: #f3f4f6;
+        border-left: 3px solid #1d4ed8;
+        font-size: 13px;
+        color: #374151;
+      }
+      #variant-b-pane {
+        margin-top: 14px;
+        padding-top: 8px;
+        border-top: 2px dashed #d1d5db;
       }
       .draft-bar {
         display: flex;

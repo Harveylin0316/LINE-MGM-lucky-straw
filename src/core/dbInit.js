@@ -184,6 +184,21 @@ async function initDb({ query, adminUsername, adminPassword, skipDdl = false }) 
     await query(
       'CREATE UNIQUE INDEX IF NOT EXISTS admin_message_templates_name_unique ON admin_message_templates (BTRIM(name))'
     );
+    // A/B test columns（後加）
+    await query('ALTER TABLE admin_broadcasts ADD COLUMN IF NOT EXISTS is_ab_test BOOLEAN NOT NULL DEFAULT false');
+    await query('ALTER TABLE admin_broadcasts ADD COLUMN IF NOT EXISTS variant_b_message_config JSONB');
+    await query("ALTER TABLE admin_broadcast_recipients ADD COLUMN IF NOT EXISTS variant TEXT NOT NULL DEFAULT 'a'");
+    await query('ALTER TABLE admin_broadcast_clicks ADD COLUMN IF NOT EXISTS variant TEXT');
+    await query('ALTER TABLE admin_broadcast_views ADD COLUMN IF NOT EXISTS variant TEXT');
+    await query(
+      'CREATE INDEX IF NOT EXISTS admin_broadcast_recipients_broadcast_variant_idx ON admin_broadcast_recipients (broadcast_id, variant)'
+    );
+    await query(
+      'CREATE INDEX IF NOT EXISTS admin_broadcast_clicks_broadcast_variant_idx ON admin_broadcast_clicks (broadcast_id, variant)'
+    );
+    await query(
+      'CREATE INDEX IF NOT EXISTS admin_broadcast_views_broadcast_variant_idx ON admin_broadcast_views (broadcast_id, variant)'
+    );
     await query(
       'CREATE INDEX IF NOT EXISTS admin_broadcasts_created_id_desc_idx ON admin_broadcasts (created_at DESC, id DESC)'
     );
@@ -458,6 +473,21 @@ async function initDb({ query, adminUsername, adminPassword, skipDdl = false }) 
   );
   await query(
     'CREATE INDEX IF NOT EXISTS admin_message_templates_created_id_desc_idx ON admin_message_templates (created_at DESC, id DESC)'
+  );
+  // A/B test columns（後加）
+  await query('ALTER TABLE admin_broadcasts ADD COLUMN IF NOT EXISTS is_ab_test BOOLEAN NOT NULL DEFAULT false');
+  await query('ALTER TABLE admin_broadcasts ADD COLUMN IF NOT EXISTS variant_b_message_config JSONB');
+  await query("ALTER TABLE admin_broadcast_recipients ADD COLUMN IF NOT EXISTS variant TEXT NOT NULL DEFAULT 'a'");
+  await query('ALTER TABLE admin_broadcast_clicks ADD COLUMN IF NOT EXISTS variant TEXT');
+  await query('ALTER TABLE admin_broadcast_views ADD COLUMN IF NOT EXISTS variant TEXT');
+  await query(
+    'CREATE INDEX IF NOT EXISTS admin_broadcast_recipients_broadcast_variant_idx ON admin_broadcast_recipients (broadcast_id, variant)'
+  );
+  await query(
+    'CREATE INDEX IF NOT EXISTS admin_broadcast_clicks_broadcast_variant_idx ON admin_broadcast_clicks (broadcast_id, variant)'
+  );
+  await query(
+    'CREATE INDEX IF NOT EXISTS admin_broadcast_views_broadcast_variant_idx ON admin_broadcast_views (broadcast_id, variant)'
   );
   await query(
     'CREATE INDEX IF NOT EXISTS admin_broadcasts_created_id_desc_idx ON admin_broadcasts (created_at DESC, id DESC)'
