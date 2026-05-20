@@ -359,11 +359,20 @@
     }
     var contents = flexMsg.contents;
     if (contents.type === 'carousel' && Array.isArray(contents.contents)) {
+      var hint = document.createElement('div');
+      hint.className = 'lm-carousel-hint';
+      hint.textContent = 'Carousel · 共 ' + contents.contents.length +
+        ' 張卡片（手機上是橫向滑動，這裡改為上下展示方便檢視）';
+      container.appendChild(hint);
       var carouselDiv = document.createElement('div');
       carouselDiv.className = 'lm-carousel';
-      contents.contents.forEach(function (bubble) {
+      contents.contents.forEach(function (bubble, idx) {
         var bubbleDiv = document.createElement('div');
         bubbleDiv.className = 'lm-bubble-in-carousel';
+        var label = document.createElement('div');
+        label.className = 'lm-bubble-num';
+        label.textContent = String(idx + 1);
+        bubbleDiv.appendChild(label);
         renderBubble(bubble, bubbleDiv);
         carouselDiv.appendChild(bubbleDiv);
       });
