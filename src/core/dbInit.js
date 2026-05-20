@@ -20,7 +20,8 @@ const APP_PUBLIC_TABLES_WITH_RLS = [
   'admin_recipient_lists',
   'admin_recipient_list_members',
   'admin_broadcast_clicks',
-  'admin_broadcast_views'
+  'admin_broadcast_views',
+  'admin_message_templates'
 ];
 
 /**
@@ -169,6 +170,19 @@ async function initDb({ query, adminUsername, adminPassword, skipDdl = false }) 
     );
     await query(
       'CREATE INDEX IF NOT EXISTS admin_broadcast_views_viewed_at_idx ON admin_broadcast_views (viewed_at DESC)'
+    );
+    await query(`CREATE TABLE IF NOT EXISTS admin_message_templates (
+      id BIGSERIAL PRIMARY KEY,
+      name TEXT NOT NULL,
+      description TEXT,
+      message_config JSONB NOT NULL,
+      created_by TEXT,
+      created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+      updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+    )`);
+    await query('ALTER TABLE admin_message_templates ENABLE ROW LEVEL SECURITY');
+    await query(
+      'CREATE UNIQUE INDEX IF NOT EXISTS admin_message_templates_name_unique ON admin_message_templates (BTRIM(name))'
     );
     await query(
       'CREATE INDEX IF NOT EXISTS admin_broadcasts_created_id_desc_idx ON admin_broadcasts (created_at DESC, id DESC)'
@@ -379,6 +393,16 @@ async function initDb({ query, adminUsername, adminPassword, skipDdl = false }) 
     viewed_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
   )`);
 
+  await query(`CREATE TABLE IF NOT EXISTS admin_message_templates (
+    id BIGSERIAL PRIMARY KEY,
+    name TEXT NOT NULL,
+    description TEXT,
+    message_config JSONB NOT NULL,
+    created_by TEXT,
+    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+  )`);
+
   // Supabase exposes public schema via PostgREST by default.
   // Enable RLS on app tables to prevent direct external reads/writes.
   await query('ALTER TABLE users ENABLE ROW LEVEL SECURITY');
@@ -400,6 +424,7 @@ async function initDb({ query, adminUsername, adminPassword, skipDdl = false }) 
   await query('ALTER TABLE admin_recipient_list_members ENABLE ROW LEVEL SECURITY');
   await query('ALTER TABLE admin_broadcast_clicks ENABLE ROW LEVEL SECURITY');
   await query('ALTER TABLE admin_broadcast_views ENABLE ROW LEVEL SECURITY');
+  await query('ALTER TABLE admin_message_templates ENABLE ROW LEVEL SECURITY');
 
   await query(
     'CREATE INDEX IF NOT EXISTS admin_login_throttle_ip_created_idx ON admin_login_throttle (ip_key, created_at DESC)'
@@ -427,6 +452,12 @@ async function initDb({ query, adminUsername, adminPassword, skipDdl = false }) 
   );
   await query(
     'CREATE INDEX IF NOT EXISTS admin_broadcast_views_viewed_at_idx ON admin_broadcast_views (viewed_at DESC)'
+  );
+  await query(
+    'CREATE UNIQUE INDEX IF NOT EXISTS admin_message_templates_name_unique ON admin_message_templates (BTRIM(name))'
+  );
+  await query(
+    'CREATE INDEX IF NOT EXISTS admin_message_templates_created_id_desc_idx ON admin_message_templates (created_at DESC, id DESC)'
   );
   await query(
     'CREATE INDEX IF NOT EXISTS admin_broadcasts_created_id_desc_idx ON admin_broadcasts (created_at DESC, id DESC)'

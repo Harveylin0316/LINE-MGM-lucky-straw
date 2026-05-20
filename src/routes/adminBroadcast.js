@@ -252,6 +252,91 @@ function registerAdminBroadcastRoutes(app, deps) {
     }
   );
 
+  // ---------- 2c. message templates CRUD ----------
+  app.get('/admin/broadcast/templates', requireAdmin, async (_req, res) => {
+    try {
+      const rs = await query(
+        `SELECT id, name, description, created_by, created_at
+         FROM admin_message_templates
+         ORDER BY id DESC`
+      );
+      return res.json({ ok: true, templates: rs.rows });
+    } catch (err) {
+      console.error('list templates error:', err);
+      return safeJsonError(res, 500, 'list_failed', { detail: err && err.message });
+    }
+  });
+
+  app.get('/admin/broadcast/templates/:id', requireAdmin, async (req, res) => {
+    const idStr = String(req.params.id || '').trim();
+    if (!isPositiveIntegerString(idStr)) return safeJsonError(res, 400, 'invalid_id');
+    try {
+      const rs = await query(
+        `SELECT id, name, description, message_config, created_by, created_at
+         FROM admin_message_templates WHERE id = $1`,
+        [Number(idStr)]
+      );
+      if (rs.rowCount === 0) return safeJsonError(res, 404, 'not_found');
+      return res.json({ ok: true, template: rs.rows[0] });
+    } catch (err) {
+      console.error('get template error:', err);
+      return safeJsonError(res, 500, 'get_failed', { detail: err && err.message });
+    }
+  });
+
+  app.post('/admin/broadcast/templates', requireAdmin, async (req, res) => {
+    try {
+      const body = req.body || {};
+      const name = String(body.name || '').trim().slice(0, 200);
+      const description = String(body.description || '').trim().slice(0, 500);
+      const messageConfig = body.message_config;
+      if (!name) return safeJsonError(res, 400, 'name_required');
+      if (!messageConfig || typeof messageConfig !== 'object') {
+        return safeJsonError(res, 400, 'message_config_required');
+      }
+      // 簡單驗：用 buildLineMessages 跑一次（沒 broadcastId / origin）看會不會 fail
+      const built = buildLineMessages(messageConfig);
+      if (!built.ok) return safeJsonError(res, 400, 'message_config_invalid:' + built.error);
+
+      const createdBy = (req.authUser && (req.authUser.un || req.authUser.username)) || 'admin';
+      try {
+        const insRs = await query(
+          `INSERT INTO admin_message_templates (name, description, message_config, created_by)
+           VALUES ($1, $2, $3::jsonb, $4)
+           RETURNING id, name, description, created_by, created_at`,
+          [name, description || null, JSON.stringify(messageConfig), createdBy]
+        );
+        return res.json({ ok: true, template: insRs.rows[0] });
+      } catch (e) {
+        if (e && e.code === '23505') {
+          return safeJsonError(res, 400, 'duplicate_name', {
+            detail: '已有同名模板，請改名或先刪除舊的'
+          });
+        }
+        throw e;
+      }
+    } catch (err) {
+      console.error('create template error:', err);
+      return safeJsonError(res, 500, 'create_failed', { detail: err && err.message });
+    }
+  });
+
+  app.delete('/admin/broadcast/templates/:id', requireAdmin, async (req, res) => {
+    const idStr = String(req.params.id || '').trim();
+    if (!isPositiveIntegerString(idStr)) return safeJsonError(res, 400, 'invalid_id');
+    try {
+      const rs = await query(
+        'DELETE FROM admin_message_templates WHERE id = $1 RETURNING id',
+        [Number(idStr)]
+      );
+      if (rs.rowCount === 0) return safeJsonError(res, 404, 'not_found');
+      return res.json({ ok: true });
+    } catch (err) {
+      console.error('delete template error:', err);
+      return safeJsonError(res, 500, 'delete_failed', { detail: err && err.message });
+    }
+  });
+
   // ---------- 2b. recipient-lists CRUD（已儲存名單） ----------
   app.get('/admin/broadcast/recipient-lists', requireAdmin, async (_req, res) => {
     try {

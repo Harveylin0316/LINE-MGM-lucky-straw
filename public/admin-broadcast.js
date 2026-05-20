@@ -581,6 +581,131 @@
   loadTestRecipients();
 
   // ------------------------------------------------------------------
+  // 9b. 訊息模板庫
+  // ------------------------------------------------------------------
+  function loadMessageTemplates() {
+    var sel = $('template-select');
+    fetch('/admin/broadcast/templates')
+      .then(function (r) { return r.json(); })
+      .then(function (data) {
+        if (!data.ok) {
+          sel.innerHTML = '<option value="">— 載入失敗 —</option>';
+          return;
+        }
+        var list = data.templates || [];
+        if (list.length === 0) {
+          sel.innerHTML = '<option value="">— 尚無模板 —</option>';
+          return;
+        }
+        sel.innerHTML = '<option value="">— 載入既有模板 —</option>' +
+          list.map(function (t) {
+            return '<option value="' + t.id + '">' + escapeHtml(t.name) + '</option>';
+          }).join('');
+      })
+      .catch(function () { sel.innerHTML = '<option value="">— 載入失敗 —</option>'; });
+  }
+
+  function applyMessageConfigToForm(messageConfig) {
+    if (!messageConfig || typeof messageConfig !== 'object') return;
+    if (messageConfig.mode === 'flex_json') {
+      // 切到進階 JSON tab
+      var jsonBtn = document.querySelector('.tab-btn[data-mode="flex_json"]');
+      if (jsonBtn) jsonBtn.click();
+      if (messageConfig.flex) {
+        $('flex-json').value = JSON.stringify(messageConfig.flex, null, 2);
+      }
+      // 模板模式不在這 tab 但也填回，避免切換時資料丟
+      return;
+    }
+    // template mode
+    var tplBtn = document.querySelector('.tab-btn[data-mode="template"]');
+    if (tplBtn) tplBtn.click();
+    var t = messageConfig.template || {};
+    $('tpl-title').value = t.title || '';
+    $('tpl-subtitle').value = t.subtitle || '';
+    $('tpl-coupon-code').value = t.couponCode || '';
+    $('tpl-disclaimer').value = t.disclaimer || '';
+    $('tpl-cta-label').value = t.ctaLabel || '';
+    $('tpl-cta-url').value = t.ctaUrl || '';
+    $('tpl-alt').value = t.altText || '';
+    if (t.heroMediaId) {
+      state.heroMediaId = t.heroMediaId;
+      // hero url 不在 message_config 內，模板載入時不還原 url（會顯示 mediaId hint）
+      state.heroUrl = null;
+    } else {
+      state.heroMediaId = null;
+      state.heroUrl = null;
+    }
+    renderHeroStatus(false);
+  }
+
+  $('template-select').addEventListener('change', function () {
+    var id = $('template-select').value;
+    $('btn-delete-template').hidden = !id;
+    if (!id) return;
+    fetch('/admin/broadcast/templates/' + id)
+      .then(function (r) { return r.json(); })
+      .then(function (data) {
+        if (!data.ok) {
+          alert('載入失敗：' + (data.error || ''));
+          return;
+        }
+        applyMessageConfigToForm(data.template.message_config);
+        state.messagePreviewed = false;
+        updateSendButton();
+        saveDraft();
+      });
+  });
+
+  $('btn-save-template').addEventListener('click', function () {
+    var cfg = collectMessageConfig();
+    if (cfg.mode === 'flex_json' && cfg.flex === null) {
+      alert('JSON 格式錯誤，無法儲存：' + cfg._parseError);
+      return;
+    }
+    var name = prompt('替這份訊息命名（之後從下拉選用）：', '');
+    if (!name) return;
+    name = name.trim();
+    if (!name) { alert('名稱不可為空'); return; }
+    fetch('/admin/broadcast/templates', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ name: name, message_config: cfg })
+    })
+      .then(function (r) { return r.json(); })
+      .then(function (data) {
+        if (!data.ok) {
+          alert('儲存失敗：' + (data.error || '') + (data.detail ? '｜' + data.detail : ''));
+          return;
+        }
+        alert('已儲存模板「' + name + '」');
+        loadMessageTemplates();
+        // 載入後自動選新模板
+        setTimeout(function () {
+          $('template-select').value = String(data.template.id);
+          $('btn-delete-template').hidden = false;
+        }, 300);
+      });
+  });
+
+  $('btn-delete-template').addEventListener('click', function () {
+    var sel = $('template-select');
+    var id = sel.value;
+    if (!id) return;
+    var label = sel.options[sel.selectedIndex].text;
+    if (!confirm('確定刪除模板「' + label + '」？這個動作無法復原。')) return;
+    fetch('/admin/broadcast/templates/' + id, { method: 'DELETE' })
+      .then(function (r) { return r.json(); })
+      .then(function (data) {
+        if (!data.ok) { alert('刪除失敗：' + (data.error || '')); return; }
+        loadMessageTemplates();
+        $('btn-delete-template').hidden = true;
+      });
+  });
+
+  loadMessageTemplates();
+
+  // ------------------------------------------------------------------
   // 8. send / process-chunk loop
   // ------------------------------------------------------------------
   function updateSendButton() {
