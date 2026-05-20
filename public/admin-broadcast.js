@@ -373,24 +373,27 @@
         label.className = 'lm-bubble-num';
         label.textContent = String(idx + 1);
         bubbleDiv.appendChild(label);
-        renderBubble(bubble, bubbleDiv);
+        // path relative to flexMsg.contents: ['contents', idx]
+        renderBubble(bubble, bubbleDiv, ['contents', idx]);
         carouselDiv.appendChild(bubbleDiv);
       });
       container.appendChild(carouselDiv);
       return;
     }
-    renderBubble(contents, container);
+    // single bubble：path 起點是 bubble 本身（相對於 flexMsg.contents）
+    renderBubble(contents, container, []);
   }
 
-  function renderBubble(bubble, container) {
+  function renderBubble(bubble, container, path) {
     if (!bubble || typeof bubble !== 'object') return;
+    path = path || [];
     // header
     if (bubble.header && Array.isArray(bubble.header.contents)) {
       var headerDiv = document.createElement('div');
       headerDiv.className = 'lm-header';
       applyBoxStyle(bubble.header, headerDiv);
-      bubble.header.contents.forEach(function (c) {
-        renderFlexComponent(c, headerDiv);
+      bubble.header.contents.forEach(function (c, idx) {
+        renderFlexComponent(c, headerDiv, path.concat(['header', 'contents', idx]));
       });
       container.appendChild(headerDiv);
     }
@@ -409,8 +412,8 @@
       var bodyDiv = document.createElement('div');
       bodyDiv.className = 'lm-body';
       applyBoxStyle(bubble.body, bodyDiv);
-      bubble.body.contents.forEach(function (c) {
-        renderFlexComponent(c, bodyDiv);
+      bubble.body.contents.forEach(function (c, idx) {
+        renderFlexComponent(c, bodyDiv, path.concat(['body', 'contents', idx]));
       });
       container.appendChild(bodyDiv);
     }
@@ -419,8 +422,8 @@
       var footerDiv = document.createElement('div');
       footerDiv.className = 'lm-footer';
       applyBoxStyle(bubble.footer, footerDiv);
-      bubble.footer.contents.forEach(function (c) {
-        renderFlexComponent(c, footerDiv);
+      bubble.footer.contents.forEach(function (c, idx) {
+        renderFlexComponent(c, footerDiv, path.concat(['footer', 'contents', idx]));
       });
       container.appendChild(footerDiv);
     }
@@ -451,8 +454,9 @@
     }
   }
 
-  function renderFlexComponent(c, parent) {
+  function renderFlexComponent(c, parent, path) {
     if (!c || typeof c !== 'object') return;
+    path = path || [];
     if (c.type === 'text') {
       var t = document.createElement('div');
       var isTitle = (c.weight === 'bold' && (c.size === 'xl' || c.size === 'xxl'));
@@ -466,11 +470,12 @@
       if (c.wrap) t.style.whiteSpace = 'pre-wrap';
       if (c.flex !== undefined) t.style.flex = String(c.flex);
       t.textContent = String(c.text || '');
-      if (c.action && c.action.type === 'uri' && c.action.uri) {
-        t.style.cursor = 'pointer';
-        t.style.textDecoration = 'underline';
-        t.addEventListener('click', function () { window.open(c.action.uri, '_blank'); });
-      }
+      // WYSIWYG：text 可直接編輯
+      t.contentEditable = 'true';
+      t.dataset.editPath = JSON.stringify(path.concat(['text']));
+      t.classList.add('lm-editable');
+      t.addEventListener('input', onPreviewTextEdit);
+      t.addEventListener('keydown', preventEditorEnter);
       parent.appendChild(t);
       return;
     }
@@ -483,27 +488,34 @@
       return;
     }
     if (c.type === 'box' && c.action && c.action.type === 'uri') {
-      // CTA 模擬：黃底深字
-      var a = document.createElement('a');
-      a.className = 'lm-cta';
-      a.href = c.action.uri || '#';
-      a.target = '_blank';
-      a.rel = 'noopener';
-      if (c.backgroundColor) a.style.background = c.backgroundColor;
-      if (c.margin) a.style.marginTop = mapFlexSpacing(c.margin);
-      // 取第一個 text content 作為 label
+      // CTA 模擬：黃底深字 — 改用 div 而非 a，避免 click 跳轉 + 支援 contenteditable
+      var btn = document.createElement('div');
+      btn.className = 'lm-cta lm-editable';
+      btn.setAttribute('role', 'button');
+      if (c.backgroundColor) btn.style.background = c.backgroundColor;
+      if (c.margin) btn.style.marginTop = mapFlexSpacing(c.margin);
+      // 找第一個 text child 的 index 跟 label
       var label = '';
+      var labelIdx = -1;
       if (Array.isArray(c.contents)) {
         for (var i = 0; i < c.contents.length; i++) {
           if (c.contents[i] && c.contents[i].type === 'text' && c.contents[i].text) {
             label = c.contents[i].text;
-            if (c.contents[i].color) a.style.color = c.contents[i].color;
+            labelIdx = i;
+            if (c.contents[i].color) btn.style.color = c.contents[i].color;
             break;
           }
         }
       }
-      a.textContent = label || (c.action.label || 'OPEN');
-      parent.appendChild(a);
+      btn.textContent = label || (c.action.label || 'OPEN');
+      // WYSIWYG：CTA 文字可直接編輯（改第一個 text child）
+      if (labelIdx >= 0) {
+        btn.contentEditable = 'true';
+        btn.dataset.editPath = JSON.stringify(path.concat(['contents', labelIdx, 'text']));
+        btn.addEventListener('input', onPreviewTextEdit);
+        btn.addEventListener('keydown', preventEditorEnter);
+      }
+      parent.appendChild(btn);
       return;
     }
     if (c.type === 'button' && c.action) {
@@ -524,9 +536,52 @@
       applyBoxStyle(c, sub);
       if (c.margin) sub.style.marginTop = mapFlexSpacing(c.margin);
       if (c.flex !== undefined) sub.style.flex = String(c.flex);
-      c.contents.forEach(function (cc) { renderFlexComponent(cc, sub); });
+      c.contents.forEach(function (cc, idx) {
+        renderFlexComponent(cc, sub, path.concat(['contents', idx]));
+      });
       parent.appendChild(sub);
     }
+  }
+
+  // ----- WYSIWYG：preview 內 text 編輯時自動 sync 回 JSON textarea -----
+  var previewEditTimer = null;
+  function onPreviewTextEdit(e) {
+    var el = e.currentTarget;
+    if (previewEditTimer) clearTimeout(previewEditTimer);
+    previewEditTimer = setTimeout(function () {
+      try {
+        var path = JSON.parse(el.dataset.editPath || '[]');
+        var newText = el.textContent;
+        var textarea = $('flex-json');
+        var parsed = JSON.parse(textarea.value);
+        if (parsed && parsed.contents) {
+          setJsonAtPath(parsed.contents, path, newText);
+          textarea.value = JSON.stringify(parsed, null, 2);
+          saveDraft();
+          // 不 re-render preview（保留 cursor）
+        }
+      } catch (err) {
+        console.warn('preview edit sync failed:', err && err.message);
+      }
+    }, 350);
+  }
+
+  function preventEditorEnter(e) {
+    // 阻止 Enter 在 contenteditable 內插入 <div>/<br>，改為 blur 結束編輯
+    if (e.key === 'Enter' && !e.shiftKey) {
+      e.preventDefault();
+      e.currentTarget.blur();
+    }
+  }
+
+  function setJsonAtPath(root, path, value) {
+    if (!Array.isArray(path) || path.length === 0) return;
+    var ref = root;
+    for (var i = 0; i < path.length - 1; i++) {
+      if (ref == null) return;
+      ref = ref[path[i]];
+    }
+    if (ref != null) ref[path[path.length - 1]] = value;
   }
 
   function mapFlexSize(s) {
