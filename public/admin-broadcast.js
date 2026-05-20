@@ -1359,16 +1359,48 @@
         allList.push(m[1]);
       }
     }
-    var urlHelper = $('json-url-helper');
-    if (allList.length === 0) {
-      urlHelper.hidden = true;
-    } else {
-      urlHelper.hidden = false;
-      $('json-url-count').textContent = String(allList.length);
-      $('json-url-list').innerHTML = allList.map(function (p) {
-        return '<code style="background:#fff;padding:1px 5px;border-radius:3px;margin-left:4px;">' + p + '</code>';
-      }).join('');
+    renderJsonUrlRows(allList);
+  }
+
+  function renderJsonUrlRows(placeholders) {
+    var helper = $('json-url-helper');
+    var list = $('json-url-list');
+    if (placeholders.length === 0) {
+      helper.hidden = true;
+      list.innerHTML = '';
+      return;
     }
+    helper.hidden = false;
+    list.innerHTML = placeholders.map(function (ph, i) {
+      return '<div class="json-url-row" data-placeholder="' + ph + '">' +
+        '<div class="jur-label">URL ' + (i + 1) + '：<code>' + ph + '</code></div>' +
+        '<input type="url" class="jur-input" placeholder="https://..." />' +
+        '<button type="button" class="btn jur-apply">套用</button>' +
+        '<span class="jur-status">未套用</span>' +
+        '</div>';
+    }).join('');
+    $$('.jur-apply', list).forEach(function (btn) {
+      btn.addEventListener('click', function () {
+        var row = btn.closest('.json-url-row');
+        applyJsonUrl(row);
+      });
+    });
+  }
+
+  function applyJsonUrl(row) {
+    var ph = row.getAttribute('data-placeholder');
+    var input = row.querySelector('.jur-input');
+    var statusEl = row.querySelector('.jur-status');
+    var url = String(input.value || '').trim();
+    if (!url) { statusEl.textContent = '請填 URL'; return; }
+    if (!/^https?:\/\//i.test(url)) { statusEl.textContent = '需 http(s):// 開頭'; return; }
+    var textarea = $('flex-json');
+    textarea.value = textarea.value.split(ph).join(url);
+    statusEl.textContent = '已套用';
+    state.messagePreviewed = false;
+    updateSendButton();
+    saveDraft();
+    scanJsonImagesAndUrls();
   }
 
   function renderJsonImageRows(placeholders) {
@@ -1385,6 +1417,7 @@
         '<div class="jir-label">圖片 ' + (i + 1) + '：<code>' + ph + '</code></div>' +
         '<input type="file" class="jir-file" accept="image/png,image/jpeg" />' +
         '<button type="button" class="btn jir-upload">上傳</button>' +
+        '<button type="button" class="jir-remove">不要這張圖</button>' +
         '<span class="jir-status">未上傳</span>' +
         '</div>';
     }).join('');
@@ -1394,6 +1427,67 @@
         uploadJsonImage(row);
       });
     });
+    $$('.jir-remove', list).forEach(function (btn) {
+      btn.addEventListener('click', function () {
+        var row = btn.closest('.json-image-row');
+        removeJsonImageBlock(row);
+      });
+    });
+  }
+
+  // 用 JSON.parse 走訪 tree，找到 url 含該 placeholder 的 hero/image 區塊並刪除
+  function removeJsonImageBlock(row) {
+    var ph = row.getAttribute('data-placeholder');
+    var textarea = $('flex-json');
+    var raw = textarea.value;
+    var parsed;
+    try {
+      parsed = JSON.parse(raw);
+    } catch (e) {
+      alert('JSON 解析失敗，無法自動移除：' + e.message + '\n請手動編輯 JSON。');
+      return;
+    }
+    var removed = walkAndRemoveImage(parsed, ph);
+    if (!removed) {
+      alert('找不到含 ' + ph + ' 的圖片區塊。');
+      return;
+    }
+    textarea.value = JSON.stringify(parsed, null, 2);
+    state.messagePreviewed = false;
+    updateSendButton();
+    saveDraft();
+    scanJsonImagesAndUrls();
+  }
+
+  function walkAndRemoveImage(obj, ph) {
+    var removed = false;
+    if (!obj || typeof obj !== 'object') return false;
+    if (Array.isArray(obj)) {
+      // 對於 array，找 image 元素整個移除
+      for (var i = obj.length - 1; i >= 0; i--) {
+        var item = obj[i];
+        if (item && typeof item === 'object' && item.type === 'image' &&
+            typeof item.url === 'string' && item.url.indexOf(ph) >= 0) {
+          obj.splice(i, 1);
+          removed = true;
+        } else if (walkAndRemoveImage(item, ph)) {
+          removed = true;
+        }
+      }
+      return removed;
+    }
+    // 對於 object，看每個 key 的 value
+    Object.keys(obj).forEach(function (k) {
+      var v = obj[k];
+      if (v && typeof v === 'object' && v.type === 'image' &&
+          typeof v.url === 'string' && v.url.indexOf(ph) >= 0) {
+        delete obj[k];
+        removed = true;
+      } else if (walkAndRemoveImage(v, ph)) {
+        removed = true;
+      }
+    });
+    return removed;
   }
 
   function uploadJsonImage(row) {
