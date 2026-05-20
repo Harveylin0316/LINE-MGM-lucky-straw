@@ -1331,52 +1331,94 @@
   // ------------------------------------------------------------------
   // 11. JSON 圖片上傳助手（友善：自動偵測 REPLACE_* placeholder + UI 上傳）
   // ------------------------------------------------------------------
-  // 偵測：URL 路徑為 /p/line-media/<PH> 或 /v/b/<id>/<PH> 的 placeholder
-  var JSON_IMAGE_PLACEHOLDER_RE =
-    /(?:p\/line-media|v\/b\/[^/'"\\s]+)\/(REPLACE_[A-Z0-9_]+)/g;
-  // 偵測其他 URL 內的 placeholder（用於提示「還有 X 個要手動填」）
+  // 偵測 image URL 內的 ID（placeholder OR 已綁定的 mediaId UUID）
+  var JSON_IMAGE_URL_RE =
+    /(?:p\/line-media|v\/b\/[^/'"\\s]+)\/([0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}|REPLACE_[A-Z0-9_]+)/gi;
+  // 純 placeholder（給 URL form 用）
   var JSON_URL_PLACEHOLDER_RE = /\b(REPLACE_[A-Z0-9_]+)\b/g;
 
-  function scanJsonImagesAndUrls() {
+  // image scan：永遠 rebuild image list，每個 URL 顯示一個 row（含已綁定 mediaId 的）
+  function scanJsonImages() {
     var raw = $('flex-json').value || '';
-    // 1. image placeholders
-    var imgSet = {};
-    var imgList = [];
+    var seen = {};
+    var list = [];
     var m;
-    JSON_IMAGE_PLACEHOLDER_RE.lastIndex = 0;
-    while ((m = JSON_IMAGE_PLACEHOLDER_RE.exec(raw)) !== null) {
-      if (!imgSet[m[1]]) { imgSet[m[1]] = true; imgList.push(m[1]); }
+    JSON_IMAGE_URL_RE.lastIndex = 0;
+    while ((m = JSON_IMAGE_URL_RE.exec(raw)) !== null) {
+      if (!seen[m[1]]) { seen[m[1]] = true; list.push(m[1]); }
     }
-    renderJsonImageRows(imgList);
+    renderJsonImageRows(list);
+  }
 
-    // 2. 其他 URL placeholder（排除已是 image 的）
+  // URL scan：rebuild URL list 只列尚未套用的 REPLACE_* placeholder
+  // 已套用的 row 由 DOM 保持（不會被這個函式刪除）— 套用 handler 自行 update row
+  function scanJsonUrls() {
+    var raw = $('flex-json').value || '';
+    var imgSet = {};
+    JSON_IMAGE_URL_RE.lastIndex = 0;
+    var m;
+    while ((m = JSON_IMAGE_URL_RE.exec(raw)) !== null) imgSet[m[1]] = true;
     var allSet = {};
-    var allList = [];
+    var newPlaceholders = [];
     JSON_URL_PLACEHOLDER_RE.lastIndex = 0;
     while ((m = JSON_URL_PLACEHOLDER_RE.exec(raw)) !== null) {
       if (!allSet[m[1]] && !imgSet[m[1]]) {
         allSet[m[1]] = true;
-        allList.push(m[1]);
+        newPlaceholders.push(m[1]);
       }
     }
-    renderJsonUrlRows(allList);
+    // 比對 DOM 現有 URL row（含已套用的）
+    var existing = {};
+    $$('.json-url-row').forEach(function (r) {
+      existing[r.getAttribute('data-id')] = r;
+    });
+    // 全新出現的 placeholder → append；舊的（含已套用）keep；不存在的 placeholder
+    // 但 row 也不在 DOM → 也不會出現
+    var combined = [];
+    // existing rows（含已套用 URL）排前面
+    Object.keys(existing).forEach(function (k) { combined.push(k); });
+    // 新發現的 placeholder
+    newPlaceholders.forEach(function (p) {
+      if (!existing[p]) combined.push(p);
+    });
+    renderJsonUrlRows(combined, existing);
   }
 
-  function renderJsonUrlRows(placeholders) {
+  // 同時 scan image + URL（給 tab 切換 / 模板載入 / 手動掃描用）
+  function scanJsonImagesAndUrls() {
+    scanJsonImages();
+    scanJsonUrls();
+  }
+
+  function renderJsonUrlRows(rowAnchors, preservedRows) {
     var helper = $('json-url-helper');
     var list = $('json-url-list');
-    if (placeholders.length === 0) {
+    if (rowAnchors.length === 0) {
       helper.hidden = true;
       list.innerHTML = '';
       return;
     }
     helper.hidden = false;
-    list.innerHTML = placeholders.map(function (ph, i) {
-      return '<div class="json-url-row" data-placeholder="' + ph + '">' +
-        '<div class="jur-label">URL ' + (i + 1) + '：<code>' + ph + '</code></div>' +
-        '<input type="url" class="jur-input" placeholder="https://..." />' +
-        '<button type="button" class="btn jur-apply">套用</button>' +
-        '<span class="jur-status">未套用</span>' +
+    list.innerHTML = rowAnchors.map(function (anchor, i) {
+      var existing = preservedRows && preservedRows[anchor];
+      var inputVal = '';
+      var statusHtml = '未套用';
+      var labelHtml;
+      var isApplied = existing && existing.getAttribute('data-applied') === '1';
+      if (isApplied) {
+        // 之前已套用過，anchor 是已替換的 URL（或 placeholder）
+        inputVal = anchor;
+        statusHtml = '<span style="color:#065f46;">已套用</span>';
+        labelHtml = 'URL ' + (i + 1) + '：<span class="muted" style="font-size:11px;">（已綁定）</span>';
+      } else {
+        labelHtml = 'URL ' + (i + 1) + '：<code>' + anchor + '</code>';
+      }
+      return '<div class="json-url-row" data-id="' + anchor + '"' +
+        (isApplied ? ' data-applied="1"' : '') + '>' +
+        '<div class="jur-label">' + labelHtml + '</div>' +
+        '<input type="url" class="jur-input" placeholder="https://..." value="' + inputVal.replace(/"/g, '&quot;') + '" />' +
+        '<button type="button" class="btn jur-apply">' + (isApplied ? '再套用' : '套用') + '</button>' +
+        '<span class="jur-status">' + statusHtml + '</span>' +
         '</div>';
     }).join('');
     $$('.jur-apply', list).forEach(function (btn) {
@@ -1388,37 +1430,59 @@
   }
 
   function applyJsonUrl(row) {
-    var ph = row.getAttribute('data-placeholder');
+    var anchor = row.getAttribute('data-id');
     var input = row.querySelector('.jur-input');
     var statusEl = row.querySelector('.jur-status');
     var url = String(input.value || '').trim();
     if (!url) { statusEl.textContent = '請填 URL'; return; }
     if (!/^https?:\/\//i.test(url)) { statusEl.textContent = '需 http(s):// 開頭'; return; }
     var textarea = $('flex-json');
-    textarea.value = textarea.value.split(ph).join(url);
-    statusEl.textContent = '已套用';
+    textarea.value = textarea.value.split(anchor).join(url);
+    row.setAttribute('data-id', url);
+    row.setAttribute('data-applied', '1');
+    var labelEl = row.querySelector('.jur-label');
+    if (labelEl) {
+      var idxText = labelEl.textContent.split('：')[0] || 'URL';
+      labelEl.innerHTML = idxText + '：<span class="muted" style="font-size:11px;">（已綁定）</span>';
+    }
+    statusEl.innerHTML = '<span style="color:#065f46;">已套用</span>';
+    var btn = row.querySelector('.jur-apply');
+    if (btn) btn.textContent = '再套用';
     state.messagePreviewed = false;
     updateSendButton();
     saveDraft();
-    scanJsonImagesAndUrls();
+    // 不 re-scan URL，row 維持
+    scanJsonImages();
   }
 
-  function renderJsonImageRows(placeholders) {
+  // 判斷 ID 是 mediaId UUID 還是 placeholder
+  function isMediaIdLike(id) {
+    return /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(String(id || ''));
+  }
+
+  function renderJsonImageRows(ids) {
     var helper = $('json-image-helper');
     var list = $('json-image-list');
-    if (placeholders.length === 0) {
+    if (ids.length === 0) {
       helper.hidden = true;
       list.innerHTML = '';
       return;
     }
     helper.hidden = false;
-    list.innerHTML = placeholders.map(function (ph, i) {
-      return '<div class="json-image-row" data-placeholder="' + ph + '">' +
-        '<div class="jir-label">圖片 ' + (i + 1) + '：<code>' + ph + '</code></div>' +
+    list.innerHTML = ids.map(function (id, i) {
+      var bound = isMediaIdLike(id);
+      var labelHtml = '圖片 ' + (i + 1) + '：' + (
+        bound
+          ? '<span style="color:#065f46;font-weight:600;">已綁定</span> <code>' + id.slice(0, 8) + '…</code>'
+          : '<code>' + id + '</code>'
+      );
+      var btnLabel = bound ? '更換' : '上傳';
+      return '<div class="json-image-row" data-id="' + id + '">' +
+        '<div class="jir-label">' + labelHtml + '</div>' +
         '<input type="file" class="jir-file" accept="image/png,image/jpeg" />' +
-        '<button type="button" class="btn jir-upload">上傳</button>' +
+        '<button type="button" class="btn jir-upload">' + btnLabel + '</button>' +
         '<button type="button" class="jir-remove">不要這張圖</button>' +
-        '<span class="jir-status">未上傳</span>' +
+        '<span class="jir-status">' + (bound ? '' : '未上傳') + '</span>' +
         '</div>';
     }).join('');
     $$('.jir-upload', list).forEach(function (btn) {
@@ -1435,9 +1499,9 @@
     });
   }
 
-  // 用 JSON.parse 走訪 tree，找到 url 含該 placeholder 的 hero/image 區塊並刪除
+  // 用 JSON.parse 走訪 tree，找到 url 含該 anchor 的 hero/image 區塊並刪除
   function removeJsonImageBlock(row) {
-    var ph = row.getAttribute('data-placeholder');
+    var ph = row.getAttribute('data-id');
     var textarea = $('flex-json');
     var raw = textarea.value;
     var parsed;
@@ -1456,7 +1520,7 @@
     state.messagePreviewed = false;
     updateSendButton();
     saveDraft();
-    scanJsonImagesAndUrls();
+    scanJsonImages();
   }
 
   function walkAndRemoveImage(obj, ph) {
@@ -1491,7 +1555,7 @@
   }
 
   function uploadJsonImage(row) {
-    var ph = row.getAttribute('data-placeholder');
+    var anchor = row.getAttribute('data-id');
     var fi = row.querySelector('.jir-file');
     var statusEl = row.querySelector('.jir-status');
     if (!fi.files || fi.files.length === 0) {
@@ -1507,27 +1571,27 @@
       .then(function (r) { return r.json(); })
       .then(function (data) {
         if (!data.ok) { statusEl.textContent = '失敗：' + (data.error || ''); return; }
-        // 把 textarea 內所有該 placeholder 換成 mediaId
+        // 把 textarea 內所有該 anchor (placeholder 或舊 mediaId) 替換為新 mediaId
         var textarea = $('flex-json');
-        textarea.value = textarea.value.split(ph).join(data.mediaId);
-        statusEl.innerHTML = '已套用 <code style="background:#fff;padding:1px 4px;border-radius:3px;">' +
-          data.mediaId.slice(0, 8) + '…</code>';
+        textarea.value = textarea.value.split(anchor).join(data.mediaId);
         state.messagePreviewed = false;
         updateSendButton();
         saveDraft();
-        // 重新 scan（少了這個 placeholder）
-        scanJsonImagesAndUrls();
+        // 重新 scan image（row 會 rebuild，但仍有 row，這次 ID 是新 mediaId）
+        scanJsonImages();
       })
       .catch(function (e) { statusEl.textContent = '錯誤：' + e.message; });
   }
 
-  // 觸發 scan 的 3 個時機
+  // 觸發 scan：
+  //   textarea input → 只 scan image（不影響 URL 已套用 row）
+  //   tab 切換 / 載入模板 / 重新掃描按鈕 → 全 scan（含 URL list rebuild）
   var scanTimer = null;
-  function scheduleScan() {
+  function scheduleScanImages() {
     if (scanTimer) clearTimeout(scanTimer);
-    scanTimer = setTimeout(scanJsonImagesAndUrls, 300);
+    scanTimer = setTimeout(scanJsonImages, 300);
   }
-  $('flex-json').addEventListener('input', scheduleScan);
+  $('flex-json').addEventListener('input', scheduleScanImages);
   $('btn-scan-json-images').addEventListener('click', scanJsonImagesAndUrls);
   // tab 切換 → 也 scan 一次
   $$('.tab-btn[data-mode]').forEach(function (btn) {
