@@ -98,6 +98,46 @@ function registerAdminBroadcastRoutes(app, deps) {
     return rs.rowCount === 0 ? null : rs.rows[0];
   }
 
+  // ---------- 0. public redirect: /r/b/:broadcastId（CTA 點擊追蹤） ----------
+  // 從 DB 撈該批次的 template.ctaUrl，寫一筆 click log，302 redirect。
+  // 用 broadcast_id 作為授權邊界（不允許 query string 傳目標 URL，避免 open redirect）。
+  app.get('/r/b/:broadcastId', async (req, res) => {
+    const idStr = String(req.params.broadcastId || '').trim();
+    if (!isPositiveIntegerString(idStr)) return res.status(404).type('text/plain').send('Not found');
+    const broadcastId = Number(idStr);
+    try {
+      const rs = await query(
+        `SELECT message_config FROM admin_broadcasts WHERE id = $1`,
+        [broadcastId]
+      );
+      if (rs.rowCount === 0) return res.status(404).type('text/plain').send('Not found');
+      const cfg = rs.rows[0].message_config || {};
+      let targetUrl = '';
+      if (cfg.mode === 'template' && cfg.template && typeof cfg.template.ctaUrl === 'string') {
+        targetUrl = cfg.template.ctaUrl.trim();
+      }
+      // 防呆：必須 http(s)
+      if (!/^https?:\/\//i.test(targetUrl)) {
+        return res.status(404).type('text/plain').send('Not found');
+      }
+      // 寫 click log（不阻塞 redirect）
+      query(
+        `INSERT INTO admin_broadcast_clicks (broadcast_id, target_url, user_agent, referer)
+         VALUES ($1, $2, $3, $4)`,
+        [
+          broadcastId,
+          targetUrl,
+          (req.get('user-agent') || '').slice(0, 500),
+          (req.get('referer') || '').slice(0, 500)
+        ]
+      ).catch(err => console.error('click log failed:', err.message));
+      return res.redirect(302, targetUrl);
+    } catch (err) {
+      console.error('redirect error:', err.message);
+      return res.status(500).type('text/plain').send('Server error');
+    }
+  });
+
   // ---------- 1. main page ----------
   app.get('/admin/broadcast', requireAdmin, async (req, res, next) => {
     try {
@@ -596,8 +636,12 @@ function registerAdminBroadcastRoutes(app, deps) {
       client.release();
 
       // 構造 messages（每個 chunk 重新建一次，避免長時間運行訊息設定變動）
+      // 傳 broadcastId → CTA 會包成 /r/b/<id> 中介 redirect 做點擊追蹤
       const origin = publicOriginOrEmpty(req);
-      const builtMsg = buildLineMessages(b.message_config, { heroImageBaseUrl: origin });
+      const builtMsg = buildLineMessages(b.message_config, {
+        heroImageBaseUrl: origin,
+        broadcastId
+      });
       if (!builtMsg.ok) {
         // 訊息無效：把 claimed 退回 pending
         if (claimed.length > 0) {
@@ -685,6 +729,161 @@ function registerAdminBroadcastRoutes(app, deps) {
     } catch (err) {
       console.error('process-chunk error:', err.message);
       return safeJsonError(res, 500, 'process_chunk_failed');
+    }
+  });
+
+  // ---------- 6b. history list page ----------
+  app.get('/admin/broadcast/history', requireAdmin, async (req, res, next) => {
+    try {
+      const pageNum = Math.max(1, parseInt(String(req.query.page || '1'), 10) || 1);
+      const perPage = 30;
+      const offset = (pageNum - 1) * perPage;
+
+      const countRs = await query(`SELECT COUNT(*)::int AS n FROM admin_broadcasts`);
+      const total = Number(countRs.rows[0]?.n || 0);
+      const totalPages = Math.max(1, Math.ceil(total / perPage));
+
+      const listRs = await query(
+        `SELECT b.id, b.created_at, b.status, b.admin_username,
+                b.recipient_total, b.recipient_ok, b.recipient_fail, b.recipient_skip,
+                b.started_at, b.finished_at,
+                (SELECT COUNT(*) FROM admin_broadcast_clicks WHERE broadcast_id = b.id)::int AS click_count
+         FROM admin_broadcasts b
+         ORDER BY b.id DESC
+         LIMIT $1 OFFSET $2`,
+        [perPage, offset]
+      );
+
+      return res.render('admin_broadcast_history', {
+        title: '群發歷史',
+        bodyClass: 'admin-shell broadcast-history-shell',
+        user: (req.authUser && req.authUser.un) || '',
+        isAdmin: true,
+        batches: listRs.rows,
+        page: pageNum,
+        totalPages,
+        total
+      });
+    } catch (err) {
+      next(err);
+    }
+  });
+
+  // ---------- 6c. single broadcast detail ----------
+  app.get('/admin/broadcast/:id(\\d+)', requireAdmin, async (req, res, next) => {
+    try {
+      const broadcastId = Number(req.params.id);
+      const b = await loadBroadcast(broadcastId);
+      if (!b) return res.status(404).type('text/plain').send('Not found');
+
+      // 收件人狀態統計
+      const statusRs = await query(
+        `SELECT status, COUNT(*)::int AS n
+         FROM admin_broadcast_recipients
+         WHERE broadcast_id = $1
+         GROUP BY status`,
+        [broadcastId]
+      );
+      const statusCounts = {};
+      statusRs.rows.forEach(r => { statusCounts[r.status] = r.n; });
+
+      // 失敗收件人 sample（給「重發」用）
+      const failedSampleRs = await query(
+        `SELECT m.id, m.line_user_id, m.error, m.pushed_at,
+                u.line_display_name, u.username
+         FROM admin_broadcast_recipients m
+         LEFT JOIN users u ON u.line_user_id = m.line_user_id
+         WHERE m.broadcast_id = $1 AND m.status = 'failed'
+         ORDER BY m.id ASC
+         LIMIT 50`,
+        [broadcastId]
+      );
+
+      // 收件人前 30 筆（一般 sample）
+      const recentSampleRs = await query(
+        `SELECT m.id, m.line_user_id, m.status, m.error, m.pushed_at,
+                u.line_display_name, u.username
+         FROM admin_broadcast_recipients m
+         LEFT JOIN users u ON u.line_user_id = m.line_user_id
+         WHERE m.broadcast_id = $1
+         ORDER BY m.id ASC
+         LIMIT 30`,
+        [broadcastId]
+      );
+
+      // click 統計
+      const clickStatRs = await query(
+        `SELECT COUNT(*)::int AS clicks,
+                COUNT(DISTINCT user_agent)::int AS unique_ua,
+                MIN(clicked_at) AS first_click,
+                MAX(clicked_at) AS last_click
+         FROM admin_broadcast_clicks
+         WHERE broadcast_id = $1`,
+        [broadcastId]
+      );
+
+      // 最近點擊 sample
+      const clickRecentRs = await query(
+        `SELECT clicked_at, user_agent
+         FROM admin_broadcast_clicks
+         WHERE broadcast_id = $1
+         ORDER BY id DESC
+         LIMIT 10`,
+        [broadcastId]
+      );
+
+      return res.render('admin_broadcast_detail', {
+        title: `批次 #${broadcastId}`,
+        bodyClass: 'admin-shell broadcast-detail-shell',
+        user: (req.authUser && req.authUser.un) || '',
+        isAdmin: true,
+        broadcast: b,
+        statusCounts,
+        failedSample: failedSampleRs.rows,
+        recentSample: recentSampleRs.rows,
+        clickStat: clickStatRs.rows[0] || { clicks: 0, unique_ua: 0 },
+        clickRecent: clickRecentRs.rows
+      });
+    } catch (err) {
+      next(err);
+    }
+  });
+
+  // ---------- 6d. resend failed recipients ----------
+  app.post('/admin/broadcast/:id(\\d+)/resend-failed', requireAdmin, async (req, res) => {
+    if (!lineChannelAccessToken) {
+      return safeJsonError(res, 400, 'no_line_channel_access_token');
+    }
+    const broadcastId = Number(req.params.id);
+    try {
+      const b = await loadBroadcast(broadcastId);
+      if (!b) return safeJsonError(res, 404, 'broadcast_not_found');
+
+      // 把 failed 改回 pending，並把 broadcast status 改回 running
+      const updRs = await query(
+        `UPDATE admin_broadcast_recipients
+         SET status = 'pending', pushed_at = NULL, error = NULL
+         WHERE broadcast_id = $1 AND status = 'failed'
+         RETURNING id`,
+        [broadcastId]
+      );
+      const resetCount = updRs.rowCount;
+      if (resetCount === 0) return safeJsonError(res, 400, 'no_failed_to_resend');
+
+      // 重設 broadcast 為 running（如果之前是 done/cancelled）+ 扣除失敗計數
+      await query(
+        `UPDATE admin_broadcasts
+         SET status = 'running',
+             recipient_fail = GREATEST(0, recipient_fail - $2),
+             finished_at = NULL,
+             updated_at = NOW()
+         WHERE id = $1`,
+        [broadcastId, resetCount]
+      );
+      return res.json({ ok: true, resetCount, broadcastId });
+    } catch (err) {
+      console.error('resend-failed error:', err);
+      return safeJsonError(res, 500, 'resend_failed', { detail: err && err.message });
     }
   });
 

@@ -1,0 +1,189 @@
+<%-
+  include('layout', {
+    user: user,
+    isAdmin: isAdmin,
+    bodyClass: bodyClass,
+    body: `
+    <section class="card">
+      <div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:10px;">
+        <div>
+          <h1 style="margin:0;">批次 #${broadcast.id}</h1>
+          <p class="muted" style="margin-top:6px;font-size:13px;">
+            建立於 ${new Date(broadcast.created_at).toLocaleString('zh-TW', { timeZone: 'Asia/Taipei' })}
+            · 建立者 ${String(broadcast.admin_username || '').replace(/</g,'&lt;')}
+            · 狀態 <span class="status-pill status-${broadcast.status}">${broadcast.status}</span>
+          </p>
+        </div>
+        <div style="display:flex;gap:8px;">
+          <a href="/admin/broadcast/history" class="btn">回歷史列表</a>
+          <a href="/admin/broadcast" class="btn">回主頁</a>
+        </div>
+      </div>
+    </section>
+
+    <section class="card">
+      <h2 style="margin-top:0;">送出統計</h2>
+      <div class="stat-grid">
+        <div class="stat-cell">
+          <div class="stat-label">總數</div>
+          <div class="stat-value">${broadcast.recipient_total}</div>
+        </div>
+        <div class="stat-cell">
+          <div class="stat-label">成功</div>
+          <div class="stat-value" style="color:#065f46;">${broadcast.recipient_ok}</div>
+        </div>
+        <div class="stat-cell">
+          <div class="stat-label">失敗</div>
+          <div class="stat-value" style="color:#991b1b;">${broadcast.recipient_fail}</div>
+        </div>
+        <div class="stat-cell">
+          <div class="stat-label">跳過</div>
+          <div class="stat-value" style="color:#6b7280;">${broadcast.recipient_skip}</div>
+        </div>
+        <div class="stat-cell stat-cell--highlight">
+          <div class="stat-label">CTA 點擊</div>
+          <div class="stat-value">${clickStat.clicks || 0}</div>
+          ${broadcast.recipient_ok > 0 ? `<div class="stat-sub muted">${Math.round((Number(clickStat.clicks || 0) / broadcast.recipient_ok) * 100)}% 對成功送達者</div>` : ''}
+        </div>
+      </div>
+
+      ${broadcast.recipient_fail > 0 && broadcast.status !== 'running' ? `
+        <div class="resend-block">
+          <button type="button" class="btn btn-warning" id="btn-resend-failed">把 ${broadcast.recipient_fail} 個失敗的重設為 pending 並重發</button>
+          <span id="resend-status" class="muted" style="font-size:13px;"></span>
+        </div>
+      ` : ''}
+    </section>
+
+    <section class="card">
+      <h2 style="margin-top:0;">收件人前 30 筆</h2>
+      ${recentSample.length === 0
+        ? '<p class="muted">無資料</p>'
+        : `<div class="table-responsive"><table class="prize-table">
+            <thead>
+              <tr>
+                <th>ID</th>
+                <th>顯示名 / 帳號</th>
+                <th>line_user_id</th>
+                <th>狀態</th>
+                <th>送出時間</th>
+                <th>錯誤訊息</th>
+              </tr>
+            </thead>
+            <tbody>
+              ${recentSample.map(r => {
+                const pushed = r.pushed_at ? new Date(r.pushed_at).toISOString().replace('T',' ').slice(11,19) : '';
+                return `<tr>
+                  <td>${r.id}</td>
+                  <td>${String(r.line_display_name || r.username || '').replace(/</g,'&lt;')}</td>
+                  <td><code style="font-size:11px;">${String(r.line_user_id || '').replace(/</g,'&lt;')}</code></td>
+                  <td><span class="status-pill status-${r.status}">${r.status}</span></td>
+                  <td class="muted" style="font-size:12px;">${pushed}</td>
+                  <td class="muted" style="font-size:12px;">${String(r.error || '').replace(/</g,'&lt;')}</td>
+                </tr>`;
+              }).join('')}
+            </tbody>
+          </table></div>`
+      }
+    </section>
+
+    ${(clickStat.clicks || 0) > 0 ? `
+      <section class="card">
+        <h2 style="margin-top:0;">最近 10 次點擊</h2>
+        <div class="table-responsive"><table class="prize-table">
+          <thead>
+            <tr>
+              <th>時間</th>
+              <th>User-Agent</th>
+            </tr>
+          </thead>
+          <tbody>
+            ${clickRecent.map(c => {
+              const ts = c.clicked_at ? new Date(c.clicked_at).toLocaleString('zh-TW', { timeZone: 'Asia/Taipei' }) : '';
+              return `<tr>
+                <td>${ts}</td>
+                <td class="muted" style="font-size:11px;font-family:monospace;">${String(c.user_agent || '').replace(/</g,'&lt;').slice(0,200)}</td>
+              </tr>`;
+            }).join('')}
+          </tbody>
+        </table></div>
+      </section>
+    ` : ''}
+
+    <style>
+      .stat-grid {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(120px, 1fr));
+        gap: 10px;
+        margin-top: 6px;
+      }
+      .stat-cell {
+        padding: 14px 16px;
+        background: #fafafa;
+        border: 1px solid #e5e7eb;
+        border-radius: 8px;
+      }
+      .stat-cell--highlight {
+        background: #FFFBEB;
+        border-color: #FCC726;
+      }
+      .stat-label { font-size: 12px; color: #6b7280; margin-bottom: 4px; }
+      .stat-value { font-size: 24px; font-weight: 700; color: #1f2937; line-height: 1.2; }
+      .stat-sub { font-size: 11px; margin-top: 4px; }
+      .resend-block {
+        display: flex;
+        gap: 10px;
+        align-items: center;
+        margin-top: 16px;
+        padding: 12px;
+        background: #fef3c7;
+        border-radius: 8px;
+      }
+      .status-pill {
+        display: inline-block;
+        padding: 2px 8px;
+        border-radius: 999px;
+        font-size: 12px;
+        background: #e5e7eb;
+        color: #374151;
+      }
+      .status-pill.status-running,
+      .status-pill.status-sending,
+      .status-pill.status-pending { background: #fde68a; color: #92400e; }
+      .status-pill.status-done,
+      .status-pill.status-sent { background: #d1fae5; color: #065f46; }
+      .status-pill.status-cancelled,
+      .status-pill.status-failed { background: #fee2e2; color: #991b1b; }
+      .status-pill.status-skipped { background: #e5e7eb; color: #6b7280; }
+    </style>
+
+    <script>
+      (function () {
+        var btn = document.getElementById('btn-resend-failed');
+        if (!btn) return;
+        var statusEl = document.getElementById('resend-status');
+        btn.addEventListener('click', function () {
+          if (!confirm('將把所有失敗收件人重設為 pending 並重發。確認？')) return;
+          btn.disabled = true;
+          statusEl.textContent = '處理中…';
+          fetch('/admin/broadcast/${broadcast.id}/resend-failed', { method: 'POST' })
+            .then(function (r) { return r.json(); })
+            .then(function (data) {
+              if (data.ok) {
+                statusEl.textContent = '已重設 ' + data.resetCount + ' 個。請回主頁從「近期批次」進入這個批次手動點重發，或等下次 chunk loop。';
+                setTimeout(function () { location.reload(); }, 1500);
+              } else {
+                statusEl.textContent = '失敗：' + (data.error || '') + (data.detail ? '｜' + data.detail : '');
+                btn.disabled = false;
+              }
+            })
+            .catch(function (e) {
+              statusEl.textContent = '網路錯誤：' + e.message;
+              btn.disabled = false;
+            });
+        });
+      })();
+    </script>
+    `
+  })
+%>

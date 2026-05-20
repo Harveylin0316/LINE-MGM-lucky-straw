@@ -1,0 +1,78 @@
+<%-
+  include('layout', {
+    user: user,
+    isAdmin: isAdmin,
+    bodyClass: bodyClass,
+    body: `
+    <section class="card">
+      <div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:10px;">
+        <h1 style="margin:0;">群發歷史</h1>
+        <a href="/admin/broadcast" class="btn">回群發訊息</a>
+      </div>
+      <p class="muted" style="margin-top:6px;">共 ${total} 筆。點批次 ID 進入詳情頁查看收件人狀態與 CTA 點擊數據。</p>
+
+      ${
+        Array.isArray(batches) && batches.length > 0
+          ? `<div class="table-responsive"><table class="prize-table">
+              <thead>
+                <tr>
+                  <th>ID</th>
+                  <th>建立時間</th>
+                  <th>建立者</th>
+                  <th>狀態</th>
+                  <th>總數</th>
+                  <th>成功</th>
+                  <th>失敗</th>
+                  <th>跳過</th>
+                  <th>點擊</th>
+                  <th>完成時間</th>
+                </tr>
+              </thead>
+              <tbody>
+                ${batches.map(r => {
+                  const ts = r.created_at ? new Date(r.created_at).toISOString().replace('T',' ').slice(0,19) : '';
+                  const fin = r.finished_at ? new Date(r.finished_at).toISOString().replace('T',' ').slice(0,19) : '';
+                  const rate = r.recipient_total > 0
+                    ? Math.round((r.click_count / r.recipient_total) * 100)
+                    : 0;
+                  return `<tr>
+                    <td><a href="/admin/broadcast/${r.id}" style="font-weight:600;">#${r.id}</a></td>
+                    <td>${ts}</td>
+                    <td>${(r.admin_username || '').replace(/</g,'&lt;')}</td>
+                    <td><span class="status-pill status-${r.status}">${r.status}</span></td>
+                    <td>${r.recipient_total}</td>
+                    <td>${r.recipient_ok}</td>
+                    <td>${r.recipient_fail}</td>
+                    <td>${r.recipient_skip}</td>
+                    <td>${r.click_count}${r.recipient_total > 0 ? ` <span class="muted" style="font-size:11px;">(${rate}%)</span>` : ''}</td>
+                    <td class="muted" style="font-size:12px;">${fin}</td>
+                  </tr>`;
+                }).join('')}
+              </tbody>
+            </table></div>
+            ${totalPages > 1 ? `<div class="pagination" style="margin-top:14px;display:flex;gap:6px;align-items:center;font-size:13px;">
+              ${page > 1 ? `<a class="btn" href="/admin/broadcast/history?page=${page-1}">上一頁</a>` : ''}
+              <span class="muted">第 ${page} / ${totalPages} 頁</span>
+              ${page < totalPages ? `<a class="btn" href="/admin/broadcast/history?page=${page+1}">下一頁</a>` : ''}
+            </div>` : ''}`
+          : '<p class="muted">尚無紀錄</p>'
+      }
+    </section>
+
+    <style>
+      .status-pill {
+        display: inline-block;
+        padding: 2px 8px;
+        border-radius: 999px;
+        font-size: 12px;
+        background: #e5e7eb;
+        color: #374151;
+      }
+      .status-pill.status-running { background: #fde68a; color: #92400e; }
+      .status-pill.status-done { background: #d1fae5; color: #065f46; }
+      .status-pill.status-cancelled,
+      .status-pill.status-failed { background: #fee2e2; color: #991b1b; }
+    </style>
+    `
+  })
+%>

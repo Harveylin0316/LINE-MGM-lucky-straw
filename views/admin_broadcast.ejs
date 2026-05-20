@@ -305,10 +305,13 @@
     </section>
 
     <section class="card">
-      <h2>近期批次（最新 10 筆）</h2>
+      <div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:10px;">
+        <h2 style="margin:0;">近期批次（最新 10 筆）</h2>
+        <a href="/admin/broadcast/history" class="btn">查看完整歷史</a>
+      </div>
       ${
         Array.isArray(recent) && recent.length > 0
-          ? `<div class="table-responsive"><table class="prize-table">
+          ? `<div class="table-responsive" style="margin-top:12px;"><table class="prize-table">
               <thead>
                 <tr>
                   <th>ID</th>
@@ -325,7 +328,7 @@
                 ${recent
                   .map(
                     r => `<tr>
-                      <td>${r.id}</td>
+                      <td><a href="/admin/broadcast/${r.id}" style="font-weight:600;">#${r.id}</a></td>
                       <td>${(r.created_at ? new Date(r.created_at).toISOString().replace('T', ' ').slice(0, 19) : '')}</td>
                       <td>${(r.admin_username || '').replace(/</g, '&lt;')}</td>
                       <td><span class="status-pill status-${r.status}">${r.status}</span></td>
@@ -338,7 +341,7 @@
                   .join('')}
               </tbody>
             </table></div>`
-          : '<p class="muted">尚無紀錄</p>'
+          : '<p class="muted" style="margin-top:12px;">尚無紀錄</p>'
       }
     </section>
 
