@@ -2,9 +2,9 @@
  * 後台「群發訊息」黃色 Flex 模板 builder
  *
  * 設計重點：
- * - 卡片底色 #FFFBEB (amber-50)，主視覺黃色 #facc15 (amber-400)
+ * - 卡片底色 #FFFFFF，主視覺黃色 #FCC726（OpenRice 官方品牌黃）
  * - CTA 按鈕用 box+action 模擬（LINE Flex 原生 button 的 label 字色無法自訂，
- *   白字在 #facc15 上對比不足；用 box 才能達到「黃底深字」的可讀性）。
+ *   白字在 #FCC726 上對比不足；用 box 才能達到「黃底深字」的可讀性）。
  * - 接受 messageConfig.mode = 'template' | 'flex_json' 兩種模式。
  */
 
@@ -21,12 +21,12 @@ const FIELD_LIMITS = {
 const COLORS = {
   cardBg: '#FFFFFF',         // 卡片底（白）
   couponBoxBg: '#FFFBEB',    // 優惠碼框淺黃底
-  couponBorder: '#FACC15',   // 優惠碼框黃邊
+  couponBorder: '#FCC726',   // 優惠碼框黃邊（OpenRice 官方黃）
   couponLabel: '#92400E',    // amber-800 (優惠碼的「優惠碼」小標)
   couponCode: '#1F2937',
   disclaimerText: '#9CA3AF', // gray-400 注意事項
   separator: '#FDE68A',
-  buttonBg: '#FACC15',
+  buttonBg: '#FCC726',
   buttonText: '#1F2937',
   titleText: '#1F2937',
   subtitleText: '#4B5563'
