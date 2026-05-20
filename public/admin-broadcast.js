@@ -590,11 +590,45 @@
       state.audiencePreviewedTotal > 0 &&
       state.messagePreviewed &&
       !state.sending;
-    btn.disabled = !ready;
+    // 不真的 disable，click 仍能 fire 才能給 user 明確 hint
+    if (ready) {
+      btn.classList.remove('btn-needs-prep');
+      btn.title = '';
+    } else {
+      btn.classList.add('btn-needs-prep');
+      btn.title = '需先完成步驟 1（預覽收件人）與步驟 2（預覽訊息）';
+    }
+  }
+
+  function checkSendReadiness() {
+    if (state.sending) return { ok: false, reason: '正在送出中，請稍候' };
+    if (!INIT.hasLineToken) return { ok: false, reason: '尚未設定 LINE_CHANNEL_ACCESS_TOKEN，無法送出' };
+    if (state.audiencePreviewedTotal === null) {
+      return { ok: false, reason: '請先在步驟 1 點「預覽收件人」按鈕確認對象', focusEl: 'btn-preview-audience' };
+    }
+    if (state.audiencePreviewedTotal === 0) {
+      return { ok: false, reason: '收件人為 0，請調整條件或選不同名單', focusEl: 'btn-preview-audience' };
+    }
+    if (!state.messagePreviewed) {
+      return { ok: false, reason: '請先在步驟 2 點「預覽訊息」按鈕確認訊息樣式', focusEl: 'btn-preview-msg' };
+    }
+    return { ok: true };
   }
 
   $('btn-send').addEventListener('click', function () {
-    if (!confirm('確定要送出？這將呼叫 LINE Push API，發出後無法回收。')) return;
+    var check = checkSendReadiness();
+    if (!check.ok) {
+      alert('無法送出：\n\n' + check.reason);
+      if (check.focusEl) {
+        var el = $(check.focusEl);
+        if (el) {
+          el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+          el.focus();
+        }
+      }
+      return;
+    }
+    if (!confirm('將送 ' + state.audiencePreviewedTotal + ' 人。發出後無法回收，確認？')) return;
     state.sending = true;
     updateSendButton();
     var progressWrap = $('send-progress');

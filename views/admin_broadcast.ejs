@@ -248,7 +248,7 @@
             <legend><span class="step-pill">3</span> 送出</legend>
             <p class="muted" style="margin-bottom:10px;">確認預覽 OK 後再送。送出後將分批處理，前端持續輪詢進度直到結束。</p>
             <div class="broadcast-action-row">
-              <button type="button" class="btn btn-warning btn-large" id="btn-send" disabled>立即送出</button>
+              <button type="button" class="btn btn-warning btn-large" id="btn-send">立即送出</button>
               <button type="button" class="btn" id="btn-cancel" hidden>取消這個批次</button>
             </div>
             <div id="send-progress" class="send-progress" hidden>
@@ -586,6 +586,8 @@
         font-weight: 600;
       }
       .btn-large { padding: 12px 24px; font-size: 15px; }
+      .btn-needs-prep { opacity: 0.5; }
+      .btn-needs-prep:hover { opacity: 1; }
       .send-progress { margin-top: 12px; }
       .progress-bar {
         background: #fde68a;
