@@ -180,8 +180,18 @@ const pool = new Pool({
   connectionString: DATABASE_URL,
   ssl: isProduction ? { rejectUnauthorized: false } : false,
   max: Number.parseInt(process.env.PG_POOL_MAX || '', 10) || (isProduction ? 2 : 10),
-  connectionTimeoutMillis: Number.parseInt(process.env.PG_CONNECTION_TIMEOUT_MS || '', 10) || 10000,
-  idleTimeoutMillis: 20000
+  // 縮短到 5s：cold start 失敗時 fail-fast，避免 user 等 10s 才看到錯
+  connectionTimeoutMillis: Number.parseInt(process.env.PG_CONNECTION_TIMEOUT_MS || '', 10) || 5000,
+  // idle 連線 10s 內回收（< Supabase 端的 idle timeout，避免拿到被 server 切斷的連線）
+  idleTimeoutMillis: 10000,
+  // TCP keepalive：偵測網路中介設備偷殺 idle 連線
+  keepAlive: true,
+  keepAliveInitialDelayMillis: 5000
+});
+
+// 防止 idle 連線在 client 端被 unhandled error 炸掉整個 process
+pool.on('error', err => {
+  console.error('pg pool idle client error:', err && (err.stack || err.message));
 });
 
 const skipDbDdlOnBoot = process.env.SKIP_DB_DDL_ON_BOOT === '1';
