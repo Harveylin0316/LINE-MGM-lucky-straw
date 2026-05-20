@@ -98,6 +98,41 @@ function registerAdminBroadcastRoutes(app, deps) {
     return rs.rowCount === 0 ? null : rs.rows[0];
   }
 
+  // ---------- 0a. public view tracking: /v/b/:broadcastId/:mediaId（Hero 被看到 proxy） ----------
+  // LINE app render hero 圖時會 fetch 這個 URL，server 寫一筆 view log + 回 image bytes。
+  // 注意：開信率 proxy，非精確的「已讀」— LINE app cache 可能少報、prefetch 可能多報。
+  app.get('/v/b/:broadcastId/:mediaId', async (req, res) => {
+    const bIdStr = String(req.params.broadcastId || '').trim();
+    const mediaId = String(req.params.mediaId || '').trim();
+    if (!isPositiveIntegerString(bIdStr)) return res.status(404).type('text/plain').send('Not found');
+    if (!/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(mediaId)) {
+      return res.status(404).type('text/plain').send('Not found');
+    }
+    const broadcastId = Number(bIdStr);
+    try {
+      const rs = await query(
+        'SELECT mime_type, body FROM line_push_media WHERE id = $1',
+        [mediaId]
+      );
+      if (rs.rowCount === 0) return res.status(404).type('text/plain').send('Not found');
+      // 寫 view log（不阻塞回 image）
+      query(
+        `INSERT INTO admin_broadcast_views (broadcast_id, user_agent) VALUES ($1, $2)`,
+        [broadcastId, (req.get('user-agent') || '').slice(0, 500)]
+      ).catch(err => console.error('view log failed:', err.message));
+      const row = rs.rows[0];
+      const buf = Buffer.isBuffer(row.body) ? row.body : Buffer.from(row.body);
+      res.setHeader('Content-Type', row.mime_type);
+      res.setHeader('Cross-Origin-Resource-Policy', 'cross-origin');
+      res.setHeader('Cache-Control', 'public, max-age=300');
+      res.setHeader('Content-Length', String(buf.length));
+      return res.send(buf);
+    } catch (err) {
+      console.error('view tracker error:', err.message);
+      return res.status(500).type('text/plain').send('Server error');
+    }
+  });
+
   // ---------- 0. public redirect: /r/b/:broadcastId（CTA 點擊追蹤） ----------
   // 從 DB 撈該批次的 template.ctaUrl，寫一筆 click log，302 redirect。
   // 用 broadcast_id 作為授權邊界（不允許 query string 傳目標 URL，避免 open redirect）。
@@ -507,9 +542,23 @@ function registerAdminBroadcastRoutes(app, deps) {
       const messageConfig = body.message_config;
       const sendMode = body.send_mode === 'scheduled' ? 'scheduled' : 'immediate';
 
+      let scheduledAt = null;
       if (sendMode === 'scheduled') {
-        // Phase 1 不支援；schema 已備，留待 Phase 3
-        return safeJsonError(res, 400, 'scheduled_not_implemented_yet');
+        const rawScheduled = String((body && body.scheduled_at) || '').trim();
+        if (!rawScheduled) return safeJsonError(res, 400, 'scheduled_at_required');
+        // 接受 ISO 字串或 datetime-local "YYYY-MM-DDTHH:mm"（視為台灣時間）
+        let dt;
+        if (/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}(:\d{2})?$/.test(rawScheduled)) {
+          // datetime-local 視為台北時間，UTC = 台北 - 8h
+          dt = new Date(rawScheduled + ':00+08:00');
+        } else {
+          dt = new Date(rawScheduled);
+        }
+        if (Number.isNaN(dt.getTime())) return safeJsonError(res, 400, 'invalid_scheduled_at');
+        if (dt.getTime() < Date.now() - 60 * 1000) {
+          return safeJsonError(res, 400, 'scheduled_at_in_past');
+        }
+        scheduledAt = dt;
       }
 
       const origin = publicOriginOrEmpty(req);
@@ -534,18 +583,32 @@ function registerAdminBroadcastRoutes(app, deps) {
       const client = await pool.connect();
       try {
         await client.query('BEGIN');
-        const insRs = await client.query(
-          `INSERT INTO admin_broadcasts
-            (status, started_at, admin_username, audience_config, message_config, recipient_total)
-           VALUES ('running', NOW(), $1, $2::jsonb, $3::jsonb, $4)
-           RETURNING id`,
-          [
-            adminUsername,
-            JSON.stringify({ conditions }),
-            JSON.stringify(messageConfig || {}),
-            recipients.length
-          ]
-        );
+        const insRs = scheduledAt
+          ? await client.query(
+              `INSERT INTO admin_broadcasts
+                (status, scheduled_at, admin_username, audience_config, message_config, recipient_total)
+               VALUES ('scheduled', $1, $2, $3::jsonb, $4::jsonb, $5)
+               RETURNING id`,
+              [
+                scheduledAt.toISOString(),
+                adminUsername,
+                JSON.stringify({ conditions }),
+                JSON.stringify(messageConfig || {}),
+                recipients.length
+              ]
+            )
+          : await client.query(
+              `INSERT INTO admin_broadcasts
+                (status, started_at, admin_username, audience_config, message_config, recipient_total)
+               VALUES ('running', NOW(), $1, $2::jsonb, $3::jsonb, $4)
+               RETURNING id`,
+              [
+                adminUsername,
+                JSON.stringify({ conditions }),
+                JSON.stringify(messageConfig || {}),
+                recipients.length
+              ]
+            );
         const broadcastId = insRs.rows[0].id;
 
         // 分批 INSERT recipients（避免單個 INSERT 太多參數）
@@ -566,7 +629,13 @@ function registerAdminBroadcastRoutes(app, deps) {
           );
         }
         await client.query('COMMIT');
-        return res.json({ ok: true, broadcastId, total: recipients.length });
+        return res.json({
+          ok: true,
+          broadcastId,
+          total: recipients.length,
+          scheduled: Boolean(scheduledAt),
+          scheduledAt: scheduledAt ? scheduledAt.toISOString() : null
+        });
       } catch (e) {
         try { await client.query('ROLLBACK'); } catch (_rb) {}
         console.error('create broadcast tx error:', e.message);
@@ -732,6 +801,143 @@ function registerAdminBroadcastRoutes(app, deps) {
     }
   });
 
+  // ---------- 6a. scheduled runner（cron 內部呼叫，secret 驗證） ----------
+  // 由 netlify/functions/scheduled-broadcast-runner.js 每 5 分鐘觸發一次。
+  // 做兩件事：
+  //   1. 把到期的 scheduled broadcasts 改成 running + started_at = NOW()
+  //   2. 對所有 running broadcasts 各跑一輪 chunk（限 50 個 recipients）
+  app.post('/admin/broadcast/run-scheduled', async (req, res) => {
+    const expectedSecret = process.env.SCHEDULED_RUNNER_SECRET || '';
+    const providedSecret = req.get('x-scheduler-secret') || '';
+    if (!expectedSecret || providedSecret !== expectedSecret) {
+      return res.status(403).json({ ok: false, error: 'forbidden' });
+    }
+    if (!lineChannelAccessToken) {
+      return res.status(200).json({ ok: true, skipped: 'no_line_token' });
+    }
+    try {
+      // Step 1: 把到期的 scheduled 改 running
+      const dueRs = await query(
+        `UPDATE admin_broadcasts
+         SET status = 'running', started_at = NOW(), updated_at = NOW()
+         WHERE status = 'scheduled' AND scheduled_at <= NOW()
+         RETURNING id`
+      );
+      const startedIds = dueRs.rows.map(r => r.id);
+
+      // Step 2: 撈所有 running broadcasts（含剛剛 start 的）
+      const runningRs = await query(
+        `SELECT id, message_config FROM admin_broadcasts
+         WHERE status = 'running'
+         ORDER BY id ASC
+         LIMIT 10`
+      );
+      const origin = process.env.LINE_PUSH_PUBLIC_BASE_URL || process.env.URL || '';
+      const cleanOrigin = String(origin).replace(/\/+$/, '');
+
+      const results = [];
+      for (const row of runningRs.rows) {
+        const bId = row.id;
+        const builtMsg = buildLineMessages(row.message_config, {
+          heroImageBaseUrl: cleanOrigin,
+          broadcastId: bId
+        });
+        if (!builtMsg.ok) {
+          results.push({ broadcastId: bId, skipped: 'message_invalid', detail: builtMsg.error });
+          continue;
+        }
+
+        // 鎖最多 50 個 pending（FOR UPDATE SKIP LOCKED）
+        const client = await pool.connect();
+        let claimed = [];
+        try {
+          await client.query('BEGIN');
+          const claimRs = await client.query(
+            `UPDATE admin_broadcast_recipients
+             SET status = 'sending'
+             WHERE id IN (
+               SELECT id FROM admin_broadcast_recipients
+               WHERE broadcast_id = $1 AND status = 'pending'
+               ORDER BY id ASC LIMIT $2 FOR UPDATE SKIP LOCKED
+             )
+             RETURNING id, user_id, line_user_id`,
+            [bId, 50]
+          );
+          await client.query('COMMIT');
+          claimed = claimRs.rows;
+        } catch (e) {
+          try { await client.query('ROLLBACK'); } catch (_rb) {}
+          client.release();
+          results.push({ broadcastId: bId, error: 'claim_failed', detail: e.message });
+          continue;
+        }
+        client.release();
+
+        let okCount = 0, failCount = 0, skipCount = 0;
+        for (const r of claimed) {
+          const lineUid = String(r.line_user_id || '').trim();
+          if (!lineUid) {
+            await query(
+              `UPDATE admin_broadcast_recipients
+               SET status = 'skipped', pushed_at = NOW(), error = 'missing_line_user_id' WHERE id = $1`,
+              [r.id]
+            );
+            skipCount++;
+            continue;
+          }
+          const pushed = await linePush.pushLineMessages(lineUid, builtMsg.messages, {
+            userId: r.user_id,
+            pushType: 'admin_broadcast'
+          });
+          if (pushed) {
+            await query(
+              `UPDATE admin_broadcast_recipients SET status = 'sent', pushed_at = NOW(), error = NULL WHERE id = $1`,
+              [r.id]
+            );
+            okCount++;
+          } else {
+            await query(
+              `UPDATE admin_broadcast_recipients SET status = 'failed', pushed_at = NOW(), error = 'push_failed' WHERE id = $1`,
+              [r.id]
+            );
+            failCount++;
+          }
+        }
+
+        await query(
+          `UPDATE admin_broadcasts
+           SET recipient_ok = recipient_ok + $2,
+               recipient_fail = recipient_fail + $3,
+               recipient_skip = recipient_skip + $4,
+               updated_at = NOW()
+           WHERE id = $1`,
+          [bId, okCount, failCount, skipCount]
+        );
+
+        // 如果這個 broadcast 沒剩 pending → 結案
+        const remRs = await query(
+          `SELECT COUNT(*)::int AS n FROM admin_broadcast_recipients
+           WHERE broadcast_id = $1 AND status IN ('pending', 'sending')`,
+          [bId]
+        );
+        const remaining = Number(remRs.rows[0]?.n || 0);
+        if (remaining === 0) {
+          await query(
+            `UPDATE admin_broadcasts SET status = 'done', finished_at = NOW(), updated_at = NOW() WHERE id = $1`,
+            [bId]
+          );
+        }
+
+        results.push({ broadcastId: bId, processed: claimed.length, ok: okCount, fail: failCount, skip: skipCount, remaining });
+      }
+
+      return res.json({ ok: true, startedFromScheduled: startedIds, results });
+    } catch (err) {
+      console.error('run-scheduled error:', err && (err.stack || err.message));
+      return res.status(500).json({ ok: false, error: 'run_scheduled_failed', detail: err && err.message });
+    }
+  });
+
   // ---------- 6b. history list page ----------
   app.get('/admin/broadcast/history', requireAdmin, async (req, res, next) => {
     try {
@@ -822,6 +1028,16 @@ function registerAdminBroadcastRoutes(app, deps) {
         [broadcastId]
       );
 
+      // view 統計（hero 圖被 fetch — 開信率 proxy）
+      const viewStatRs = await query(
+        `SELECT COUNT(*)::int AS views,
+                MIN(viewed_at) AS first_view,
+                MAX(viewed_at) AS last_view
+         FROM admin_broadcast_views
+         WHERE broadcast_id = $1`,
+        [broadcastId]
+      );
+
       // 最近點擊 sample
       const clickRecentRs = await query(
         `SELECT clicked_at, user_agent
@@ -842,7 +1058,8 @@ function registerAdminBroadcastRoutes(app, deps) {
         failedSample: failedSampleRs.rows,
         recentSample: recentSampleRs.rows,
         clickStat: clickStatRs.rows[0] || { clicks: 0, unique_ua: 0 },
-        clickRecent: clickRecentRs.rows
+        clickRecent: clickRecentRs.rows,
+        viewStat: viewStatRs.rows[0] || { views: 0, first_view: null, last_view: null }
       });
     } catch (err) {
       next(err);

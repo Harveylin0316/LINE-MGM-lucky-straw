@@ -246,7 +246,29 @@
 
           <fieldset class="broadcast-step">
             <legend><span class="step-pill">3</span> 送出</legend>
-            <p class="muted" style="margin-bottom:10px;">確認預覽 OK 後再送。送出後將分批處理，前端持續輪詢進度直到結束。</p>
+            <p class="muted" style="margin-bottom:10px;">確認預覽 OK 後再送。</p>
+
+            <div class="broadcast-field send-mode-row">
+              <label class="radio-pill">
+                <input type="radio" name="send-mode" value="immediate" checked />
+                <span>立即送出</span>
+              </label>
+              <label class="radio-pill">
+                <input type="radio" name="send-mode" value="scheduled" />
+                <span>排程指定時間</span>
+              </label>
+            </div>
+
+            <div class="broadcast-field" id="schedule-field" hidden>
+              <label>
+                送出時間（台灣時間）
+                <input type="datetime-local" id="schedule-datetime" />
+              </label>
+              <div class="muted" style="font-size:12px;margin-top:4px;">
+                Cron 每 5 分鐘掃一次到期任務，實際送出時間可能晚 0–5 分鐘。
+              </div>
+            </div>
+
             <div class="broadcast-action-row">
               <button type="button" class="btn btn-warning btn-large" id="btn-send">立即送出</button>
               <button type="button" class="btn" id="btn-cancel" hidden>取消這個批次</button>
@@ -586,6 +608,29 @@
         font-weight: 600;
       }
       .btn-large { padding: 12px 24px; font-size: 15px; }
+      .send-mode-row {
+        display: flex;
+        gap: 8px;
+        flex-wrap: wrap;
+      }
+      .radio-pill {
+        display: inline-flex;
+        align-items: center;
+        gap: 6px;
+        padding: 8px 14px;
+        border: 1px solid #d1d5db;
+        border-radius: 999px;
+        cursor: pointer;
+        font-size: 13px;
+        background: #fff;
+      }
+      .radio-pill:has(input:checked) {
+        background: #FCC726;
+        border-color: #d97706;
+        color: #111827;
+        font-weight: 600;
+      }
+      .radio-pill input { margin: 0; accent-color: #d97706; }
       .btn-needs-prep { opacity: 0.5; }
       .btn-needs-prep:hover { opacity: 1; }
       .send-progress { margin-top: 12px; }

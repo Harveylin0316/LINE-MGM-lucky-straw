@@ -247,7 +247,12 @@ function buildLineMessages(messageConfig, { heroImageBaseUrl, broadcastId } = {}
 
   let heroImageUrl = '';
   if (t.heroMediaId && heroImageBaseUrl && /^https:\/\//i.test(heroImageBaseUrl)) {
-    heroImageUrl = `${heroImageBaseUrl.replace(/\/+$/, '')}/p/line-media/${t.heroMediaId}`;
+    const origin = heroImageBaseUrl.replace(/\/+$/, '');
+    // 有 broadcastId → 用 /v/b/<id>/<mediaId> 中介 endpoint，server 寫 view log（開信率 proxy）
+    // 無 broadcastId（譬如 test-push、後台預覽）→ 原本 /p/line-media/<id>，不追蹤
+    heroImageUrl = broadcastId
+      ? `${origin}/v/b/${broadcastId}/${t.heroMediaId}`
+      : `${origin}/p/line-media/${t.heroMediaId}`;
   }
 
   // 點擊追蹤：把模板 CTA URL 包成中介 redirect endpoint

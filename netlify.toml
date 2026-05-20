@@ -13,6 +13,9 @@
   external_node_modules = ["pg", "ejs"]
   included_files = ["views/**", "public/**", "src/views/**", "src/public/**", "server.js"]
 
+[functions."scheduled-broadcast-runner"]
+  schedule = "*/5 * * * *"
+
 [[redirects]]
   from = "/style.css"
   to = "/style.css"

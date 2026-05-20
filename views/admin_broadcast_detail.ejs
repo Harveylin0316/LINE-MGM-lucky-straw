@@ -12,6 +12,7 @@
             建立於 ${new Date(broadcast.created_at).toLocaleString('zh-TW', { timeZone: 'Asia/Taipei' })}
             · 建立者 ${String(broadcast.admin_username || '').replace(/</g,'&lt;')}
             · 狀態 <span class="status-pill status-${broadcast.status}">${broadcast.status}</span>
+            ${broadcast.scheduled_at ? `· 排程於 <strong>${new Date(broadcast.scheduled_at).toLocaleString('zh-TW', { timeZone: 'Asia/Taipei' })}</strong>` : ''}
           </p>
         </div>
         <div style="display:flex;gap:8px;">
@@ -41,11 +42,22 @@
           <div class="stat-value" style="color:#6b7280;">${broadcast.recipient_skip}</div>
         </div>
         <div class="stat-cell stat-cell--highlight">
+          <div class="stat-label">Hero 被看（開信率 proxy）</div>
+          <div class="stat-value">${viewStat.views || 0}</div>
+          ${broadcast.recipient_ok > 0 ? `<div class="stat-sub muted">${Math.round((Number(viewStat.views || 0) / broadcast.recipient_ok) * 100)}% 對成功送達者</div>` : ''}
+        </div>
+        <div class="stat-cell stat-cell--highlight">
           <div class="stat-label">CTA 點擊</div>
           <div class="stat-value">${clickStat.clicks || 0}</div>
           ${broadcast.recipient_ok > 0 ? `<div class="stat-sub muted">${Math.round((Number(clickStat.clicks || 0) / broadcast.recipient_ok) * 100)}% 對成功送達者</div>` : ''}
         </div>
       </div>
+
+      <p class="muted" style="margin-top:10px;font-size:11px;line-height:1.5;">
+        備註：LINE 平台對 OA push 沒有原生「已讀」回條。「Hero 被看」是用「Hero 圖被 fetch 的次數」當開信率
+        proxy — LINE app cache 可能少報，多人同時打開可能多報，僅供參考。「CTA 點擊」是強訊號（有看到才會點）。
+        只有「模板模式」會追蹤；進階 Flex JSON 由你自行用 utm 追蹤。
+      </p>
 
       ${broadcast.recipient_fail > 0 && broadcast.status !== 'running' ? `
         <div class="resend-block">
@@ -155,6 +167,7 @@
       .status-pill.status-cancelled,
       .status-pill.status-failed { background: #fee2e2; color: #991b1b; }
       .status-pill.status-skipped { background: #e5e7eb; color: #6b7280; }
+      .status-pill.status-scheduled { background: #dbeafe; color: #1e40af; }
     </style>
 
     <script>

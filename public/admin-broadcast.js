@@ -26,7 +26,8 @@
     audiencePreviewedTotal: null,
     messagePreviewed: false,
     currentBroadcastId: null,
-    sending: false
+    sending: false,
+    sendMode: 'immediate'  // 'immediate' | 'scheduled'
   };
 
   // ------------------------------------------------------------------
@@ -612,8 +613,26 @@
     if (!state.messagePreviewed) {
       return { ok: false, reason: '請先在步驟 2 點「預覽訊息」按鈕確認訊息樣式', focusEl: 'btn-preview-msg' };
     }
+    if (state.sendMode === 'scheduled') {
+      var dtStr = $('schedule-datetime').value;
+      if (!dtStr) return { ok: false, reason: '請選擇排程時間', focusEl: 'schedule-datetime' };
+      var dt = new Date(dtStr + ':00+08:00');
+      if (isNaN(dt.getTime())) return { ok: false, reason: '排程時間格式錯誤' };
+      if (dt.getTime() <= Date.now() + 60 * 1000) return { ok: false, reason: '排程時間必須在 1 分鐘後' };
+    }
     return { ok: true };
   }
+
+  // send-mode radio：切換顯示 + 按鈕文字
+  $$('input[name="send-mode"]').forEach(function (r) {
+    r.addEventListener('change', function () {
+      var v = r.value;
+      if (!r.checked) return;
+      state.sendMode = v;
+      $('schedule-field').hidden = (v !== 'scheduled');
+      $('btn-send').textContent = v === 'scheduled' ? '排程送出' : '立即送出';
+    });
+  });
 
   $('btn-send').addEventListener('click', function () {
     var check = checkSendReadiness();
@@ -628,7 +647,14 @@
       }
       return;
     }
-    if (!confirm('將送 ' + state.audiencePreviewedTotal + ' 人。發出後無法回收，確認？')) return;
+    var confirmMsg;
+    if (state.sendMode === 'scheduled') {
+      var dtStr2 = $('schedule-datetime').value;
+      confirmMsg = '將排程於「' + dtStr2.replace('T', ' ') + '」送給 ' + state.audiencePreviewedTotal + ' 人，確認？';
+    } else {
+      confirmMsg = '將立即送 ' + state.audiencePreviewedTotal + ' 人。發出後無法回收，確認？';
+    }
+    if (!confirm(confirmMsg)) return;
     state.sending = true;
     updateSendButton();
     var progressWrap = $('send-progress');
@@ -639,14 +665,18 @@
     meta.textContent = '建立批次中…';
     bar.style.width = '0%';
 
+    var createBody = {
+      conditions: collectConditions(),
+      message_config: collectMessageConfig(),
+      send_mode: state.sendMode
+    };
+    if (state.sendMode === 'scheduled') {
+      createBody.scheduled_at = $('schedule-datetime').value;
+    }
     fetch('/admin/broadcast/create', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        conditions: collectConditions(),
-        message_config: collectMessageConfig(),
-        send_mode: 'immediate'
-      })
+      body: JSON.stringify(createBody)
     })
       .then(function (r) { return r.json(); })
       .then(function (data) {
@@ -657,6 +687,16 @@
           return;
         }
         state.currentBroadcastId = data.broadcastId;
+        if (data.scheduled) {
+          // 排程：不啟動前端 chunk loop，等 cron 處理
+          bar.style.width = '100%';
+          meta.innerHTML = '已排程批次 #' + data.broadcastId + '，' + data.total + ' 人。' +
+            '預定 <strong>' + new Date(data.scheduledAt).toLocaleString('zh-TW', { timeZone: 'Asia/Taipei' }) +
+            '</strong> 由 cron 自動送出。可至「群發歷史」追蹤狀態。';
+          state.sending = false;
+          updateSendButton();
+          return;
+        }
         cancelBtn.hidden = false;
         meta.textContent = '批次 #' + data.broadcastId + ' 已建立，共 ' + data.total + ' 人。正在送出…';
         processChunkLoop(data.broadcastId, data.total, 0);
