@@ -234,6 +234,40 @@ function buildYellowFlexFromTemplate(t, { heroImageUrl, heroIsBrandBar } = {}) {
  * variant: 'a' | 'b' | undefined — A/B test 時帶入；URL 會加 ?v=<variant> 標記，
  *          給 redirect / view endpoint 寫進對應的 variant 欄位。
  */
+/**
+ * 走訪 Flex tree 移除 url 仍含 REPLACE_* placeholder 的 image。
+ * 這樣 user 載入 JSON 模板沒上傳 hero 就送出時，LINE 那邊看到的不是
+ * broken image，而是直接沒這個區塊。
+ */
+function stripPlaceholderImages(node) {
+  if (!node || typeof node !== 'object') return;
+  if (Array.isArray(node)) {
+    for (let i = node.length - 1; i >= 0; i--) {
+      const item = node[i];
+      if (
+        item && item.type === 'image' &&
+        typeof item.url === 'string' && /REPLACE_[A-Z0-9_]+/.test(item.url)
+      ) {
+        node.splice(i, 1);
+      } else {
+        stripPlaceholderImages(item);
+      }
+    }
+    return;
+  }
+  Object.keys(node).forEach(k => {
+    const v = node[k];
+    if (
+      v && typeof v === 'object' && v.type === 'image' &&
+      typeof v.url === 'string' && /REPLACE_[A-Z0-9_]+/.test(v.url)
+    ) {
+      delete node[k];
+    } else if (v && typeof v === 'object') {
+      stripPlaceholderImages(v);
+    }
+  });
+}
+
 function buildLineMessages(messageConfig, { heroImageBaseUrl, broadcastId, variant } = {}) {
   const variantSuffix = variant === 'a' || variant === 'b' ? `?v=${variant}` : '';
   if (!messageConfig || typeof messageConfig !== 'object') {
@@ -251,7 +285,10 @@ function buildLineMessages(messageConfig, { heroImageBaseUrl, broadcastId, varia
     if (!flex.contents || typeof flex.contents !== 'object') {
       return { ok: false, error: '缺少 contents（氣泡內容）。' };
     }
-    return { ok: true, messages: [flex] };
+    // Clone 後移除尚未替換的 placeholder image（沒上傳 hero 時，LINE 不會看到 broken image）
+    const cloned = JSON.parse(JSON.stringify(flex));
+    stripPlaceholderImages(cloned.contents);
+    return { ok: true, messages: [cloned] };
   }
   // template mode（預設）
   const t = normalizeTemplateInput(messageConfig.template || {});
@@ -289,6 +326,8 @@ function buildLineMessages(messageConfig, { heroImageBaseUrl, broadcastId, varia
   }
 
   const flex = buildYellowFlexFromTemplate(tForBuild, { heroImageUrl, heroIsBrandBar });
+  // 防呆：即使是模板模式，也 strip 殘留 placeholder image
+  stripPlaceholderImages(flex.contents);
   return { ok: true, messages: [flex] };
 }
 

@@ -397,8 +397,8 @@
       });
       container.appendChild(headerDiv);
     }
-    // hero
-    if (bubble.hero && bubble.hero.url) {
+    // hero — 跳過 url 含 REPLACE_* 的 placeholder（避免預覽留白佔位）
+    if (bubble.hero && bubble.hero.url && !/REPLACE_[A-Z0-9_]+/i.test(bubble.hero.url)) {
       var heroDiv = document.createElement('div');
       heroDiv.className = 'lm-hero';
       var img = document.createElement('img');
