@@ -847,7 +847,12 @@
       if (messageConfig.flex) {
         $('flex-json').value = JSON.stringify(messageConfig.flex, null, 2);
       }
-      // 觸發圖片助手 scan
+      // 清空助手 — 載入新模板舊 row 不該保留
+      var urlList = $('json-url-list');
+      var imgList = $('json-image-list');
+      if (urlList) urlList.innerHTML = '';
+      if (imgList) imgList.innerHTML = '';
+      // 觸發圖片+URL 助手 scan
       setTimeout(scanJsonImagesAndUrls, 100);
       return;
     }
