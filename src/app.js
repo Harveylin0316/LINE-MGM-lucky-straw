@@ -236,6 +236,21 @@ const publicDir = resolveAssetDir('public', 'style.css');
 
 app.set('trust proxy', 1);
 app.disable('x-powered-by');
+
+/**
+ * Production 強制 HTTPS：Netlify CDN 一般會 301，但有些路徑不確定，這層做雙保險。
+ * 只對 GET/HEAD redirect（其他方法 redirect 會掉 body，且 webhook 本就走 https）。
+ */
+app.use((req, res, next) => {
+  if (!isProduction) return next();
+  if (req.method !== 'GET' && req.method !== 'HEAD') return next();
+  const proto = String(req.get('x-forwarded-proto') || req.protocol || '').toLowerCase();
+  if (proto && proto !== 'https') {
+    const host = req.get('x-forwarded-host') || req.get('host');
+    if (host) return res.redirect(301, 'https://' + host + req.originalUrl);
+  }
+  next();
+});
 app.set('view engine', 'ejs');
 app.set('views', viewsDir);
 app.use(
