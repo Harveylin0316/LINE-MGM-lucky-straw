@@ -975,6 +975,29 @@
         text-decoration: none;
         word-wrap: break-word;
       }
+      .line-mock .lm-editable {
+        outline: 1px dashed transparent;
+        outline-offset: 2px;
+        border-radius: 2px;
+        transition: outline-color 0.15s ease, background 0.15s ease;
+        cursor: text;
+      }
+      .line-mock .lm-editable:hover {
+        outline-color: rgba(252, 199, 38, 0.7);
+      }
+      .line-mock .lm-editable:focus {
+        outline: 2px solid #FCC726;
+        outline-offset: 2px;
+        background: rgba(252, 199, 38, 0.08);
+      }
+      .line-mock .lm-cta.lm-editable:hover {
+        outline-offset: -2px;
+      }
+      .line-mock .lm-cta.lm-editable:focus {
+        outline: 2px solid #1f2937;
+        outline-offset: -2px;
+        background: #FCC726;
+      }
       .status-pill {
         display: inline-block;
         padding: 2px 8px;
