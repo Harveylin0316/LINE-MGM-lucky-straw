@@ -8,19 +8,22 @@
   <script src="https://static.line-scdn.net/liff/edge/2/sdk.js"></script>
   <style>
     :root {
-      --bg-1:       #FAF6EE;
-      --bg-2:       #EFE7D4;
-      --surface:    #FFFFFF;
-      --ink:        #1D1D1F;
-      --ink-2:      #6E6E73;
-      --ink-3:      #B8B8BD;
-      --gold-1:     #FFD86B;
-      --gold-2:     #F5A623;
-      --gold-3:     #D97706;
-      --cream:      #FFF8E7;
-      --butter:     #FFE9A0;
-      --shadow-1:   0 8px 24px rgba(120, 80, 20, 0.08);
-      --shadow-2:   0 20px 50px rgba(120, 80, 20, 0.15);
+      /* OpenRice 品牌色系：黃主 / 紅副 / 白底 */
+      --or-yellow:      #FCC726;
+      --or-yellow-2:    #F5B800;
+      --or-yellow-3:    #C68F00;
+      --or-yellow-soft: #FFF4D1;
+      --or-red:         #E81E25;
+      --or-red-2:       #C0151B;
+      --or-red-soft:    #FDECEC;
+      --surface:        #FFFFFF;
+      --bg-1:           #FFFFFF;
+      --bg-2:           #FFF8E1;
+      --ink:            #1D1D1F;
+      --ink-2:          #6E6E73;
+      --ink-3:          #B8B8BD;
+      --shadow-1:       0 8px 24px rgba(232, 30, 37, 0.08);
+      --shadow-2:       0 20px 50px rgba(232, 30, 37, 0.18);
     }
     * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
     html, body { margin: 0; padding: 0; }
@@ -33,24 +36,24 @@
       letter-spacing: -0.01em;
       overflow-x: hidden;
     }
-    /* 主背景 + 微妙裝飾 */
+    /* 白底 + 上方黃色 spotlight + 底部紅色微光 */
     body::before {
       content: '';
       position: fixed;
       inset: 0;
       background:
-        radial-gradient(ellipse 80% 50% at 50% 0%, rgba(255, 216, 107, 0.3) 0%, transparent 60%),
-        radial-gradient(ellipse 60% 40% at 50% 100%, rgba(217, 119, 6, 0.08) 0%, transparent 60%),
+        radial-gradient(ellipse 90% 55% at 50% 0%, rgba(252, 199, 38, 0.32) 0%, transparent 60%),
+        radial-gradient(ellipse 70% 45% at 50% 100%, rgba(232, 30, 37, 0.06) 0%, transparent 60%),
         var(--bg-1);
       z-index: -2;
     }
-    /* 細微點點圖案，奢侈品包裝紙感 */
+    /* 細微黃點 pattern */
     body::after {
       content: '';
       position: fixed;
       inset: 0;
-      background-image: radial-gradient(circle, rgba(217, 119, 6, 0.06) 1px, transparent 1.5px);
-      background-size: 24px 24px;
+      background-image: radial-gradient(circle, rgba(252, 199, 38, 0.18) 1px, transparent 1.5px);
+      background-size: 26px 26px;
       z-index: -1;
       pointer-events: none;
     }
@@ -70,22 +73,23 @@
       align-items: center;
       gap: 6px;
       font-size: 11px;
-      font-weight: 600;
-      letter-spacing: 0.12em;
+      font-weight: 700;
+      letter-spacing: 0.14em;
       text-transform: uppercase;
-      color: var(--gold-3);
-      background: rgba(217, 119, 6, 0.08);
-      padding: 5px 12px;
+      color: #FFFFFF;
+      background: var(--or-red);
+      padding: 5px 14px;
       border-radius: 999px;
       margin-bottom: 14px;
+      box-shadow: 0 4px 12px rgba(232, 30, 37, 0.3);
     }
     .w-eyebrow::before {
       content: '';
       width: 6px;
       height: 6px;
       border-radius: 50%;
-      background: var(--gold-2);
-      box-shadow: 0 0 8px var(--gold-2);
+      background: #FFFFFF;
+      box-shadow: 0 0 8px rgba(255, 255, 255, 0.9);
       animation: pulse-dot 1.6s ease-in-out infinite;
     }
     @keyframes pulse-dot {
@@ -126,21 +130,20 @@
       justify-content: center;
       position: relative;
     }
-    /* 輪盤旁的裝飾星 */
+    /* 輪盤旁的裝飾星 — 黃色 / 紅色交錯 */
     .w-stage-outer::before,
     .w-stage-outer::after {
       content: '✦';
       position: absolute;
       top: 50%;
-      font-size: 18px;
-      color: var(--gold-2);
-      opacity: 0.5;
+      font-size: 20px;
+      opacity: 0.7;
       animation: twinkle 3s ease-in-out infinite;
     }
-    .w-stage-outer::before { left: 4%; transform: translateY(-60%); }
-    .w-stage-outer::after  { right: 4%; transform: translateY(40%); animation-delay: 1.5s; }
+    .w-stage-outer::before { left: 4%; transform: translateY(-60%); color: var(--or-yellow-2); }
+    .w-stage-outer::after  { right: 4%; transform: translateY(40%); color: var(--or-red); animation-delay: 1.5s; }
     @keyframes twinkle {
-      0%, 100% { opacity: 0.5; transform: translateY(-60%) scale(1); }
+      0%, 100% { opacity: 0.6; transform: translateY(-60%) scale(1); }
       50% { opacity: 1; transform: translateY(-60%) scale(1.3); }
     }
     .w-stage {
@@ -161,18 +164,18 @@
     }
     .w-pointer svg { width: 100%; height: 100%; display: block; }
 
-    /* 輪盤外框（精緻金屬邊框） */
+    /* 輪盤外框 — 白色 ring + 紅色細邊 */
     .w-canvas-wrap {
       position: relative;
       width: 100%;
       height: 100%;
       border-radius: 50%;
-      background: radial-gradient(circle, var(--surface) 0%, var(--bg-1) 90%);
+      background: radial-gradient(circle, var(--surface) 0%, #FFFCF2 90%);
       box-shadow:
         var(--shadow-2),
         inset 0 0 0 1px rgba(255,255,255,0.6),
-        0 0 0 6px rgba(255, 255, 255, 0.5),
-        0 0 0 7px rgba(217, 119, 6, 0.15);
+        0 0 0 6px var(--surface),
+        0 0 0 7px var(--or-red);
     }
     #wheel-canvas {
       width: 100%;
@@ -200,13 +203,13 @@
       box-shadow: 0 10px 24px rgba(120,80,20,0.18);
       z-index: -1;
     }
-    /* pulsing glow ring（吸引點擊） */
+    /* pulsing glow ring — 紅色（OpenRice 紅，吸引點擊） */
     .w-center::after {
       content: '';
       position: absolute;
       inset: -4px;
       border-radius: 50%;
-      border: 2px solid var(--gold-2);
+      border: 2.5px solid var(--or-red);
       opacity: 0;
       animation: pulse-ring 2.2s ease-out infinite;
       z-index: -1;
@@ -226,15 +229,15 @@
       cursor: pointer;
       font-family: inherit;
       font-weight: 800;
-      font-size: 16px;
+      font-size: 17px;
       letter-spacing: 0.06em;
       color: var(--ink);
       background:
-        radial-gradient(circle at 35% 28%, #FFEDA8 0%, var(--gold-1) 35%, var(--gold-2) 100%);
+        radial-gradient(circle at 35% 28%, #FFE89A 0%, var(--or-yellow) 38%, var(--or-yellow-2) 100%);
       box-shadow:
-        inset 0 -4px 8px rgba(120, 70, 0, 0.22),
-        inset 0 3px 6px rgba(255,255,255,0.85),
-        0 8px 18px rgba(217,119,6,0.4);
+        inset 0 -4px 8px rgba(140, 90, 0, 0.22),
+        inset 0 3px 6px rgba(255,255,255,0.9),
+        0 8px 20px rgba(252, 199, 38, 0.55);
       transition: transform 0.2s cubic-bezier(0.34, 1.56, 0.64, 1), filter 0.2s;
       position: relative;
       display: flex;
@@ -272,11 +275,11 @@
       padding: 0 20px;
     }
     .w-status-row .dot {
-      width: 6px;
-      height: 6px;
+      width: 7px;
+      height: 7px;
       border-radius: 50%;
-      background: var(--gold-2);
-      box-shadow: 0 0 6px var(--gold-2);
+      background: var(--or-red);
+      box-shadow: 0 0 8px var(--or-red);
       flex-shrink: 0;
     }
 
@@ -315,23 +318,30 @@
       align-items: center;
       gap: 10px;
       padding: 10px 12px;
-      background: linear-gradient(135deg, var(--cream), #FFFDF7);
+      background: var(--or-yellow-soft);
       border-radius: 12px;
-      border: 1px solid rgba(217, 119, 6, 0.08);
+      border: 1px solid rgba(252, 199, 38, 0.4);
     }
     .w-prize-item.grand {
-      background: linear-gradient(135deg, var(--butter), #FFD86B);
-      border-color: var(--gold-2);
+      background: linear-gradient(135deg, var(--or-red-soft), #FFE5E5);
+      border-color: var(--or-red);
     }
     .w-prize-thumb {
-      width: 36px; height: 36px;
+      width: 38px; height: 38px;
       border-radius: 10px;
-      background: linear-gradient(135deg, var(--gold-1), var(--gold-2));
-      color: white;
+      background: linear-gradient(135deg, var(--or-yellow), var(--or-yellow-2));
+      color: var(--ink);
       display: flex; align-items: center; justify-content: center;
       font-size: 16px;
+      font-weight: 700;
       flex-shrink: 0;
       overflow: hidden;
+      box-shadow: 0 2px 6px rgba(252, 199, 38, 0.4);
+    }
+    .w-prize-item.grand .w-prize-thumb {
+      background: linear-gradient(135deg, var(--or-red), var(--or-red-2));
+      color: #FFFFFF;
+      box-shadow: 0 2px 6px rgba(232, 30, 37, 0.4);
     }
     .w-prize-thumb img { width: 100%; height: 100%; object-fit: cover; }
     .w-prize-info { flex: 1; min-width: 0; }
@@ -346,15 +356,15 @@
       color: var(--ink-2);
       margin-top: 1px;
     }
-    .w-prize-item.grand .w-prize-tag { color: var(--gold-3); font-weight: 600; }
+    .w-prize-item.grand .w-prize-tag { color: var(--or-red-2); font-weight: 600; }
     .w-prize-grand-badge {
       font-size: 10px;
-      font-weight: 700;
-      padding: 2px 6px;
-      background: var(--gold-3);
+      font-weight: 800;
+      padding: 3px 8px;
+      background: var(--or-red);
       color: white;
       border-radius: 4px;
-      letter-spacing: 0.05em;
+      letter-spacing: 0.08em;
     }
 
     /* ---------- Footnote ---------- */
@@ -404,8 +414,8 @@
     .w-modal-title {
       text-align: center;
       font-size: 12px;
-      font-weight: 600;
-      color: var(--gold-3);
+      font-weight: 700;
+      color: var(--or-red);
       letter-spacing: 0.18em;
       text-transform: uppercase;
       margin-bottom: 12px;
@@ -414,17 +424,25 @@
       width: 108px; height: 108px;
       margin: 0 auto 18px;
       border-radius: 28px;
-      background: linear-gradient(135deg, var(--cream), var(--butter));
+      background: linear-gradient(135deg, var(--or-yellow-soft), var(--or-yellow));
       display: flex;
       align-items: center;
       justify-content: center;
       box-shadow:
-        0 12px 28px rgba(245, 166, 35, 0.3),
-        inset 0 -3px 8px rgba(217,119,6,0.15),
-        inset 0 3px 6px rgba(255,255,255,0.8);
+        0 12px 28px rgba(252, 199, 38, 0.45),
+        inset 0 -3px 8px rgba(140, 90, 0, 0.15),
+        inset 0 3px 6px rgba(255,255,255,0.85);
       overflow: hidden;
       position: relative;
     }
+    .w-modal.grand .w-prize-img-wrap {
+      background: linear-gradient(135deg, var(--or-red), var(--or-red-2));
+      box-shadow:
+        0 12px 28px rgba(232, 30, 37, 0.45),
+        inset 0 -3px 8px rgba(120, 10, 15, 0.2),
+        inset 0 3px 6px rgba(255,255,255,0.4);
+    }
+    .w-modal.grand .w-prize-img-wrap .glyph { color: #FFFFFF; }
     .w-prize-img-wrap::after {
       content: '';
       position: absolute;
@@ -455,7 +473,7 @@
       line-height: 1.15;
     }
     .w-modal.grand .w-modal-prize {
-      background: linear-gradient(135deg, var(--gold-3), var(--gold-1));
+      background: linear-gradient(135deg, var(--or-red), var(--or-yellow-2));
       -webkit-background-clip: text;
       background-clip: text;
       color: transparent;
@@ -489,17 +507,20 @@
     }
     .w-modal-btn:active { transform: scale(0.97); }
 
-    /* gold sparkles (大獎用) */
+    /* sparkles — 大獎觸發，黃 / 紅 / 白交錯 */
     .sparkle {
       position: fixed;
       pointer-events: none;
       top: 50%; left: 50%;
       width: 8px; height: 8px;
-      background: radial-gradient(circle, #FFFFFF, var(--gold-1) 50%, transparent 75%);
+      background: radial-gradient(circle, #FFFFFF, var(--or-yellow) 50%, transparent 75%);
       border-radius: 50%;
       z-index: 99;
       opacity: 0;
       animation: spark 1.8s ease-out forwards;
+    }
+    .sparkle.red {
+      background: radial-gradient(circle, #FFFFFF, var(--or-red) 50%, transparent 75%);
     }
     @keyframes spark {
       0%   { opacity: 0; transform: translate(-50%, -50%) scale(0); }
@@ -525,12 +546,12 @@
       <div class="w-stage">
         <div class="w-pointer">
           <svg viewBox="0 0 20 32" fill="none">
-            <path d="M10 32 L0 8 Q0 0 10 0 Q20 0 20 8 Z" fill="url(#g)"/>
-            <circle cx="10" cy="9" r="4" fill="#FFFFFF" opacity="0.4"/>
+            <path d="M10 32 L0 8 Q0 0 10 0 Q20 0 20 8 Z" fill="url(#pg)"/>
+            <circle cx="10" cy="9" r="4" fill="#FFFFFF" opacity="0.5"/>
             <defs>
-              <linearGradient id="g" x1="0" y1="0" x2="0" y2="32">
-                <stop offset="0%" stop-color="#3D3D42"/>
-                <stop offset="100%" stop-color="#1D1D1F"/>
+              <linearGradient id="pg" x1="0" y1="0" x2="0" y2="32">
+                <stop offset="0%" stop-color="#FF4A50"/>
+                <stop offset="100%" stop-color="#C0151B"/>
               </linearGradient>
             </defs>
           </svg>
@@ -676,11 +697,11 @@
 
         ctx.clearRect(0, 0, W, H);
 
-        // 1) 外圈金色 ring（漸層）
+        // 1) 外圈紅色 ring（OpenRice 紅漸層）
         var ringGrad = ctx.createLinearGradient(0, 0, 0, H);
-        ringGrad.addColorStop(0, '#FFE08A');
-        ringGrad.addColorStop(0.5, '#F5A623');
-        ringGrad.addColorStop(1, '#B45309');
+        ringGrad.addColorStop(0, '#FF4A50');
+        ringGrad.addColorStop(0.5, '#E81E25');
+        ringGrad.addColorStop(1, '#A01016');
         ctx.beginPath();
         ctx.arc(cx, cy, R + ringWidth, 0, Math.PI * 2);
         ctx.fillStyle = ringGrad;
@@ -702,7 +723,7 @@
         }
         ctx.shadowBlur = 0;
 
-        // 3) 扇形 — 2 色交替 + 大獎特殊色
+        // 3) 扇形 — 白 / OpenRice 黃 交替，大獎用 OpenRice 紅
         prizes.forEach(function (p, i) {
           var start = i * anglePer - Math.PI / 2;
           var end = start + anglePer;
@@ -712,8 +733,8 @@
           ctx.closePath();
 
           var baseColor;
-          if (p.is_grand_prize) baseColor = '#F5A623';
-          else baseColor = (i % 2 === 0) ? '#FFFFFF' : '#FFE9A0';
+          if (p.is_grand_prize) baseColor = '#E81E25';                      // OpenRice 紅
+          else baseColor = (i % 2 === 0) ? '#FFFFFF' : '#FCC726';            // 白 / OpenRice 黃
 
           // 徑向漸層讓扇形有體積感
           var midAngle = start + anglePer / 2;
@@ -893,10 +914,10 @@
       });
 
       function sparkleBurst() {
-        for (var i = 0; i < 28; i++) {
+        for (var i = 0; i < 32; i++) {
           var el = document.createElement('div');
-          el.className = 'sparkle';
-          var angle = (i / 28) * Math.PI * 2 + Math.random() * 0.4;
+          el.className = 'sparkle' + (i % 3 === 0 ? ' red' : '');
+          var angle = (i / 32) * Math.PI * 2 + Math.random() * 0.4;
           var distance = 80 + Math.random() * 120;
           el.style.setProperty('--dx', Math.cos(angle) * distance + 'px');
           el.style.setProperty('--dy', Math.sin(angle) * distance + 'px');
