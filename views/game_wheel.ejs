@@ -272,16 +272,20 @@
           return;
         }
         if (!liffId) {
-          throw new Error('LIFF ID 未設定（請聯絡管理員設定 WHEEL_LIFF_ID 環境變數）');
+          throw new Error('LIFF ID 未設定（請聯絡管理員設定 GAMES_LIFF_ID 環境變數）');
         }
         try {
           await liff.init({ liffId: liffId });
         } catch (e) {
-          // LIFF init 失敗通常是 Endpoint URL 不匹配。給更友善訊息。
           throw new Error('LIFF 初始化失敗 — 此頁面路徑可能不在 LIFF App Endpoint URL 範圍內。詳細：' + (e.message || e));
         }
+        // 桌機/外部瀏覽器：明確阻擋 login flow（會無限循環跳回 endpoint）
+        if (!liff.isInClient()) {
+          throw new Error('請在 LINE App 內打開此連結。桌機要看 UI 請在網址尾加上 ?preview=1');
+        }
         if (!liff.isLoggedIn()) {
-          liff.login({ redirectUri: location.href });
+          // 不傳 redirectUri — 讓 LIFF SDK 自己處理（避免 LINE 校驗 redirectUri 失敗回 endpoint）
+          liff.login();
           return new Promise(function () {});
         }
         profile = await liff.getProfile();

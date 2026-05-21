@@ -26,7 +26,7 @@ function registerGamesWheelRoutes(app, deps) {
     let activities = [];
     try {
       const { rows } = await query(
-        `SELECT slug, name, description, game_type, cover_image_url, start_at, end_at
+        `SELECT slug, name, description, game_type, cover_image_url, start_at, end_at, liff_id_override
          FROM activities
          WHERE status = 'active'
            AND (start_at IS NULL OR start_at <= NOW())
@@ -47,7 +47,11 @@ function registerGamesWheelRoutes(app, deps) {
           const cover = a.cover_image_url
             ? `<div class="cover" style="background-image:url('${esc(a.cover_image_url)}')"></div>`
             : `<div class="cover cover-default">${esc(a.name.slice(0, 2))}</div>`;
-          const link = `/games/${esc(a.game_type)}/${encodeURIComponent(a.slug)}`;
+          // 用 LIFF 短網址讓 LINE 內 login flow 能保留子路徑
+          const liffIdForThis = (a.liff_id_override && a.liff_id_override.trim()) || defaultLiffId;
+          const link = liffIdForThis
+            ? `https://liff.line.me/${liffIdForThis}/${esc(a.game_type)}/${encodeURIComponent(a.slug)}`
+            : `/games/${esc(a.game_type)}/${encodeURIComponent(a.slug)}`;
           return `<a class="act-card" href="${link}">
             ${cover}
             <div class="info">
