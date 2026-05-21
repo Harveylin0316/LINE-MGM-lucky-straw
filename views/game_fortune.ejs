@@ -1,0 +1,561 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, viewport-fit=cover" />
+  <meta name="theme-color" content="#FAFAFA" />
+  <title><%= title %></title>
+  <script src="https://static.line-scdn.net/liff/edge/2/sdk.js"></script>
+  <style>
+    :root {
+      --bg:         #FAFAFA;
+      --surface:    #FFFFFF;
+      --or-yellow:  #FCC726;
+      --or-yellow-d: #E8B400;
+      --or-red:     #E11D27;
+      --ink:        #0F0F10;
+      --ink-2:      #6B6B70;
+      --ink-3:      #A0A0A6;
+      --border:     #ECECEE;
+      --border-2:   #E0E0E4;
+    }
+    * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+    html, body { margin: 0; padding: 0; }
+    body {
+      background: var(--bg); color: var(--ink); min-height: 100vh;
+      font-family: -apple-system, BlinkMacSystemFont, "SF Pro Display", "Inter", "PingFang TC", sans-serif;
+      letter-spacing: -0.011em; -webkit-font-smoothing: antialiased;
+    }
+    .page { max-width: 480px; margin: 0 auto; padding: 16px 16px 56px; }
+
+    /* Brand bar */
+    .brand-bar { display: flex; align-items: center; justify-content: space-between; padding: 6px 0 16px; }
+    .brand-bar .logo { display: inline-flex; align-items: center; gap: 7px; font-size: 13px; font-weight: 700; }
+    .brand-bar .logo .dot { width: 18px; height: 18px; border-radius: 6px; background: var(--or-yellow); position: relative; flex-shrink: 0; }
+    .brand-bar .logo .dot::after { content: ''; position: absolute; inset: 4px; border-radius: 50%; background: var(--ink); }
+    .brand-bar .chip { display: inline-flex; align-items: center; gap: 5px; font-size: 11px; font-weight: 500; color: var(--ink-2); background: var(--surface); border: 1px solid var(--border); padding: 5px 10px; border-radius: 999px; }
+    .brand-bar .chip::before { content: ''; width: 5px; height: 5px; border-radius: 50%; background: #22C55E; box-shadow: 0 0 0 2px rgba(34, 197, 94, 0.15); }
+
+    /* Hero */
+    .hero { background: var(--surface); border: 1px solid var(--border); border-radius: 20px; padding: 22px 22px 24px; position: relative; overflow: hidden; }
+    .hero::before { content: ''; position: absolute; top: -40px; right: -40px; width: 180px; height: 180px; background: radial-gradient(circle, rgba(252, 199, 38, 0.18), transparent 70%); pointer-events: none; }
+    .hero-tag { display: inline-flex; align-items: center; gap: 6px; font-size: 11px; font-weight: 600; letter-spacing: 0.06em; color: var(--or-red); text-transform: uppercase; margin-bottom: 14px; }
+    .hero-tag::before { content: ''; width: 6px; height: 6px; background: var(--or-red); border-radius: 50%; }
+    .hero h1 { margin: 0 0 8px; font-size: 26px; font-weight: 700; letter-spacing: -0.028em; line-height: 1.2; }
+    .hero p { margin: 0; font-size: 14px; line-height: 1.55; color: var(--ink-2); }
+    .hero-cover { width: calc(100% + 44px); margin: 18px -22px -24px; aspect-ratio: 16 / 9; object-fit: cover; display: block; border-top: 1px solid var(--border); }
+
+    /* Stats */
+    .stats { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 8px; margin-top: 12px; }
+    .stat { background: var(--surface); border: 1px solid var(--border); border-radius: 14px; padding: 12px; }
+    .stat .v { font-size: 20px; font-weight: 700; letter-spacing: -0.02em; line-height: 1; font-variant-numeric: tabular-nums; }
+    .stat .v .unit { font-size: 11px; font-weight: 500; color: var(--ink-2); margin-left: 2px; }
+    .stat .k { font-size: 11px; color: var(--ink-2); margin-top: 5px; font-weight: 500; }
+
+    /* Invite */
+    .invite-card { margin-top: 8px; background: var(--ink); border-radius: 16px; padding: 14px 16px; display: flex; align-items: center; justify-content: space-between; gap: 12px; position: relative; overflow: hidden; color: #fff; }
+    .invite-card::before { content: ''; position: absolute; top: -40px; right: -30px; width: 140px; height: 140px; background: radial-gradient(circle, rgba(252, 199, 38, 0.32), transparent 70%); pointer-events: none; }
+    .invite-left { flex: 1; min-width: 0; z-index: 1; }
+    .invite-title { font-size: 14px; font-weight: 700; line-height: 1.3; }
+    .invite-sub { font-size: 11px; color: rgba(255, 255, 255, 0.62); margin-top: 3px; }
+    .invite-btn { flex-shrink: 0; background: var(--or-yellow); color: var(--ink); border: none; border-radius: 999px; padding: 8px 16px; font-family: inherit; font-weight: 700; font-size: 13px; cursor: pointer; z-index: 1; transition: background 0.15s ease, transform 0.15s cubic-bezier(0.34, 1.56, 0.64, 1); display: inline-flex; align-items: center; }
+    .invite-btn:hover { background: var(--or-yellow-d); }
+    .invite-btn:active { transform: scale(0.96); }
+    .invite-card.maxed { opacity: 0.6; }
+    .invite-card.maxed .invite-btn { background: var(--ink-3); cursor: default; pointer-events: none; }
+
+    /* ========== Fortune stage ========== */
+    .stage-card { margin-top: 12px; background: var(--surface); border: 1px solid var(--border); border-radius: 24px; padding: 24px 20px 22px; position: relative; overflow: hidden; }
+    .stage-card::before { content: ''; position: absolute; bottom: -80px; left: -60px; width: 240px; height: 240px; background: radial-gradient(circle, rgba(225, 29, 39, 0.05), transparent 70%); pointer-events: none; }
+    .stage-head { display: flex; align-items: center; justify-content: space-between; margin-bottom: 14px; }
+    .stage-head .label { font-size: 11px; font-weight: 600; letter-spacing: 0.06em; text-transform: uppercase; color: var(--ink-3); }
+    .stage-head .count { font-size: 11px; color: var(--ink-2); font-weight: 500; }
+
+    .fortune-stage {
+      position: relative;
+      height: 360px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+
+    /* 籤筒 */
+    .fortune-jar {
+      position: relative;
+      width: 84px;
+      height: 130px;
+      transition: transform 0.4s cubic-bezier(0.34, 1.56, 0.64, 1);
+      cursor: pointer;
+      z-index: 2;
+    }
+    .fortune-jar.shake { animation: jar-shake 0.6s ease-in-out 3; }
+    @keyframes jar-shake {
+      0%, 100% { transform: rotate(0); }
+      25% { transform: rotate(-8deg); }
+      75% { transform: rotate(8deg); }
+    }
+    .fortune-jar.tilt { transform: rotate(-30deg) translateY(-10px); }
+
+    /* 籤紙散在頂部準備飛出 */
+    .fortune-paper-stack {
+      position: absolute;
+      top: 50%;
+      left: 50%;
+      transform: translate(-50%, -50%);
+      width: 280px;
+      height: 280px;
+      pointer-events: none;
+      perspective: 1200px;
+    }
+
+    /* 抽出的籤紙 */
+    .fortune-result {
+      position: absolute;
+      top: 50%;
+      left: 50%;
+      transform: translate(-50%, -50%) rotateY(180deg) scale(0.7);
+      width: 220px;
+      height: 320px;
+      background: var(--surface);
+      border-radius: 14px;
+      border: 1px solid var(--border);
+      box-shadow:
+        0 24px 60px -12px rgba(15, 15, 16, 0.25),
+        0 8px 20px -6px rgba(15, 15, 16, 0.15);
+      opacity: 0;
+      transition: opacity 0.3s ease, transform 0.7s cubic-bezier(0.34, 1.56, 0.64, 1);
+      transform-style: preserve-3d;
+      backface-visibility: hidden;
+      padding: 22px 18px 18px;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      text-align: center;
+    }
+    .fortune-result.show {
+      opacity: 1;
+      transform: translate(-50%, -50%) rotateY(0) scale(1);
+    }
+    .fortune-result.grand { border-color: var(--or-red); }
+
+    .fortune-rank {
+      font-size: 12px;
+      font-weight: 700;
+      letter-spacing: 0.18em;
+      color: var(--or-red);
+      padding: 3px 10px;
+      background: rgba(225, 29, 39, 0.08);
+      border-radius: 999px;
+      margin-bottom: 18px;
+    }
+    .fortune-result.grand .fortune-rank { color: #fff; background: var(--or-red); }
+
+    .fortune-glyph-wrap {
+      width: 76px; height: 76px;
+      border-radius: 50%;
+      background: linear-gradient(135deg, #FFF7DA, var(--or-yellow));
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      margin-bottom: 14px;
+      font-size: 32px;
+      font-weight: 700;
+    }
+    .fortune-result.grand .fortune-glyph-wrap {
+      background: linear-gradient(135deg, var(--or-red), #B61118);
+      color: #fff;
+    }
+
+    .fortune-name {
+      font-size: 22px;
+      font-weight: 700;
+      letter-spacing: -0.025em;
+      color: var(--ink);
+      margin-bottom: 6px;
+      line-height: 1.2;
+    }
+    .fortune-desc {
+      font-size: 13px;
+      color: var(--ink-2);
+      line-height: 1.55;
+      max-height: 80px;
+      overflow-y: auto;
+    }
+
+    /* 抽籤按鈕 */
+    .draw-btn-wrap {
+      margin-top: 18px;
+      display: flex;
+      justify-content: center;
+    }
+    .draw-btn {
+      background: var(--or-yellow);
+      color: var(--ink);
+      border: none;
+      padding: 14px 36px;
+      border-radius: 999px;
+      font-family: inherit;
+      font-weight: 700;
+      font-size: 16px;
+      letter-spacing: 0.04em;
+      cursor: pointer;
+      box-shadow: 0 6px 16px -4px rgba(252, 199, 38, 0.5);
+      transition: background 0.15s ease, transform 0.18s cubic-bezier(0.34, 1.56, 0.64, 1);
+    }
+    .draw-btn:hover:not(:disabled) { background: var(--or-yellow-d); }
+    .draw-btn:active:not(:disabled) { transform: scale(0.96); }
+    .draw-btn:disabled { background: #F0F0F2; color: var(--ink-3); cursor: default; box-shadow: none; }
+
+    /* Status */
+    .status-row { display: flex; align-items: center; justify-content: center; gap: 8px; margin-top: 16px; font-size: 13px; color: var(--ink-2); min-height: 22px; }
+    .status-row .name { color: var(--ink); font-weight: 600; }
+
+    /* Prize section（候選籤詩列表）*/
+    .section { margin-top: 24px; }
+    .section-head { display: flex; align-items: baseline; justify-content: space-between; padding: 0 4px; margin-bottom: 10px; }
+    .section-head h2 { margin: 0; font-size: 17px; font-weight: 700; letter-spacing: -0.015em; }
+    .section-head .meta { font-size: 11px; color: var(--ink-2); font-weight: 500; }
+    .prize-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+    .prize-card { background: var(--surface); border: 1px solid var(--border); border-radius: 14px; padding: 14px; position: relative; }
+    .prize-card.grand { grid-column: span 2; border-color: var(--or-red); background: linear-gradient(180deg, rgba(225, 29, 39, 0.04), transparent); }
+    .prize-card .top { display: flex; align-items: center; justify-content: space-between; margin-bottom: 8px; }
+    .prize-card .icon { width: 32px; height: 32px; border-radius: 10px; background: linear-gradient(135deg, #FFF7DA, var(--or-yellow)); display: flex; align-items: center; justify-content: center; color: var(--ink); font-weight: 700; font-size: 14px; flex-shrink: 0; }
+    .prize-card.grand .icon { background: var(--or-red); color: #fff; }
+    .prize-card .badge { font-size: 10px; font-weight: 700; letter-spacing: 0.06em; padding: 3px 8px; border-radius: 999px; background: var(--or-red); color: #fff; }
+    .prize-card .name { font-size: 14px; font-weight: 600; line-height: 1.35; }
+    .prize-card .desc { margin-top: 3px; font-size: 12px; color: var(--ink-2); line-height: 1.4; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
+
+    /* Footer */
+    .foot { margin-top: 28px; padding: 14px 16px; background: var(--surface); border: 1px solid var(--border); border-radius: 14px; display: flex; align-items: center; justify-content: space-between; font-size: 12px; color: var(--ink-2); }
+    .foot .l { display: flex; align-items: center; gap: 8px; }
+    .foot .i { width: 20px; height: 20px; border-radius: 6px; background: var(--bg); border: 1px solid var(--border); display: inline-flex; align-items: center; justify-content: center; font-size: 11px; color: var(--ink-2); }
+    .foot .r { font-weight: 600; color: var(--ink); }
+  </style>
+</head>
+<body>
+  <div class="page">
+
+    <header class="brand-bar">
+      <div class="logo"><span class="dot"></span>OpenRice</div>
+      <div class="chip">活動進行中</div>
+    </header>
+
+    <section class="hero">
+      <div class="hero-tag">每日抽籤</div>
+      <h1><%= activity.name %></h1>
+      <% if (activity.description) { %><p><%= activity.description %></p><% } %>
+      <% if (activity.cover_image_url) { %>
+        <img class="hero-cover" src="<%= activity.cover_image_url %>" alt="" />
+      <% } %>
+    </section>
+
+    <section class="stats">
+      <div class="stat">
+        <div class="v" id="stat-remaining">—</div>
+        <div class="k">剩餘次數</div>
+      </div>
+      <div class="stat">
+        <div class="v" id="stat-referrals">—</div>
+        <div class="k">已邀請</div>
+      </div>
+      <div class="stat">
+        <div class="v"><%= prizes && prizes.length || 0 %><span class="unit">種</span></div>
+        <div class="k">籤詩</div>
+      </div>
+    </section>
+
+    <% if (activity.referral_bonus_per && activity.referral_bonus_per > 0) { %>
+    <section class="invite-card" id="invite-card">
+      <div class="invite-left">
+        <div class="invite-title">邀請朋友 +<%= activity.referral_bonus_per %> 次抽籤</div>
+        <div class="invite-sub" id="invite-sub">最多再加 <%= activity.referral_bonus_max %> 次</div>
+      </div>
+      <button type="button" class="invite-btn" id="invite-btn">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" style="margin-right:5px;vertical-align:-2px;"><path d="M4 12v8a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-8"/><polyline points="16 6 12 2 8 6"/><line x1="12" y1="2" x2="12" y2="15"/></svg>分享
+      </button>
+    </section>
+    <% } %>
+
+    <section class="stage-card">
+      <div class="stage-head">
+        <span class="label">抽籤</span>
+        <span class="count">點下方按鈕求籤</span>
+      </div>
+      <div class="fortune-stage" id="stage">
+        <!-- 籤筒 SVG -->
+        <div class="fortune-jar" id="jar">
+          <svg viewBox="0 0 84 130" width="84" height="130" fill="none">
+            <!-- jar body -->
+            <path d="M14 30 Q14 24 20 24 L64 24 Q70 24 70 30 L66 122 Q66 128 60 128 L24 128 Q18 128 18 122 Z"
+                  fill="#0F0F10" stroke="#0F0F10" stroke-width="2"/>
+            <!-- jar top band -->
+            <rect x="10" y="20" width="64" height="10" rx="2" fill="#FCC726"/>
+            <rect x="10" y="20" width="64" height="3" fill="#E8B400"/>
+            <!-- 籤柱（露出） -->
+            <rect x="32" y="8" width="3" height="14" rx="1" fill="#FAFAFA"/>
+            <rect x="40" y="4" width="3" height="18" rx="1" fill="#FAFAFA"/>
+            <rect x="48" y="10" width="3" height="12" rx="1" fill="#FAFAFA"/>
+            <rect x="36" y="6" width="3" height="16" rx="1" fill="#E11D27"/>
+          </svg>
+        </div>
+
+        <!-- 抽出的籤紙（reveal）-->
+        <div class="fortune-result" id="result" hidden>
+          <div class="fortune-rank" id="result-rank">—</div>
+          <div class="fortune-glyph-wrap"><span id="result-glyph">籤</span></div>
+          <div class="fortune-name" id="result-name">—</div>
+          <div class="fortune-desc" id="result-desc"></div>
+        </div>
+      </div>
+
+      <div class="draw-btn-wrap">
+        <button type="button" class="draw-btn" id="draw-btn">抽 一 支</button>
+      </div>
+
+      <div class="status-row" id="status-row"><span id="status">準備中</span></div>
+    </section>
+
+    <% if (prizes && prizes.length > 0) { %>
+    <section class="section">
+      <div class="section-head">
+        <h2>本次籤詩</h2>
+        <span class="meta"><%= prizes.length %> 種</span>
+      </div>
+      <div class="prize-grid">
+        <% prizes.forEach(function (p, i) { %>
+          <div class="prize-card <%= p.is_grand_prize ? 'grand' : '' %>">
+            <div class="top">
+              <div class="icon"><%= String(i + 1).padStart(2, '0') %></div>
+              <% if (p.is_grand_prize) { %><span class="badge">上上籤</span><% } %>
+            </div>
+            <div class="name"><%= p.name %></div>
+            <% if (p.description) { %><div class="desc"><%= p.description %></div><% } %>
+          </div>
+        <% }); %>
+      </div>
+    </section>
+    <% } %>
+
+    <div class="foot">
+      <div class="l"><span class="i">i</span><span>遊戲規則</span></div>
+      <span class="r">公平隨機</span>
+    </div>
+  </div>
+
+  <script>
+    (function () {
+      var slug = <%- JSON.stringify(activity.slug) %>;
+      var liffId = <%- JSON.stringify(liffId || '') %>;
+      var prizes = <%- JSON.stringify(prizes || []) %>;
+      var activityMeta = <%- JSON.stringify({
+        name: activity.name,
+        referral_bonus_per: activity.referral_bonus_per,
+        referral_bonus_max: activity.referral_bonus_max
+      }) %>;
+
+      var jarEl = document.getElementById('jar');
+      var resultEl = document.getElementById('result');
+      var drawBtn = document.getElementById('draw-btn');
+      var statusEl = document.getElementById('status');
+      var statusRow = document.getElementById('status-row');
+
+      var drawing = false;
+      var profile = null;
+      var liffReady = false;
+
+      async function initLiff() {
+        var qs = new URLSearchParams(location.search);
+        var devUid = qs.get('uid');
+        if (devUid) { profile = { userId: devUid, displayName: qs.get('name') || 'DEV' }; return; }
+        if (qs.get('preview') === '1') {
+          profile = { userId: 'PREVIEW', displayName: '預覽' };
+          drawBtn.disabled = true; drawBtn.textContent = '預覽';
+          return;
+        }
+        if (!liffId) throw new Error('LIFF ID 未設定');
+        try { await liff.init({ liffId: liffId }); }
+        catch (e) { throw new Error('LIFF 初始化失敗'); }
+        if (!liff.isInClient()) throw new Error('請在 LINE App 內打開');
+        if (!liff.isLoggedIn()) { liff.login(); return new Promise(function () {}); }
+        profile = await liff.getProfile();
+      }
+
+      async function maybeRegisterReferral() {
+        try {
+          var qs = new URLSearchParams(location.search);
+          var inviter = qs.get('ref');
+          if (!inviter || !profile || !profile.userId || inviter === profile.userId) return;
+          await fetch('/api/games/fortune/' + encodeURIComponent(slug) + '/referral', {
+            method: 'POST', headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ line_user_id: profile.userId, inviter_line_user_id: inviter })
+          });
+          var url = new URL(location.href);
+          url.searchParams.delete('ref');
+          history.replaceState({}, '', url.pathname + url.search);
+        } catch (e) { console.warn('referral failed:', e); }
+      }
+
+      async function refreshQuota() {
+        try {
+          if (!profile || !profile.userId) return;
+          var resp = await fetch('/api/games/fortune/' + encodeURIComponent(slug) +
+            '/meta?line_user_id=' + encodeURIComponent(profile.userId)).then(function (r) { return r.json(); });
+          if (!resp.ok || !resp.quota) return;
+          renderQuota(resp.quota);
+        } catch (e) { console.warn('quota fetch failed:', e); }
+      }
+
+      function renderQuota(q) {
+        document.getElementById('stat-remaining').innerHTML = q.remaining + '<span class="unit">/ ' + q.total + '</span>';
+        document.getElementById('stat-referrals').innerHTML = q.referrals + '<span class="unit">人</span>';
+        if (q.remaining <= 0) {
+          drawBtn.disabled = true;
+          var canMore = q.referral_bonus_per > 0 && q.referral_bonus < q.referral_bonus_max;
+          statusEl.textContent = canMore ? '次數用完，邀請朋友 +' + q.referral_bonus_per + ' 次' : '次數已用完';
+        } else {
+          drawBtn.disabled = false;
+        }
+        var inviteCard = document.getElementById('invite-card');
+        var inviteSub = document.getElementById('invite-sub');
+        if (inviteCard) {
+          var bonusLeft = q.referral_bonus_max - q.referral_bonus;
+          if (bonusLeft <= 0) {
+            inviteCard.classList.add('maxed');
+            if (inviteSub) inviteSub.textContent = '邀請次數已用滿';
+          } else {
+            inviteCard.classList.remove('maxed');
+            if (inviteSub) inviteSub.textContent = '還可再邀請 ' + Math.ceil(bonusLeft / q.referral_bonus_per) + ' 位拿 +' + bonusLeft + ' 次';
+          }
+        }
+      }
+
+      async function drawFortune() {
+        if (drawing) return;
+        if (!liffReady || !profile) { statusEl.textContent = '請稍候'; return; }
+        drawing = true;
+        drawBtn.disabled = true;
+        statusEl.textContent = '抽籤中⋯';
+
+        // 籤紙先隱藏（如果上次有 reveal）
+        resultEl.classList.remove('show');
+        resultEl.hidden = false;
+
+        // 搖籤動畫
+        jarEl.classList.add('shake');
+
+        try {
+          var resp = await fetch('/api/games/fortune/' + encodeURIComponent(slug) + '/play', {
+            method: 'POST', headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ line_user_id: profile.userId, line_display_name: profile.displayName || null })
+          }).then(function (r) { return r.json(); });
+
+          if (!resp.ok) {
+            statusEl.textContent = resp.detail || resp.error || '抽籤失敗';
+            jarEl.classList.remove('shake');
+            drawing = false;
+            drawBtn.disabled = false;
+            return;
+          }
+
+          // 等搖完
+          await new Promise(function (r) { setTimeout(r, 1800); });
+          jarEl.classList.remove('shake');
+          // 籤筒傾斜
+          jarEl.classList.add('tilt');
+          await new Promise(function (r) { setTimeout(r, 400); });
+
+          // 顯示籤紙
+          showResult(resp.prize);
+
+          // 1.5 秒後籤筒回正
+          setTimeout(function () { jarEl.classList.remove('tilt'); }, 1500);
+
+          statusEl.textContent = '';
+          setTimeout(refreshQuota, 800);
+        } catch (e) {
+          statusEl.textContent = '錯誤：' + e.message;
+        } finally {
+          drawing = false;
+          drawBtn.disabled = false;
+        }
+      }
+
+      function showResult(prize) {
+        var rank = '';
+        if (prize.is_grand_prize) rank = '上 上 籤';
+        else if (prize.prize_value && prize.prize_value.fortune) rank = prize.prize_value.fortune;
+        else rank = '籤 詩';
+        document.getElementById('result-rank').textContent = rank;
+        document.getElementById('result-name').textContent = prize.name || '—';
+        var descParts = [];
+        if (prize.description) descParts.push(prize.description);
+        if (prize.prize_value) {
+          if (prize.prize_value.amount) descParts.push('NT$ ' + prize.prize_value.amount);
+          if (prize.prize_value.code) descParts.push('優惠碼 ' + prize.prize_value.code);
+          if (prize.prize_value.label) descParts.push(prize.prize_value.label);
+        }
+        document.getElementById('result-desc').textContent = descParts.join(' · ');
+        document.getElementById('result-glyph').textContent = prize.is_grand_prize ? '吉' : '籤';
+
+        if (prize.is_grand_prize) resultEl.classList.add('grand');
+        else resultEl.classList.remove('grand');
+
+        // 用 requestAnimationFrame 觸發 transition
+        requestAnimationFrame(function () { resultEl.classList.add('show'); });
+      }
+
+      var inviteBtn = document.getElementById('invite-btn');
+      if (inviteBtn) inviteBtn.addEventListener('click', shareWithFriend);
+
+      async function shareWithFriend() {
+        if (!profile || !profile.userId) { alert('身分驗證中'); return; }
+        var inviteUrl = 'https://liff.line.me/' + liffId + '/fortune/' + encodeURIComponent(slug) + '?ref=' + encodeURIComponent(profile.userId);
+        var msg = '快來抽「' + activityMeta.name + '」籤詩！我已經抽過了，你也來試試';
+        try {
+          if (liff.isApiAvailable && liff.isApiAvailable('shareTargetPicker')) {
+            var res = await liff.shareTargetPicker([{ type: 'text', text: msg + '\n' + inviteUrl }]);
+            if (res) { flashStatus('已分享！'); return; }
+          }
+        } catch (e) { console.warn('shareTargetPicker failed:', e); }
+        try {
+          await navigator.clipboard.writeText(inviteUrl);
+          flashStatus('連結已複製');
+        } catch (e) { prompt('複製此連結：', inviteUrl); }
+      }
+      function flashStatus(msg) {
+        statusEl.textContent = msg;
+        setTimeout(function () {
+          refreshQuota();
+          if (profile) statusEl.innerHTML = '哈囉，<span class="name">' + (profile.displayName || '') + '</span>';
+        }, 2400);
+      }
+
+      drawBtn.addEventListener('click', drawFortune);
+      jarEl.addEventListener('click', drawFortune);
+
+      if (prizes.length < 1) {
+        statusEl.textContent = '籤詩未設定';
+        drawBtn.disabled = true;
+      } else {
+        statusEl.textContent = '驗證身分中⋯';
+        drawBtn.disabled = true;
+      }
+
+      (async function () {
+        if (prizes.length < 1) return;
+        try {
+          await initLiff();
+          liffReady = true;
+          await maybeRegisterReferral();
+          await refreshQuota();
+          if (statusEl.textContent === '驗證身分中⋯' || statusEl.textContent === '') {
+            statusEl.innerHTML = '哈囉，<span class="name">' + (profile.displayName || '') + '</span>';
+          }
+        } catch (e) {
+          statusEl.textContent = e.message || '初始化失敗';
+        }
+      })();
+    })();
+  </script>
+</body>
+</html>

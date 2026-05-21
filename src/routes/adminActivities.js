@@ -24,7 +24,7 @@
  *   GET  /admin/activities/api/:id/stats    遊玩統計
  */
 
-const GAME_TYPES = ['wheel']; // v1 只支援輪盤；後續加 fortune / scratch 在這裡
+const GAME_TYPES = ['wheel', 'fortune', 'scratch', 'slot'];
 const STATUSES = ['draft', 'active', 'paused', 'ended'];
 const PRIZE_TYPES = ['rice_dollar', 'coupon_code', 'badge', 'physical', 'none'];
 

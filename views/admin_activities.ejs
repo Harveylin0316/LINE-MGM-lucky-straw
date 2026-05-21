@@ -9,7 +9,7 @@
         <div>
           <h1>活動管理</h1>
           <p class="muted" style="margin-top:6px;">
-            設定 LINE 用戶可玩的互動活動。目前支援「輪盤抽獎」遊戲類型，後續會擴增更多玩法。
+            設定 LINE 用戶可玩的互動活動。支援輪盤、抽籤、刮刮樂、老虎機 4 種玩法。
           </p>
         </div>
         <a href="/admin/activities/new" class="act-primary-btn">＋ 新增活動</a>
@@ -68,7 +68,7 @@
         return '<span class="act-badge ' + v[1] + '">' + v[0] + '</span>';
       }
       function gameLabel(t) {
-        return ({ wheel: '輪盤抽獎', fortune: '每日抽籤', scratch: '刮刮樂' })[t] || t;
+        return ({ wheel: '輪盤抽獎', fortune: '每日抽籤', scratch: '刮刮樂', slot: '老虎機' })[t] || t;
       }
 
       function load() {
