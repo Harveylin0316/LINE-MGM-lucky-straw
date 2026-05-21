@@ -493,17 +493,20 @@
       if (c.size) t.style.fontSize = mapFlexSize(c.size);
       if (c.weight === 'bold') t.style.fontWeight = '700';
       if (c.align === 'center') t.style.textAlign = 'center';
+      else if (c.align === 'end') t.style.textAlign = 'right';
+      else if (c.align === 'start') t.style.textAlign = 'left';
       if (c.margin) t.style.marginTop = mapFlexSpacing(c.margin);
       if (c.lineSpacing) t.style.lineHeight = '1.55';
       if (c.wrap) t.style.whiteSpace = 'pre-wrap';
       if (c.flex !== undefined) t.style.flex = String(c.flex);
       t.textContent = String(c.text || '');
-      // WYSIWYG：text 可直接編輯
+      // WYSIWYG：text 可直接編輯 + focus 顯示 floating toolbar
       t.contentEditable = 'true';
       t.dataset.editPath = JSON.stringify(path.concat(['text']));
       t.classList.add('lm-editable');
       t.addEventListener('input', onPreviewTextEdit);
       t.addEventListener('keydown', preventEditorEnter);
+      t.addEventListener('focus', function () { showTextFormatToolbar(t); });
       parent.appendChild(t);
       return;
     }
@@ -610,6 +613,187 @@
       ref = ref[path[i]];
     }
     if (ref != null) ref[path[path.length - 1]] = value;
+  }
+
+  // ------------------------------------------------------------------
+  // Floating text format toolbar
+  // ------------------------------------------------------------------
+  var currentEditingText = null;
+
+  function showTextFormatToolbar(textEl) {
+    currentEditingText = textEl;
+    var tb = $('text-format-toolbar');
+    if (!tb) return;
+    // 計算位置：text 上方 + scrollY 補正
+    var rect = textEl.getBoundingClientRect();
+    var previewWrap = $('msg-preview-wrap');
+    var wrapRect = previewWrap ? previewWrap.getBoundingClientRect() : { left: 0, top: 0 };
+    // toolbar 用 absolute 定位（page-relative）
+    tb.style.top = (rect.top + window.scrollY - 44) + 'px';
+    tb.style.left = (rect.left + window.scrollX) + 'px';
+    tb.hidden = false;
+    syncToolbarFromText(textEl);
+  }
+
+  function syncToolbarFromText(textEl) {
+    var tb = $('text-format-toolbar');
+    if (!tb) return;
+    try {
+      var path = JSON.parse(textEl.dataset.editPath || '[]');
+      if (path.length === 0) return;
+      var parsed = JSON.parse($('flex-json').value);
+      var nodePath = path.slice(0, -1); // 移除 'text' segment 到 text node 本身
+      var ref = parsed.contents;
+      for (var i = 0; i < nodePath.length; i++) ref = ref[nodePath[i]];
+      if (!ref) return;
+      tb.querySelector('.tft-size').value = ref.size || 'md';
+      tb.querySelector('.tft-color').value = normalizeHexColor(ref.color);
+      tb.querySelector('.tft-bold').classList.toggle('active', ref.weight === 'bold');
+      ['start', 'center', 'end'].forEach(function (a) {
+        var btn = tb.querySelector('[data-action="align-' + a + '"]');
+        if (btn) btn.classList.toggle('active', ref.align === a);
+      });
+    } catch (e) {}
+  }
+
+  function normalizeHexColor(c) {
+    if (typeof c !== 'string') return '#1f2937';
+    var m = c.match(/^#([0-9a-f]{6}|[0-9a-f]{3})$/i);
+    if (!m) return '#1f2937';
+    if (m[1].length === 3) {
+      return '#' + m[1].split('').map(function (x) { return x + x; }).join('');
+    }
+    return c.toLowerCase();
+  }
+
+  function hideTextFormatToolbar() {
+    var tb = $('text-format-toolbar');
+    if (tb) tb.hidden = true;
+    currentEditingText = null;
+  }
+
+  // 點外面 hide（但 toolbar 內部、預覽內 editable 點擊都不 hide）
+  document.addEventListener('mousedown', function (e) {
+    var tb = $('text-format-toolbar');
+    if (!tb || tb.hidden) return;
+    if (tb.contains(e.target)) return;
+    if (e.target.classList && e.target.classList.contains('lm-editable')) return;
+    hideTextFormatToolbar();
+  });
+
+  // toolbar 內部 mousedown 不要 blur text（保留 cursor）
+  (function bindToolbar() {
+    var tb = document.getElementById('text-format-toolbar');
+    if (!tb) return;
+    tb.addEventListener('mousedown', function (e) {
+      // 排除 select / input — 它們要正常 focus
+      var tag = e.target.tagName;
+      if (tag === 'SELECT' || tag === 'INPUT') return;
+      e.preventDefault();
+    });
+    // 字級
+    tb.querySelector('.tft-size').addEventListener('change', function (e) {
+      handleStyleChange('size', e.target.value);
+    });
+    // 顏色（input 事件即時 reflect）
+    tb.querySelector('.tft-color').addEventListener('input', function (e) {
+      handleStyleChange('color', e.target.value);
+    });
+    // 粗體 toggle
+    tb.querySelector('.tft-bold').addEventListener('click', function () {
+      var btn = tb.querySelector('.tft-bold');
+      var bold = btn.classList.contains('active');
+      handleStyleChange('weight', bold ? null : 'bold');
+      btn.classList.toggle('active', !bold);
+    });
+    // 對齊
+    ['start', 'center', 'end'].forEach(function (a) {
+      var btn = tb.querySelector('[data-action="align-' + a + '"]');
+      if (!btn) return;
+      btn.addEventListener('click', function () {
+        // 互斥 active 三選一
+        ['start', 'center', 'end'].forEach(function (b) {
+          var x = tb.querySelector('[data-action="align-' + b + '"]');
+          if (x) x.classList.toggle('active', b === a);
+        });
+        handleStyleChange('align', a);
+      });
+    });
+    // 加上方 / 加下方 / 刪除（row 操作）
+    tb.querySelectorAll('.tft-btn[data-action]').forEach(function (btn) {
+      var act = btn.getAttribute('data-action');
+      if (act !== 'add-above' && act !== 'add-below' && act !== 'delete') return;
+      btn.addEventListener('click', function () { handleRowAction(act); });
+    });
+  })();
+
+  // style 操作：JSON sync + DOM 即時 update（不 re-render preview，保留 focus / cursor）
+  function handleStyleChange(prop, val) {
+    if (!currentEditingText) return;
+    try {
+      var path = JSON.parse(currentEditingText.dataset.editPath || '[]');
+      if (path.length === 0) return;
+      var nodePath = path.slice(0, -1);
+      var textarea = $('flex-json');
+      var parsed = JSON.parse(textarea.value);
+      var ref = parsed.contents;
+      for (var i = 0; i < nodePath.length; i++) ref = ref[nodePath[i]];
+      if (!ref) return;
+      if (val == null) delete ref[prop];
+      else ref[prop] = val;
+      textarea.value = JSON.stringify(parsed, null, 2);
+      saveDraft();
+      // DOM 即時 reflect
+      if (prop === 'size') currentEditingText.style.fontSize = mapFlexSize(val);
+      else if (prop === 'color') currentEditingText.style.color = val || '';
+      else if (prop === 'weight') currentEditingText.style.fontWeight = val === 'bold' ? '700' : '';
+      else if (prop === 'align') {
+        currentEditingText.style.textAlign =
+          val === 'center' ? 'center' :
+          val === 'end' ? 'right' :
+          val === 'start' ? 'left' : '';
+      }
+    } catch (e) {
+      console.warn('handleStyleChange failed:', e && e.message);
+    }
+  }
+
+  // row 操作：改 JSON 後 re-render preview（新加 row 沒 DOM element 必須重 render）
+  function handleRowAction(action) {
+    if (!currentEditingText) return;
+    try {
+      var path = JSON.parse(currentEditingText.dataset.editPath || '[]');
+      if (path.length < 2) return;
+      // path = [..., contents_key, idx, 'text']
+      var idxPos = path.length - 2;
+      var idx = path[idxPos];
+      var parentPath = path.slice(0, idxPos);
+      var textarea = $('flex-json');
+      var parsed = JSON.parse(textarea.value);
+      var ref = parsed.contents;
+      for (var i = 0; i < parentPath.length; i++) ref = ref[parentPath[i]];
+      if (!Array.isArray(ref)) {
+        alert('這個 text 不在 array 內，無法插入或刪除一列。');
+        return;
+      }
+      if (action === 'add-above' || action === 'add-below') {
+        var newText = { type: 'text', text: '點此編輯', size: 'md', color: '#1f2937', wrap: true };
+        var insertIdx = action === 'add-above' ? idx : idx + 1;
+        ref.splice(insertIdx, 0, newText);
+      } else if (action === 'delete') {
+        if (ref.length <= 1) {
+          alert('這個 box 只有一列，不可刪除（會破壞 LINE Flex 規範）。');
+          return;
+        }
+        ref.splice(idx, 1);
+      }
+      textarea.value = JSON.stringify(parsed, null, 2);
+      saveDraft();
+      hideTextFormatToolbar();
+      schedulePreview();
+    } catch (e) {
+      console.warn('handleRowAction failed:', e && e.message);
+    }
   }
 
   function mapFlexSize(s) {

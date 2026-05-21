@@ -377,6 +377,36 @@
             <div id="msg-preview" class="line-mock empty">尚未有訊息內容。從上方挑一個模板，或直接編輯下方表單。</div>
           </div>
         </aside>
+
+        <!-- floating text format toolbar (跟著 focus 的 text) -->
+        <div id="text-format-toolbar" class="text-format-toolbar" hidden>
+          <button type="button" class="tft-btn" data-action="add-above" title="在上方插入一列">＋上方</button>
+          <button type="button" class="tft-btn" data-action="add-below" title="在下方插入一列">＋下方</button>
+          <span class="tft-sep"></span>
+          <label class="tft-label" title="字級">
+            <span>字</span>
+            <select class="tft-size">
+              <option value="xs">XS</option>
+              <option value="sm">S</option>
+              <option value="md" selected>M</option>
+              <option value="lg">L</option>
+              <option value="xl">XL</option>
+              <option value="xxl">XXL</option>
+              <option value="3xl">3XL</option>
+            </select>
+          </label>
+          <label class="tft-label" title="文字顏色">
+            <span>色</span>
+            <input type="color" class="tft-color" value="#1f2937" />
+          </label>
+          <button type="button" class="tft-btn tft-bold" data-action="bold" title="粗體切換"><strong>B</strong></button>
+          <span class="tft-sep"></span>
+          <button type="button" class="tft-btn tft-align" data-action="align-start" title="靠左">⟸</button>
+          <button type="button" class="tft-btn tft-align" data-action="align-center" title="置中">⇔</button>
+          <button type="button" class="tft-btn tft-align" data-action="align-end" title="靠右">⟹</button>
+          <span class="tft-sep"></span>
+          <button type="button" class="tft-btn tft-danger" data-action="delete" title="刪除這一列">✕</button>
+        </div>
       </div>
     </section>
 
@@ -1137,6 +1167,77 @@
         outline: 2px solid #1f2937;
         outline-offset: -2px;
         background: #FCC726;
+      }
+
+      /* floating text format toolbar */
+      .text-format-toolbar {
+        position: absolute;
+        z-index: 1000;
+        display: flex;
+        align-items: center;
+        gap: 4px;
+        padding: 5px 8px;
+        background: #1f2937;
+        color: #fff;
+        border-radius: 8px;
+        font-size: 12px;
+        box-shadow: 0 6px 16px rgba(0,0,0,0.25);
+        user-select: none;
+      }
+      .text-format-toolbar::after {
+        content: '';
+        position: absolute;
+        bottom: -5px;
+        left: 16px;
+        width: 0; height: 0;
+        border-left: 5px solid transparent;
+        border-right: 5px solid transparent;
+        border-top: 5px solid #1f2937;
+      }
+      .text-format-toolbar .tft-btn {
+        background: transparent;
+        border: 1px solid rgba(255,255,255,0.18);
+        color: #fff;
+        padding: 3px 7px;
+        border-radius: 4px;
+        cursor: pointer;
+        font-size: 12px;
+        line-height: 1.2;
+      }
+      .text-format-toolbar .tft-btn:hover { background: rgba(255,255,255,0.12); }
+      .text-format-toolbar .tft-btn.active { background: #FCC726; color: #1f2937; border-color: #FCC726; }
+      .text-format-toolbar .tft-bold strong { font-family: serif; font-size: 13px; }
+      .text-format-toolbar .tft-align { font-size: 13px; padding: 2px 6px; }
+      .text-format-toolbar .tft-danger:hover { background: #dc2626; border-color: #dc2626; }
+      .text-format-toolbar .tft-label {
+        display: inline-flex;
+        align-items: center;
+        gap: 4px;
+        font-size: 11px;
+        color: rgba(255,255,255,0.7);
+      }
+      .text-format-toolbar .tft-size {
+        background: #374151;
+        color: #fff;
+        border: 1px solid rgba(255,255,255,0.18);
+        padding: 2px 5px;
+        border-radius: 4px;
+        font-size: 11px;
+      }
+      .text-format-toolbar .tft-color {
+        width: 26px;
+        height: 22px;
+        border: 1px solid rgba(255,255,255,0.18);
+        border-radius: 4px;
+        cursor: pointer;
+        padding: 0;
+        background: transparent;
+      }
+      .text-format-toolbar .tft-sep {
+        width: 1px;
+        height: 18px;
+        background: rgba(255,255,255,0.18);
+        margin: 0 2px;
       }
       .status-pill {
         display: inline-block;
