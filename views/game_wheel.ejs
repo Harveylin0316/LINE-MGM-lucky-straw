@@ -8,139 +8,215 @@
   <script src="https://static.line-scdn.net/liff/edge/2/sdk.js"></script>
   <style>
     :root {
-      --bg-warm-1: #FAF7F1;
-      --bg-warm-2: #F0EAD9;
-      --surface:   #FFFFFF;
-      --ink:       #1D1D1F;
-      --ink-2:     #86868B;
-      --ink-3:     #C7C7CC;
-      --gold-1:    #FFC83D;
-      --gold-2:    #F5A623;
-      --gold-deep: #D97706;
-      --cream:     #FFF8E7;
-      --butter:    #FFE6A0;
-      --pointer:   #2E2E33;
-      --shadow-soft: 0 10px 30px rgba(31, 26, 18, 0.08);
-      --shadow-deep: 0 24px 60px rgba(31, 26, 18, 0.18);
+      --bg-1:       #FAF6EE;
+      --bg-2:       #EFE7D4;
+      --surface:    #FFFFFF;
+      --ink:        #1D1D1F;
+      --ink-2:      #6E6E73;
+      --ink-3:      #B8B8BD;
+      --gold-1:     #FFD86B;
+      --gold-2:     #F5A623;
+      --gold-3:     #D97706;
+      --cream:      #FFF8E7;
+      --butter:     #FFE9A0;
+      --shadow-1:   0 8px 24px rgba(120, 80, 20, 0.08);
+      --shadow-2:   0 20px 50px rgba(120, 80, 20, 0.15);
     }
     * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
     html, body { margin: 0; padding: 0; }
     body {
       font-family: -apple-system, BlinkMacSystemFont, "SF Pro Display", "SF Pro Text",
-        "Helvetica Neue", "PingFang TC", "Microsoft JhengHei", sans-serif;
+        "PingFang TC", "Microsoft JhengHei", sans-serif;
       color: var(--ink);
       min-height: 100vh;
-      background:
-        radial-gradient(circle at 50% 0%, #FFFFFF 0%, var(--bg-warm-1) 40%, var(--bg-warm-2) 100%);
-      background-attachment: fixed;
+      background: var(--bg-1);
       letter-spacing: -0.01em;
       overflow-x: hidden;
     }
+    /* 主背景 + 微妙裝飾 */
+    body::before {
+      content: '';
+      position: fixed;
+      inset: 0;
+      background:
+        radial-gradient(ellipse 80% 50% at 50% 0%, rgba(255, 216, 107, 0.3) 0%, transparent 60%),
+        radial-gradient(ellipse 60% 40% at 50% 100%, rgba(217, 119, 6, 0.08) 0%, transparent 60%),
+        var(--bg-1);
+      z-index: -2;
+    }
+    /* 細微點點圖案，奢侈品包裝紙感 */
+    body::after {
+      content: '';
+      position: fixed;
+      inset: 0;
+      background-image: radial-gradient(circle, rgba(217, 119, 6, 0.06) 1px, transparent 1.5px);
+      background-size: 24px 24px;
+      z-index: -1;
+      pointer-events: none;
+    }
 
-    /* ---------- Header ---------- */
-    .w-header {
-      padding: 32px 24px 8px;
-      text-align: center;
+    /* ---------- Page Layout ---------- */
+    .w-app {
       max-width: 480px;
       margin: 0 auto;
+      padding: 24px 20px 48px;
+      position: relative;
+    }
+
+    /* ---------- Header ---------- */
+    .w-header { text-align: center; padding: 8px 0 4px; }
+    .w-eyebrow {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      font-size: 11px;
+      font-weight: 600;
+      letter-spacing: 0.12em;
+      text-transform: uppercase;
+      color: var(--gold-3);
+      background: rgba(217, 119, 6, 0.08);
+      padding: 5px 12px;
+      border-radius: 999px;
+      margin-bottom: 14px;
+    }
+    .w-eyebrow::before {
+      content: '';
+      width: 6px;
+      height: 6px;
+      border-radius: 50%;
+      background: var(--gold-2);
+      box-shadow: 0 0 8px var(--gold-2);
+      animation: pulse-dot 1.6s ease-in-out infinite;
+    }
+    @keyframes pulse-dot {
+      0%, 100% { opacity: 1; transform: scale(1); }
+      50% { opacity: 0.5; transform: scale(0.85); }
     }
     .w-cover {
       width: 100%;
-      max-width: 360px;
+      max-width: 320px;
       aspect-ratio: 16 / 9;
       object-fit: cover;
       display: block;
-      margin: 0 auto 16px;
+      margin: 0 auto 18px;
       border-radius: 20px;
-      box-shadow: var(--shadow-soft);
+      box-shadow: var(--shadow-1);
     }
     .w-header h1 {
       margin: 0 0 8px;
-      font-size: 30px;
-      font-weight: 700;
-      letter-spacing: -0.025em;
+      font-size: 32px;
+      font-weight: 800;
+      letter-spacing: -0.03em;
       color: var(--ink);
-      line-height: 1.15;
+      line-height: 1.1;
     }
     .w-header p {
       margin: 0 auto;
-      max-width: 320px;
+      max-width: 280px;
       color: var(--ink-2);
-      font-size: 15px;
+      font-size: 14px;
       line-height: 1.5;
       font-weight: 400;
     }
 
     /* ---------- Stage ---------- */
     .w-stage-outer {
-      padding: 28px 16px 0;
+      padding: 28px 0 12px;
       display: flex;
       justify-content: center;
+      position: relative;
+    }
+    /* 輪盤旁的裝飾星 */
+    .w-stage-outer::before,
+    .w-stage-outer::after {
+      content: '✦';
+      position: absolute;
+      top: 50%;
+      font-size: 18px;
+      color: var(--gold-2);
+      opacity: 0.5;
+      animation: twinkle 3s ease-in-out infinite;
+    }
+    .w-stage-outer::before { left: 4%; transform: translateY(-60%); }
+    .w-stage-outer::after  { right: 4%; transform: translateY(40%); animation-delay: 1.5s; }
+    @keyframes twinkle {
+      0%, 100% { opacity: 0.5; transform: translateY(-60%) scale(1); }
+      50% { opacity: 1; transform: translateY(-60%) scale(1.3); }
     }
     .w-stage {
       position: relative;
-      width: min(88vw, 360px);
+      width: min(86vw, 340px);
       aspect-ratio: 1;
     }
-    /* Pointer: 細長 + 漸層金屬感 */
+    /* Pointer：細緻金屬箭頭 */
     .w-pointer {
       position: absolute;
-      top: -2px;
+      top: -4px;
       left: 50%;
       transform: translateX(-50%);
-      width: 0;
-      height: 0;
-      border-left: 11px solid transparent;
-      border-right: 11px solid transparent;
-      border-top: 26px solid var(--pointer);
       z-index: 5;
-      filter: drop-shadow(0 4px 8px rgba(0,0,0,0.25));
+      width: 20px;
+      height: 32px;
+      filter: drop-shadow(0 4px 8px rgba(0,0,0,0.3));
     }
-    .w-pointer::after {
-      content: '';
-      position: absolute;
-      top: -28px;
-      left: -8px;
-      width: 14px;
-      height: 14px;
-      background: radial-gradient(circle at 35% 30%, #FFFFFF, var(--gold-1) 60%, var(--gold-2));
-      border-radius: 50%;
-      box-shadow: 0 2px 6px rgba(0,0,0,0.25), inset 0 -2px 3px rgba(0,0,0,0.15);
-    }
+    .w-pointer svg { width: 100%; height: 100%; display: block; }
+
+    /* 輪盤外框（精緻金屬邊框） */
     .w-canvas-wrap {
       position: relative;
       width: 100%;
       height: 100%;
       border-radius: 50%;
-      background: radial-gradient(circle, var(--surface) 0%, var(--bg-warm-1) 100%);
+      background: radial-gradient(circle, var(--surface) 0%, var(--bg-1) 90%);
       box-shadow:
-        var(--shadow-deep),
-        inset 0 0 0 1px rgba(255,255,255,0.6);
+        var(--shadow-2),
+        inset 0 0 0 1px rgba(255,255,255,0.6),
+        0 0 0 6px rgba(255, 255, 255, 0.5),
+        0 0 0 7px rgba(217, 119, 6, 0.15);
     }
     #wheel-canvas {
       width: 100%;
       height: 100%;
       display: block;
-      transition: transform 5.2s cubic-bezier(0.17, 0.67, 0.27, 1);
+      transition: transform 5.5s cubic-bezier(0.16, 0.74, 0.24, 1);
     }
-    /* 中心按鈕：金漸層 + 立體浮起感 */
+    /* 中心 SPIN 按鈕 + pulsing 光環 */
     .w-center {
       position: absolute;
       top: 50%; left: 50%;
       transform: translate(-50%, -50%);
-      width: 28%;
-      height: 28%;
+      width: 30%;
+      height: 30%;
       border-radius: 50%;
       z-index: 4;
     }
+    /* 三層 ring 製造立體基座 */
     .w-center::before {
       content: '';
       position: absolute;
-      inset: -6px;
+      inset: -10px;
       border-radius: 50%;
-      background: linear-gradient(180deg, rgba(255,255,255,0.9), rgba(255,255,255,0.4));
+      background: linear-gradient(180deg, #FFFFFF, #F0EBE0);
+      box-shadow: 0 10px 24px rgba(120,80,20,0.18);
       z-index: -1;
-      box-shadow: 0 8px 20px rgba(31,26,18,0.18);
+    }
+    /* pulsing glow ring（吸引點擊） */
+    .w-center::after {
+      content: '';
+      position: absolute;
+      inset: -4px;
+      border-radius: 50%;
+      border: 2px solid var(--gold-2);
+      opacity: 0;
+      animation: pulse-ring 2.2s ease-out infinite;
+      z-index: -1;
+    }
+    .w-center.spinning::after,
+    .w-center.disabled::after { animation: none; }
+    @keyframes pulse-ring {
+      0%   { opacity: 0.6; transform: scale(1); }
+      80%  { opacity: 0; transform: scale(1.45); }
+      100% { opacity: 0; transform: scale(1.5); }
     }
     .w-spin-btn {
       width: 100%;
@@ -149,45 +225,145 @@
       border: none;
       cursor: pointer;
       font-family: inherit;
-      font-weight: 700;
-      font-size: 17px;
-      letter-spacing: 0.04em;
+      font-weight: 800;
+      font-size: 16px;
+      letter-spacing: 0.06em;
       color: var(--ink);
       background:
-        radial-gradient(circle at 35% 30%, #FFE393 0%, var(--gold-1) 38%, var(--gold-2) 100%);
+        radial-gradient(circle at 35% 28%, #FFEDA8 0%, var(--gold-1) 35%, var(--gold-2) 100%);
       box-shadow:
-        inset 0 -3px 8px rgba(0,0,0,0.18),
-        inset 0 3px 6px rgba(255,255,255,0.7),
-        0 6px 14px rgba(217,119,6,0.35);
-      transition: transform 0.18s cubic-bezier(0.34, 1.56, 0.64, 1), filter 0.2s;
+        inset 0 -4px 8px rgba(120, 70, 0, 0.22),
+        inset 0 3px 6px rgba(255,255,255,0.85),
+        0 8px 18px rgba(217,119,6,0.4);
+      transition: transform 0.2s cubic-bezier(0.34, 1.56, 0.64, 1), filter 0.2s;
+      position: relative;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      gap: 1px;
+      line-height: 1;
+    }
+    .w-spin-btn .tap {
+      font-size: 9px;
+      font-weight: 600;
+      opacity: 0.6;
+      letter-spacing: 0.15em;
+      text-transform: uppercase;
     }
     .w-spin-btn:active:not(:disabled) {
-      transform: scale(0.93);
+      transform: scale(0.92);
     }
     .w-spin-btn:disabled {
       cursor: default;
-      filter: saturate(0.5) brightness(0.95);
-      opacity: 0.85;
+      filter: saturate(0.4) brightness(0.96);
     }
 
-    /* ---------- Status + Info ---------- */
-    .w-status {
-      margin: 28px auto 4px;
-      text-align: center;
-      font-size: 14px;
+    /* ---------- Status row（替換原本兩行文字） ---------- */
+    .w-status-row {
+      margin: 24px auto 16px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 8px;
+      font-size: 13px;
       color: var(--ink-2);
       min-height: 20px;
-      max-width: 320px;
-      padding: 0 16px;
-      transition: opacity 0.2s;
+      padding: 0 20px;
     }
-    .w-info {
-      margin: 0 auto 32px;
+    .w-status-row .dot {
+      width: 6px;
+      height: 6px;
+      border-radius: 50%;
+      background: var(--gold-2);
+      box-shadow: 0 0 6px var(--gold-2);
+      flex-shrink: 0;
+    }
+
+    /* ---------- 獎品預覽 card ---------- */
+    .w-prizes-card {
+      background: var(--surface);
+      border-radius: 20px;
+      padding: 18px 18px 12px;
+      box-shadow: var(--shadow-1);
+      margin-top: 8px;
+    }
+    .w-prizes-head {
+      display: flex;
+      align-items: baseline;
+      justify-content: space-between;
+      margin-bottom: 12px;
+    }
+    .w-prizes-head h2 {
+      margin: 0;
+      font-size: 16px;
+      font-weight: 700;
+      letter-spacing: -0.01em;
+    }
+    .w-prizes-meta {
+      font-size: 11px;
+      color: var(--ink-2);
+      font-weight: 500;
+    }
+    .w-prize-list {
+      display: grid;
+      grid-template-columns: 1fr;
+      gap: 8px;
+    }
+    .w-prize-item {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      padding: 10px 12px;
+      background: linear-gradient(135deg, var(--cream), #FFFDF7);
+      border-radius: 12px;
+      border: 1px solid rgba(217, 119, 6, 0.08);
+    }
+    .w-prize-item.grand {
+      background: linear-gradient(135deg, var(--butter), #FFD86B);
+      border-color: var(--gold-2);
+    }
+    .w-prize-thumb {
+      width: 36px; height: 36px;
+      border-radius: 10px;
+      background: linear-gradient(135deg, var(--gold-1), var(--gold-2));
+      color: white;
+      display: flex; align-items: center; justify-content: center;
+      font-size: 16px;
+      flex-shrink: 0;
+      overflow: hidden;
+    }
+    .w-prize-thumb img { width: 100%; height: 100%; object-fit: cover; }
+    .w-prize-info { flex: 1; min-width: 0; }
+    .w-prize-name {
+      font-size: 13px;
+      font-weight: 600;
+      color: var(--ink);
+      letter-spacing: -0.01em;
+    }
+    .w-prize-tag {
+      font-size: 11px;
+      color: var(--ink-2);
+      margin-top: 1px;
+    }
+    .w-prize-item.grand .w-prize-tag { color: var(--gold-3); font-weight: 600; }
+    .w-prize-grand-badge {
+      font-size: 10px;
+      font-weight: 700;
+      padding: 2px 6px;
+      background: var(--gold-3);
+      color: white;
+      border-radius: 4px;
+      letter-spacing: 0.05em;
+    }
+
+    /* ---------- Footnote ---------- */
+    .w-footnote {
+      margin-top: 16px;
       text-align: center;
-      font-size: 12px;
+      font-size: 11px;
       color: var(--ink-3);
-      max-width: 320px;
-      padding: 0 16px;
+      letter-spacing: 0.02em;
     }
 
     /* ---------- Result Bottom Sheet ---------- */
@@ -198,93 +374,103 @@
       pointer-events: none;
       opacity: 0;
       transition: opacity 0.3s ease;
-      background: rgba(20, 20, 22, 0.4);
-      backdrop-filter: blur(8px);
-      -webkit-backdrop-filter: blur(8px);
+      background: rgba(20, 20, 22, 0.45);
+      backdrop-filter: blur(10px);
+      -webkit-backdrop-filter: blur(10px);
       display: flex;
       align-items: flex-end;
       justify-content: center;
     }
-    .w-modal.open {
-      opacity: 1;
-      pointer-events: auto;
-    }
+    .w-modal.open { opacity: 1; pointer-events: auto; }
     .w-sheet {
       width: 100%;
       max-width: 480px;
       background: var(--surface);
-      border-radius: 28px 28px 0 0;
-      padding: 14px 24px 32px;
+      border-radius: 32px 32px 0 0;
+      padding: 14px 24px 36px;
+      padding-bottom: max(36px, env(safe-area-inset-bottom));
       transform: translateY(100%);
-      transition: transform 0.45s cubic-bezier(0.32, 0.72, 0, 1);
-      box-shadow: 0 -8px 32px rgba(0,0,0,0.18);
+      transition: transform 0.5s cubic-bezier(0.32, 0.72, 0, 1);
+      box-shadow: 0 -8px 32px rgba(0,0,0,0.2);
     }
     .w-modal.open .w-sheet { transform: translateY(0); }
     .w-handle {
-      width: 36px;
-      height: 5px;
+      width: 38px; height: 5px;
       border-radius: 999px;
       background: var(--ink-3);
-      margin: 0 auto 18px;
-      opacity: 0.6;
+      margin: 0 auto 22px;
+      opacity: 0.5;
     }
     .w-modal-title {
       text-align: center;
-      font-size: 13px;
-      font-weight: 500;
-      color: var(--ink-2);
-      letter-spacing: 0.03em;
+      font-size: 12px;
+      font-weight: 600;
+      color: var(--gold-3);
+      letter-spacing: 0.18em;
       text-transform: uppercase;
-      margin-bottom: 10px;
+      margin-bottom: 12px;
     }
     .w-prize-img-wrap {
-      width: 96px;
-      height: 96px;
+      width: 108px; height: 108px;
       margin: 0 auto 18px;
-      border-radius: 24px;
+      border-radius: 28px;
       background: linear-gradient(135deg, var(--cream), var(--butter));
       display: flex;
       align-items: center;
       justify-content: center;
-      box-shadow: 0 8px 20px rgba(245, 166, 35, 0.25), inset 0 -3px 8px rgba(217,119,6,0.15);
+      box-shadow:
+        0 12px 28px rgba(245, 166, 35, 0.3),
+        inset 0 -3px 8px rgba(217,119,6,0.15),
+        inset 0 3px 6px rgba(255,255,255,0.8);
       overflow: hidden;
+      position: relative;
+    }
+    .w-prize-img-wrap::after {
+      content: '';
+      position: absolute;
+      inset: 0;
+      background: radial-gradient(circle at 30% 20%, rgba(255,255,255,0.5), transparent 60%);
+      pointer-events: none;
     }
     .w-prize-img-wrap img {
-      width: 100%;
-      height: 100%;
+      width: 100%; height: 100%;
       object-fit: cover;
       border-radius: inherit;
+      position: relative;
+      z-index: 1;
     }
     .w-prize-img-wrap .glyph {
-      font-size: 42px;
-      filter: drop-shadow(0 2px 4px rgba(0,0,0,0.15));
+      font-size: 48px;
+      filter: drop-shadow(0 3px 6px rgba(0,0,0,0.18));
+      position: relative;
+      z-index: 1;
     }
     .w-modal-prize {
       text-align: center;
-      font-size: 28px;
-      font-weight: 700;
-      letter-spacing: -0.02em;
+      font-size: 30px;
+      font-weight: 800;
+      letter-spacing: -0.025em;
       color: var(--ink);
       margin-bottom: 8px;
-      line-height: 1.2;
+      line-height: 1.15;
     }
     .w-modal.grand .w-modal-prize {
-      background: linear-gradient(135deg, #D97706, #FFC83D);
+      background: linear-gradient(135deg, var(--gold-3), var(--gold-1));
       -webkit-background-clip: text;
       background-clip: text;
       color: transparent;
       animation: shimmer 1.4s ease infinite;
     }
     @keyframes shimmer {
-      0%, 100% { filter: brightness(1); }
-      50% { filter: brightness(1.18); }
+      0%, 100% { filter: brightness(1) saturate(1); }
+      50% { filter: brightness(1.2) saturate(1.2); }
     }
     .w-modal-desc {
       text-align: center;
       color: var(--ink-2);
       font-size: 14px;
       line-height: 1.55;
-      margin-bottom: 24px;
+      margin-bottom: 28px;
     }
     .w-modal-btn {
       display: block;
@@ -303,52 +489,102 @@
     }
     .w-modal-btn:active { transform: scale(0.97); }
 
-    /* ---------- Gold sparkles (only for grand prize, elegant) ---------- */
+    /* gold sparkles (大獎用) */
     .sparkle {
       position: fixed;
       pointer-events: none;
-      top: 50%;
-      left: 50%;
-      width: 6px;
-      height: 6px;
-      background: radial-gradient(circle, #FFFFFF, var(--gold-1) 60%, transparent 75%);
+      top: 50%; left: 50%;
+      width: 8px; height: 8px;
+      background: radial-gradient(circle, #FFFFFF, var(--gold-1) 50%, transparent 75%);
       border-radius: 50%;
       z-index: 99;
       opacity: 0;
-      animation: spark 1.6s ease-out forwards;
+      animation: spark 1.8s ease-out forwards;
     }
     @keyframes spark {
       0%   { opacity: 0; transform: translate(-50%, -50%) scale(0); }
       15%  { opacity: 1; transform: translate(calc(-50% + var(--dx, 0px)), calc(-50% + var(--dy, 0px))) scale(1.2); }
-      100% { opacity: 0; transform: translate(calc(-50% + var(--dx, 0px) * 1.4), calc(-50% + var(--dy, 0px) * 1.4 + 60px)) scale(0.4); }
+      100% { opacity: 0; transform: translate(calc(-50% + var(--dx, 0px) * 1.4), calc(-50% + var(--dy, 0px) * 1.4 + 80px)) scale(0.3); }
     }
   </style>
 </head>
 <body>
-  <header class="w-header">
-    <% if (activity.cover_image_url) { %>
-      <img class="w-cover" src="<%= activity.cover_image_url %>" alt="" />
-    <% } %>
-    <h1><%= activity.name %></h1>
-    <% if (activity.description) { %>
-      <p><%= activity.description %></p>
-    <% } %>
-  </header>
+  <div class="w-app">
+    <header class="w-header">
+      <div class="w-eyebrow">幸運抽獎</div>
+      <% if (activity.cover_image_url) { %>
+        <img class="w-cover" src="<%= activity.cover_image_url %>" alt="" />
+      <% } %>
+      <h1><%= activity.name %></h1>
+      <% if (activity.description) { %>
+        <p><%= activity.description %></p>
+      <% } %>
+    </header>
 
-  <div class="w-stage-outer">
-    <div class="w-stage">
-      <div class="w-pointer"></div>
-      <div class="w-canvas-wrap">
-        <canvas id="wheel-canvas" width="720" height="720"></canvas>
-      </div>
-      <div class="w-center">
-        <button type="button" id="spin-btn" class="w-spin-btn">SPIN</button>
+    <div class="w-stage-outer">
+      <div class="w-stage">
+        <div class="w-pointer">
+          <svg viewBox="0 0 20 32" fill="none">
+            <path d="M10 32 L0 8 Q0 0 10 0 Q20 0 20 8 Z" fill="url(#g)"/>
+            <circle cx="10" cy="9" r="4" fill="#FFFFFF" opacity="0.4"/>
+            <defs>
+              <linearGradient id="g" x1="0" y1="0" x2="0" y2="32">
+                <stop offset="0%" stop-color="#3D3D42"/>
+                <stop offset="100%" stop-color="#1D1D1F"/>
+              </linearGradient>
+            </defs>
+          </svg>
+        </div>
+        <div class="w-canvas-wrap">
+          <canvas id="wheel-canvas" width="720" height="720"></canvas>
+        </div>
+        <div class="w-center" id="w-center">
+          <button type="button" id="spin-btn" class="w-spin-btn">
+            <span class="main">SPIN</span>
+            <span class="tap">點擊開始</span>
+          </button>
+        </div>
       </div>
     </div>
-  </div>
 
-  <div id="status" class="w-status">準備中…</div>
-  <p id="info" class="w-info"></p>
+    <div class="w-status-row" id="status-row">
+      <div class="dot"></div>
+      <span id="status">準備中…</span>
+    </div>
+
+    <% if (prizes && prizes.length > 0) { %>
+    <section class="w-prizes-card">
+      <div class="w-prizes-head">
+        <h2>本次獎項</h2>
+        <span class="w-prizes-meta"><%= prizes.length %> 種獎品</span>
+      </div>
+      <div class="w-prize-list">
+        <% prizes.forEach(function (p) { %>
+          <div class="w-prize-item <%= p.is_grand_prize ? 'grand' : '' %>">
+            <div class="w-prize-thumb">
+              <% if (p.image_url) { %>
+                <img src="<%= p.image_url %>" alt="" />
+              <% } else { %>
+                <%= p.is_grand_prize ? '★' : '◆' %>
+              <% } %>
+            </div>
+            <div class="w-prize-info">
+              <div class="w-prize-name"><%= p.name %></div>
+              <% if (p.description) { %>
+                <div class="w-prize-tag"><%= p.description %></div>
+              <% } %>
+            </div>
+            <% if (p.is_grand_prize) { %>
+              <span class="w-prize-grand-badge">大獎</span>
+            <% } %>
+          </div>
+        <% }); %>
+      </div>
+    </section>
+    <% } %>
+
+    <p class="w-footnote" id="info"></p>
+  </div>
 
   <!-- Bottom sheet modal -->
   <div id="modal" class="w-modal" aria-hidden="true">
@@ -375,6 +611,7 @@
       var canvas = document.getElementById('wheel-canvas');
       var ctx = canvas.getContext('2d');
       var spinBtn = document.getElementById('spin-btn');
+      var centerEl = document.getElementById('w-center');
       var statusEl = document.getElementById('status');
       var infoEl = document.getElementById('info');
       var modal = document.getElementById('modal');
@@ -395,7 +632,8 @@
         if (qs.get('preview') === '1') {
           profile = { userId: 'PREVIEW_MODE', displayName: '預覽模式' };
           spinBtn.disabled = true;
-          spinBtn.textContent = '預覽';
+          spinBtn.querySelector('.main').textContent = '預覽';
+          centerEl.classList.add('disabled');
           return;
         }
         if (!liffId) {
@@ -424,50 +662,47 @@
         }
       }
 
-      // ----- 畫輪盤（Apple 風重寫）-----
-      // 配色策略：
-      // - 預設交替：cream / butter（極簡 2 色）
-      // - 大獎扇形：深金 gold-deep
-      // - 外圈：金色 gradient ring + LED 點
-      // - 文字：深色 ink + 適當字距 + SF Pro 風
+      // ===========================================================
+      // 畫輪盤 — 關鍵改進：文字水平擺放，不再倒置
+      // ===========================================================
       function drawWheel() {
         var W = canvas.width;
         var H = canvas.height;
         var cx = W / 2, cy = H / 2;
-        var ringWidth = 14;
+        var ringWidth = 18;
         var R = W / 2 - ringWidth - 8;
         var n = prizes.length;
         var anglePer = (Math.PI * 2) / n;
 
         ctx.clearRect(0, 0, W, H);
 
-        // 1) 最外圈 — 金漸層 ring
+        // 1) 外圈金色 ring（漸層）
         var ringGrad = ctx.createLinearGradient(0, 0, 0, H);
-        ringGrad.addColorStop(0, '#FFD86B');
-        ringGrad.addColorStop(0.5, '#FFC83D');
-        ringGrad.addColorStop(1, '#E89B0E');
+        ringGrad.addColorStop(0, '#FFE08A');
+        ringGrad.addColorStop(0.5, '#F5A623');
+        ringGrad.addColorStop(1, '#B45309');
         ctx.beginPath();
         ctx.arc(cx, cy, R + ringWidth, 0, Math.PI * 2);
         ctx.fillStyle = ringGrad;
         ctx.fill();
 
-        // 2) ring 上的小點 (LED 風)
-        var dotCount = n * 2;
+        // 2) ring 上的 LED 風小白點（亮/暗交替）
+        var dotCount = n * 3;
         for (var i = 0; i < dotCount; i++) {
           var a = (i / dotCount) * Math.PI * 2 - Math.PI / 2;
           var rx = cx + Math.cos(a) * (R + ringWidth / 2);
           var ry = cy + Math.sin(a) * (R + ringWidth / 2);
           ctx.beginPath();
-          ctx.arc(rx, ry, 3, 0, Math.PI * 2);
+          ctx.arc(rx, ry, 3.5, 0, Math.PI * 2);
           var bright = i % 2 === 0;
-          ctx.fillStyle = bright ? '#FFFFFF' : 'rgba(255,255,255,0.45)';
-          ctx.shadowColor = bright ? 'rgba(255,255,255,0.8)' : 'transparent';
-          ctx.shadowBlur = bright ? 6 : 0;
+          ctx.fillStyle = bright ? '#FFFFFF' : 'rgba(255,255,255,0.4)';
+          ctx.shadowColor = bright ? 'rgba(255,255,255,0.9)' : 'transparent';
+          ctx.shadowBlur = bright ? 8 : 0;
           ctx.fill();
         }
         ctx.shadowBlur = 0;
 
-        // 3) 扇形 — 交替 2 色 + 大獎用深金
+        // 3) 扇形 — 2 色交替 + 大獎特殊色
         prizes.forEach(function (p, i) {
           var start = i * anglePer - Math.PI / 2;
           var end = start + anglePer;
@@ -477,48 +712,67 @@
           ctx.closePath();
 
           var baseColor;
-          if (p.is_grand_prize) baseColor = '#F5A623'; // 深金
-          else baseColor = (i % 2 === 0) ? '#FFF8E7' : '#FFE6A0'; // 奶白 / 淡黃
+          if (p.is_grand_prize) baseColor = '#F5A623';
+          else baseColor = (i % 2 === 0) ? '#FFFFFF' : '#FFE9A0';
 
-          // 微微的徑向漸層讓扇形更有深度
+          // 徑向漸層讓扇形有體積感
           var midAngle = start + anglePer / 2;
           var sectorGrad = ctx.createRadialGradient(
-            cx + Math.cos(midAngle) * R * 0.3,
-            cy + Math.sin(midAngle) * R * 0.3,
+            cx + Math.cos(midAngle) * R * 0.35,
+            cy + Math.sin(midAngle) * R * 0.35,
             0,
             cx, cy, R
           );
-          sectorGrad.addColorStop(0, lightenColor(baseColor, 8));
+          sectorGrad.addColorStop(0, lightenColor(baseColor, 12));
           sectorGrad.addColorStop(1, baseColor);
           ctx.fillStyle = sectorGrad;
           ctx.fill();
 
-          // 扇形之間的細白線（Apple 風的精緻分割）
           ctx.lineWidth = 2;
           ctx.strokeStyle = 'rgba(255, 255, 255, 0.85)';
           ctx.stroke();
+        });
 
-          // 4) 文字 — 沿半徑方向書寫
+        // 4) 文字（水平擺放關鍵）— 用 transform sandwich 抵銷 sector rotation
+        prizes.forEach(function (p, i) {
+          var start = i * anglePer - Math.PI / 2;
+          var midAngle = start + anglePer / 2;
+          var textRadius = R * 0.62;
+
           ctx.save();
           ctx.translate(cx, cy);
-          ctx.rotate(start + anglePer / 2);
-          ctx.textAlign = 'right';
+          ctx.rotate(midAngle);
+          ctx.translate(textRadius, 0);
+          // 抵銷 sector rotation，讓文字保持水平
+          ctx.rotate(-midAngle);
+          // 但這樣會「永遠水平」— 對下半 sector，文字仍朝上方讀，等於要倒著看
+          // 進一步：對下半 sector（midAngle > 90 度且 < 270 度），翻 180 度
+          // canvas 座標 -PI/2 是上方，所以 midAngle 在 (PI/2, 3PI/2) 等於下半
+          var normalizedAngle = ((midAngle + Math.PI * 2.5) % (Math.PI * 2)) - Math.PI / 2;
+          // 上方 = -PI/2 到 PI/2；下方 = PI/2 到 3PI/2
+          // 簡化判斷：cos(midAngle) > 0 = 右半；sin(midAngle) > 0 = 下半（canvas y 朝下）
+          // 我們把「文字基線朝向圓心」設計：
+          // - 右半 sector: 文字朝右、靠近外圈
+          // - 左半 sector: 文字朝左
+          ctx.textAlign = 'center';
           ctx.textBaseline = 'middle';
           ctx.fillStyle = p.is_grand_prize ? '#FFFFFF' : '#1D1D1F';
-          ctx.font = '600 22px -apple-system, "SF Pro Display", "PingFang TC", sans-serif';
-          var label = p.name || '';
-          if (label.length > 9) label = label.slice(0, 9) + '…';
-          ctx.fillText(label, R - 30, 0);
+          ctx.font = '700 22px -apple-system, "SF Pro Display", "PingFang TC", sans-serif';
+
+          var label = String(p.name || '');
+          if (label.length > 8) label = label.slice(0, 8) + '…';
+          ctx.fillText(label, 0, 0);
+
           if (p.is_grand_prize) {
             ctx.fillStyle = 'rgba(255,255,255,0.85)';
-            ctx.font = '600 11px -apple-system, "SF Pro Display", sans-serif';
-            ctx.fillText('GRAND', R - 30, 22);
+            ctx.font = '700 10px -apple-system, "SF Pro Display", sans-serif';
+            ctx.fillText('GRAND PRIZE', 0, 18);
           }
           ctx.restore();
         });
 
-        // 5) 中心圓背景襯托（讓中央按鈕浮起來）
-        var centerR = R * 0.22;
+        // 5) 中心圓底盤（讓中央按鈕浮起來）
+        var centerR = R * 0.24;
         var coreGrad = ctx.createRadialGradient(cx, cy, 0, cx, cy, centerR);
         coreGrad.addColorStop(0, '#FFFFFF');
         coreGrad.addColorStop(1, '#F0EAD9');
@@ -526,9 +780,12 @@
         ctx.arc(cx, cy, centerR, 0, Math.PI * 2);
         ctx.fillStyle = coreGrad;
         ctx.fill();
+        // 中心圓邊框（細）
+        ctx.lineWidth = 1.5;
+        ctx.strokeStyle = 'rgba(217, 119, 6, 0.2)';
+        ctx.stroke();
       }
 
-      // 顏色亮度微調 helper
       function lightenColor(hex, amount) {
         var c = hex.replace('#', '');
         var r = parseInt(c.substr(0, 2), 16);
@@ -540,7 +797,7 @@
         return '#' + [r, g, b].map(function (x) { return x.toString(16).padStart(2, '0'); }).join('');
       }
 
-      // ----- 動畫旋轉到指定獎品 -----
+      // ----- 動畫旋轉 -----
       function animateToPrize(prize) {
         var n = prizes.length;
         if (n === 0) return Promise.resolve();
@@ -552,7 +809,7 @@
         var finalAngle = currentRotation + 360 * 6 + (360 - targetCenter) + jitter;
         currentRotation = finalAngle;
         canvas.style.transform = 'rotate(' + finalAngle + 'deg)';
-        return new Promise(function (resolve) { setTimeout(resolve, 5300); });
+        return new Promise(function (resolve) { setTimeout(resolve, 5600); });
       }
 
       // ----- spin -----
@@ -564,8 +821,8 @@
         }
         spinning = true;
         spinBtn.disabled = true;
+        centerEl.classList.add('spinning');
         statusEl.textContent = '抽選中…';
-        statusEl.style.opacity = '0.6';
 
         try {
           var resp = await fetch('/api/games/wheel/' + encodeURIComponent(slug) + '/spin', {
@@ -579,9 +836,9 @@
 
           if (!resp.ok) {
             statusEl.textContent = resp.detail || resp.error || '抽選失敗';
-            statusEl.style.opacity = '1';
             spinning = false;
             spinBtn.disabled = false;
+            centerEl.classList.remove('spinning');
             return;
           }
 
@@ -589,11 +846,10 @@
           showResult(resp.prize);
         } catch (e) {
           statusEl.textContent = '錯誤：' + e.message;
-          statusEl.style.opacity = '1';
         } finally {
           spinning = false;
           spinBtn.disabled = false;
-          statusEl.style.opacity = '1';
+          centerEl.classList.remove('spinning');
         }
       }
 
@@ -614,7 +870,7 @@
         }
         var descParts = [];
         if (prize.prize_value) {
-          if (prize.prize_value.amount) descParts.push('價值 NT$ ' + prize.prize_value.amount);
+          if (prize.prize_value.amount) descParts.push('NT$ ' + prize.prize_value.amount);
           if (prize.prize_value.code) descParts.push('優惠碼 ' + prize.prize_value.code);
           if (prize.prize_value.label) descParts.push(prize.prize_value.label);
           if (prize.prize_value.note) descParts.push(prize.prize_value.note);
@@ -626,32 +882,30 @@
         } else {
           modal.classList.remove('grand');
         }
-        // 給 transform 一點延遲讓 backdrop 先顯示，更滑順
         requestAnimationFrame(function () { modal.classList.add('open'); });
       }
 
       document.getElementById('modal-close').addEventListener('click', function () {
         modal.classList.remove('open');
       });
-      // 點背景關閉
       modal.addEventListener('click', function (e) {
         if (e.target === modal) modal.classList.remove('open');
       });
 
-      // ---- gold sparkles（只給大獎、優雅版，不再彩色 confetti）----
       function sparkleBurst() {
-        for (var i = 0; i < 24; i++) {
+        for (var i = 0; i < 28; i++) {
           var el = document.createElement('div');
           el.className = 'sparkle';
-          var angle = (i / 24) * Math.PI * 2 + Math.random() * 0.5;
+          var angle = (i / 28) * Math.PI * 2 + Math.random() * 0.4;
           var distance = 80 + Math.random() * 120;
           el.style.setProperty('--dx', Math.cos(angle) * distance + 'px');
           el.style.setProperty('--dy', Math.sin(angle) * distance + 'px');
           el.style.animationDelay = (Math.random() * 0.2) + 's';
-          el.style.width = (3 + Math.random() * 5) + 'px';
-          el.style.height = el.style.width;
+          var size = (4 + Math.random() * 6) + 'px';
+          el.style.width = size;
+          el.style.height = size;
           document.body.appendChild(el);
-          setTimeout(function (e) { e.remove(); }.bind(null, el), 2000);
+          setTimeout(function (e) { e.remove(); }.bind(null, el), 2200);
         }
       }
 
@@ -661,12 +915,14 @@
       if (prizes.length < 2) {
         statusEl.textContent = '獎品數量不足，無法開始遊戲（至少需 2 個）';
         spinBtn.disabled = true;
-        spinBtn.textContent = '—';
+        spinBtn.querySelector('.main').textContent = '—';
+        spinBtn.querySelector('.tap').textContent = '';
+        centerEl.classList.add('disabled');
       } else {
         drawWheel();
         renderInfo();
         spinBtn.disabled = true;
-        spinBtn.textContent = '準備中';
+        centerEl.classList.add('disabled');
         statusEl.textContent = '載入 LINE 身分…';
       }
 
@@ -676,8 +932,8 @@
           await initLiff();
           liffReady = true;
           spinBtn.disabled = false;
-          spinBtn.textContent = 'SPIN';
-          statusEl.textContent = '哈囉 ' + (profile.displayName || '') + '，點 SPIN 開始抽';
+          centerEl.classList.remove('disabled');
+          statusEl.textContent = '哈囉 ' + (profile.displayName || '') + '！輪到你了';
         } catch (e) {
           statusEl.textContent = e.message || '初始化失敗';
           console.error(e);
