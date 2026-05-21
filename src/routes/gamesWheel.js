@@ -10,9 +10,11 @@
 
 function registerGamesWheelRoutes(app, deps) {
   const { query, pool } = deps;
-  // 優先用 WHEEL_LIFF_ID（活動專屬 LIFF App），fallback 到 LIFF_ID（春日饗里那個）
-  // 春日饗里 LIFF Endpoint 路徑是 /liff/lottery，跟 /games/wheel/* 不同 → 必須獨立 LIFF App
-  const liffId = process.env.WHEEL_LIFF_ID || process.env.LIFF_ID || '';
+  // 策略 C：預設用 GAMES_LIFF_ID（共用 Endpoint /games/）
+  //   - WHEEL_LIFF_ID 為舊變數名稱 fallback，避免破壞既有部署
+  //   - 個別 activity 可在 DB 用 liff_id_override 覆寫（少數特殊拉新活動用）
+  const defaultLiffId =
+    process.env.GAMES_LIFF_ID || process.env.WHEEL_LIFF_ID || process.env.LIFF_ID || '';
 
   // ----------------------------------------------------------------------
   // 頁面
@@ -22,7 +24,7 @@ function registerGamesWheelRoutes(app, deps) {
       const slug = String(req.params.slug || '').trim();
       const { rows } = await query(
         `SELECT id, slug, name, description, game_type, status, start_at, end_at,
-                cover_image_url, daily_plays_per_user, require_follow_oa
+                cover_image_url, daily_plays_per_user, require_follow_oa, liff_id_override
          FROM activities WHERE slug = $1 LIMIT 1`,
         [slug]
       );
@@ -30,11 +32,13 @@ function registerGamesWheelRoutes(app, deps) {
         return res.status(404).send('活動不存在或類型不符');
       }
       const a = rows[0];
+      // 活動可覆寫；無則用環境變數預設
+      const effectiveLiffId = (a.liff_id_override && a.liff_id_override.trim()) || defaultLiffId;
       res.render('game_wheel', {
         title: a.name + ' — OpenRice LINE',
         bodyClass: 'liff-shell wheel-shell',
         activity: a,
-        liffId: liffId
+        liffId: effectiveLiffId
       });
     } catch (err) {
       console.error('wheel page error:', err && err.message);

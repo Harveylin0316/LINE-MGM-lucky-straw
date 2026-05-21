@@ -121,15 +121,15 @@ function registerAdminActivitiesRoutes(app, deps) {
       const sql = `
         INSERT INTO activities
           (slug, name, description, game_type, status, start_at, end_at,
-           cover_image_url, rules, daily_plays_per_user, require_follow_oa)
-        VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9::jsonb,$10,$11)
+           cover_image_url, rules, daily_plays_per_user, require_follow_oa, liff_id_override)
+        VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9::jsonb,$10,$11,$12)
         RETURNING *
       `;
       const { rows } = await query(sql, [
         data.slug, data.name, data.description, data.game_type, data.status,
         data.start_at, data.end_at, data.cover_image_url,
         JSON.stringify(data.rules || {}),
-        data.daily_plays_per_user, data.require_follow_oa
+        data.daily_plays_per_user, data.require_follow_oa, data.liff_id_override
       ]);
       res.json({ ok: true, activity: rows[0] });
     } catch (err) {
@@ -151,14 +151,15 @@ function registerAdminActivitiesRoutes(app, deps) {
         UPDATE activities SET
           slug = $1, name = $2, description = $3, game_type = $4, status = $5,
           start_at = $6, end_at = $7, cover_image_url = $8,
-          rules = $9::jsonb, daily_plays_per_user = $10, require_follow_oa = $11
-        WHERE id = $12 RETURNING *
+          rules = $9::jsonb, daily_plays_per_user = $10, require_follow_oa = $11,
+          liff_id_override = $12
+        WHERE id = $13 RETURNING *
       `;
       const { rows } = await query(sql, [
         data.slug, data.name, data.description, data.game_type, data.status,
         data.start_at, data.end_at, data.cover_image_url,
         JSON.stringify(data.rules || {}),
-        data.daily_plays_per_user, data.require_follow_oa, id
+        data.daily_plays_per_user, data.require_follow_oa, data.liff_id_override, id
       ]);
       if (rows.length === 0) return res.status(404).json({ ok: false, error: 'not_found' });
       res.json({ ok: true, activity: rows[0] });
@@ -324,7 +325,10 @@ function sanitizeActivityInput(body) {
     cover_image_url: body.cover_image_url ? String(body.cover_image_url) : null,
     rules: (body.rules && typeof body.rules === 'object') ? body.rules : {},
     daily_plays_per_user: numOrNull(body.daily_plays_per_user, 0),
-    require_follow_oa: Boolean(body.require_follow_oa)
+    require_follow_oa: Boolean(body.require_follow_oa),
+    liff_id_override: body.liff_id_override
+      ? String(body.liff_id_override).trim() || null
+      : null
   };
 }
 

@@ -56,6 +56,11 @@
         <label class="ae-field ae-field-full">
           <input type="checkbox" id="ae-require-follow" /> 需先加入 LINE OA 好友才能玩
         </label>
+        <label class="ae-field ae-field-full">
+          <span>自訂 LIFF ID（進階，留空 = 用預設的 GAMES_LIFF_ID）</span>
+          <input type="text" id="ae-liff-override" placeholder="例：1234567890-abcDEF12（特殊拉新活動才需要）" />
+          <span class="muted" style="font-size:11px;font-weight:400;">99% 活動留空就好。需要 Aggressive 加好友等特殊設定時才填獨立 LIFF ID。</span>
+        </label>
       </div>
 
       <div class="ae-actions">
@@ -204,6 +209,7 @@
           cover_image_url: $('ae-cover').value.trim() || null,
           daily_plays_per_user: $('ae-daily-limit').value ? Number($('ae-daily-limit').value) : null,
           require_follow_oa: $('ae-require-follow').checked,
+          liff_id_override: $('ae-liff-override').value.trim() || null,
           rules: {}
         };
       }
@@ -219,6 +225,7 @@
         $('ae-cover').value = a.cover_image_url || '';
         $('ae-daily-limit').value = a.daily_plays_per_user || '';
         $('ae-require-follow').checked = Boolean(a.require_follow_oa);
+        $('ae-liff-override').value = a.liff_id_override || '';
       }
 
       function loadActivity() {
