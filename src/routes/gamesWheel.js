@@ -17,32 +17,83 @@ function registerGamesWheelRoutes(app, deps) {
     process.env.GAMES_LIFF_ID || process.env.WHEEL_LIFF_ID || process.env.LIFF_ID || '';
 
   // ----------------------------------------------------------------------
-  // /games/ 跟 /games landing — LIFF Endpoint URL 驗證會打這裡
-  // 給一個簡單頁面（避免 LINE Console 顯示 Cannot GET 觸發 400）
+  // /games/ 跟 /games landing — 顯示所有 active 活動讓用戶選
+  //   LINE Console 驗證會打這裡；LIFF 短網址沒帶 path 也會落在這
+  //   給一個友善的活動入口頁，user 從哪裡進來都不會走丟
   // ----------------------------------------------------------------------
-  const gamesLanding = (_req, res) => {
+  const gamesLanding = async (_req, res) => {
     res.setHeader('Cache-Control', 'no-store');
+    let activities = [];
+    try {
+      const { rows } = await query(
+        `SELECT slug, name, description, game_type, cover_image_url, start_at, end_at
+         FROM activities
+         WHERE status = 'active'
+           AND (start_at IS NULL OR start_at <= NOW())
+           AND (end_at IS NULL OR end_at >= NOW())
+         ORDER BY created_at DESC LIMIT 20`
+      );
+      activities = rows;
+    } catch (e) {
+      console.error('games landing query failed:', e && e.message);
+    }
+    const esc = (s) => String(s == null ? '' : s)
+      .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
+      .replace(/"/g, '&quot;').replace(/'/g, '&#039;');
+    const gameLabel = (t) => ({ wheel: '輪盤抽獎', fortune: '每日抽籤', scratch: '刮刮樂' })[t] || t;
+    const cardsHtml = activities.length === 0
+      ? `<div class="empty">目前沒有進行中的活動，請稍後再回來看看。</div>`
+      : activities.map(a => {
+          const cover = a.cover_image_url
+            ? `<div class="cover" style="background-image:url('${esc(a.cover_image_url)}')"></div>`
+            : `<div class="cover cover-default">${esc(a.name.slice(0, 2))}</div>`;
+          const link = `/games/${esc(a.game_type)}/${encodeURIComponent(a.slug)}`;
+          return `<a class="act-card" href="${link}">
+            ${cover}
+            <div class="info">
+              <div class="title">${esc(a.name)}</div>
+              <div class="type">${gameLabel(a.game_type)}</div>
+              ${a.description ? `<div class="desc">${esc(a.description)}</div>` : ''}
+            </div>
+            <div class="arrow">›</div>
+          </a>`;
+        }).join('');
     res.send(`<!DOCTYPE html>
 <html lang="zh-Hant"><head>
 <meta charset="UTF-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1" />
 <title>OpenRice LINE 活動</title>
 <style>
-  body { margin:0; min-height:100vh; display:flex; align-items:center; justify-content:center;
-    font-family:-apple-system,BlinkMacSystemFont,"PingFang TC","Microsoft JhengHei",sans-serif;
-    background:linear-gradient(180deg,#fffbeb,#fef3c7); color:#1f2937; padding:24px; }
-  .card { background:#fff; border-radius:16px; padding:28px 24px; max-width:360px;
-    text-align:center; box-shadow:0 8px 24px rgba(0,0,0,0.08); }
-  h1 { margin:0 0 8px; font-size:20px; }
-  p { margin:0; color:#6b7280; font-size:14px; line-height:1.6; }
-  .pill { display:inline-block; padding:4px 12px; background:#FCC726; color:#1f2937;
-    border-radius:9999px; font-size:12px; font-weight:600; margin-top:12px; }
+  *{box-sizing:border-box}
+  body{margin:0;min-height:100vh;font-family:-apple-system,BlinkMacSystemFont,"PingFang TC","Microsoft JhengHei",sans-serif;
+    background:linear-gradient(180deg,#fffbeb,#fef3c7);color:#1f2937;padding:20px 16px 40px;}
+  .wrap{max-width:480px;margin:0 auto;}
+  h1{margin:8px 0 4px;font-size:22px;text-align:center;}
+  .sub{margin:0 0 20px;color:#6b7280;font-size:13px;text-align:center;}
+  .act-card{display:flex;align-items:center;gap:12px;padding:12px;margin-bottom:10px;
+    background:#fff;border-radius:14px;text-decoration:none;color:inherit;
+    box-shadow:0 2px 8px rgba(0,0,0,0.05);transition:transform .15s,box-shadow .15s;}
+  .act-card:active{transform:scale(0.98);}
+  .act-card:hover{box-shadow:0 4px 12px rgba(0,0,0,0.1);}
+  .cover{flex-shrink:0;width:64px;height:64px;border-radius:10px;background:#FCC726;
+    background-size:cover;background-position:center;
+    display:flex;align-items:center;justify-content:center;
+    font-weight:700;font-size:18px;color:#1f2937;}
+  .info{flex:1;min-width:0;}
+  .title{font-weight:600;font-size:15px;}
+  .type{font-size:11px;color:#92400e;background:#fef3c7;padding:1px 8px;border-radius:9999px;
+    display:inline-block;margin-top:2px;}
+  .desc{margin-top:4px;color:#6b7280;font-size:12px;line-height:1.5;
+    display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden;}
+  .arrow{flex-shrink:0;color:#9ca3af;font-size:24px;line-height:1;}
+  .empty{padding:32px 20px;text-align:center;color:#6b7280;background:#fff;border-radius:14px;
+    box-shadow:0 2px 8px rgba(0,0,0,0.05);}
 </style></head><body>
-  <div class="card">
-    <h1>OpenRice LINE 活動</h1>
-    <p>這裡是 LIFF 入口。請點擊我們發給你的活動連結，才能進入對應的遊戲。</p>
-    <div class="pill">LIFF Endpoint OK</div>
-  </div>
+<div class="wrap">
+  <h1>OpenRice LINE 活動</h1>
+  <p class="sub">選一個來玩吧</p>
+  ${cardsHtml}
+</div>
 </body></html>`);
   };
   app.get('/games', gamesLanding);
