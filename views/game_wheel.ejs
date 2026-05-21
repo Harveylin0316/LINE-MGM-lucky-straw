@@ -173,6 +173,63 @@
       font-weight: 500;
     }
 
+    /* ========== Invite card（MGM）========== */
+    .invite-card {
+      margin-top: 8px;
+      background: var(--ink);
+      border-radius: 16px;
+      padding: 14px 16px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 12px;
+      position: relative;
+      overflow: hidden;
+      color: #fff;
+    }
+    .invite-card::before {
+      content: '';
+      position: absolute;
+      top: -40px;
+      right: -30px;
+      width: 140px; height: 140px;
+      background: radial-gradient(circle, rgba(252, 199, 38, 0.32), transparent 70%);
+      pointer-events: none;
+    }
+    .invite-left { flex: 1; min-width: 0; z-index: 1; }
+    .invite-title {
+      font-size: 14px;
+      font-weight: 700;
+      letter-spacing: -0.012em;
+      line-height: 1.3;
+    }
+    .invite-sub {
+      font-size: 11px;
+      color: rgba(255, 255, 255, 0.62);
+      margin-top: 3px;
+    }
+    .invite-btn {
+      flex-shrink: 0;
+      background: var(--or-yellow);
+      color: var(--ink);
+      border: none;
+      border-radius: 999px;
+      padding: 8px 16px;
+      font-family: inherit;
+      font-weight: 700;
+      font-size: 13px;
+      cursor: pointer;
+      letter-spacing: -0.005em;
+      z-index: 1;
+      transition: background 0.15s ease, transform 0.15s cubic-bezier(0.34, 1.56, 0.64, 1);
+      display: inline-flex;
+      align-items: center;
+    }
+    .invite-btn:hover { background: var(--or-yellow-d); }
+    .invite-btn:active { transform: scale(0.96); }
+    .invite-card.maxed { opacity: 0.6; }
+    .invite-card.maxed .invite-btn { background: var(--ink-3); cursor: default; pointer-events: none; }
+
     /* ========== Stage card ========== */
     .stage-card {
       margin-top: 12px;
@@ -563,18 +620,34 @@
 
     <section class="stats">
       <div class="stat">
+        <div class="v" id="stat-remaining">—</div>
+        <div class="k">剩餘次數</div>
+      </div>
+      <div class="stat">
+        <div class="v" id="stat-referrals">—</div>
+        <div class="k">已邀請</div>
+      </div>
+      <div class="stat">
         <div class="v"><%= prizes && prizes.length || 0 %><span class="unit">種</span></div>
         <div class="k">獎品</div>
       </div>
-      <div class="stat">
-        <div class="v">100<span class="unit">%</span></div>
-        <div class="k">中獎率</div>
-      </div>
-      <div class="stat">
-        <div class="v"><%= activity.daily_plays_per_user || '∞' %><% if (activity.daily_plays_per_user) { %><span class="unit">次</span><% } %></div>
-        <div class="k">每日限額</div>
-      </div>
     </section>
+
+    <% if (activity.referral_bonus_per && activity.referral_bonus_per > 0) { %>
+    <section class="invite-card" id="invite-card">
+      <div class="invite-left">
+        <div class="invite-title">邀請朋友 +<%= activity.referral_bonus_per %> 次抽獎</div>
+        <div class="invite-sub" id="invite-sub">最多再加 <%= activity.referral_bonus_max %> 次</div>
+      </div>
+      <button type="button" class="invite-btn" id="invite-btn">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" style="margin-right:5px;vertical-align:-2px;">
+          <path d="M4 12v8a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-8"/>
+          <polyline points="16 6 12 2 8 6"/>
+          <line x1="12" y1="2" x2="12" y2="15"/>
+        </svg>分享
+      </button>
+    </section>
+    <% } %>
 
     <section class="stage-card">
       <div class="stage-head">
@@ -657,6 +730,11 @@
       var slug = <%- JSON.stringify(activity.slug) %>;
       var liffId = <%- JSON.stringify(liffId || '') %>;
       var prizes = <%- JSON.stringify(prizes || []) %>;
+      var activityMeta = <%- JSON.stringify({
+        name: activity.name,
+        referral_bonus_per: activity.referral_bonus_per,
+        referral_bonus_max: activity.referral_bonus_max
+      }) %>;
 
       var canvas = document.getElementById('wheel');
       var ctx = canvas.getContext('2d');
@@ -869,13 +947,152 @@
         try {
           await initLiff();
           liffReady = true;
-          spinBtn.disabled = false;
+
+          // 1) 先處理「我是被邀請來的」— 把 referral 寫進 DB
+          await maybeRegisterReferral();
+
+          // 2) 拉 quota
+          await refreshQuota();
+
+          // 3) ready
           statusRow.classList.add('ready');
           statusEl.innerHTML = '哈囉，<span class="name">' + (profile.displayName || '') + '</span>';
         } catch (e) {
           statusEl.textContent = e.message || '初始化失敗';
         }
       })();
+
+      // ----- 邀請拉新：偵測 ?ref= 並寫 referral -----
+      async function maybeRegisterReferral() {
+        try {
+          var qs = new URLSearchParams(location.search);
+          var inviter = qs.get('ref');
+          if (!inviter) return;
+          if (!profile || !profile.userId) return;
+          if (inviter === profile.userId) return; // 不能邀請自己
+          await fetch('/api/games/wheel/' + encodeURIComponent(slug) + '/referral', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              line_user_id: profile.userId,
+              inviter_line_user_id: inviter
+            })
+          });
+          // 清掉 URL 上的 ref（避免重整時又 POST）
+          var url = new URL(location.href);
+          url.searchParams.delete('ref');
+          history.replaceState({}, '', url.pathname + url.search);
+        } catch (e) {
+          console.warn('referral register failed:', e);
+        }
+      }
+
+      // ----- 拉 quota 並更新 UI -----
+      async function refreshQuota() {
+        try {
+          if (!profile || !profile.userId) return;
+          var resp = await fetch('/api/games/wheel/' + encodeURIComponent(slug) +
+            '/meta?line_user_id=' + encodeURIComponent(profile.userId)).then(function (r) { return r.json(); });
+          if (!resp.ok || !resp.quota) return;
+          renderQuota(resp.quota);
+        } catch (e) { console.warn('quota fetch failed:', e); }
+      }
+
+      function renderQuota(q) {
+        var remEl = document.getElementById('stat-remaining');
+        var refEl = document.getElementById('stat-referrals');
+        if (remEl) remEl.innerHTML = q.remaining + '<span class="unit">/ ' + q.total + '</span>';
+        if (refEl) refEl.innerHTML = q.referrals + '<span class="unit">人</span>';
+
+        // 沒次數 → SPIN 鈕禁用 + 提示
+        if (q.remaining <= 0) {
+          spinBtn.disabled = true;
+          var canMore = q.referral_bonus_per > 0 && q.referral_bonus < q.referral_bonus_max;
+          if (canMore) {
+            statusRow.classList.remove('ready');
+            statusEl.textContent = '次數用完，邀請朋友 +' + q.referral_bonus_per + ' 次';
+          } else {
+            statusEl.textContent = '次數已用完';
+          }
+        } else {
+          spinBtn.disabled = false;
+        }
+
+        // invite card 顯示剩餘可加額度
+        var inviteCard = document.getElementById('invite-card');
+        var inviteSub = document.getElementById('invite-sub');
+        if (inviteCard) {
+          var bonusLeft = q.referral_bonus_max - q.referral_bonus;
+          if (bonusLeft <= 0) {
+            inviteCard.classList.add('maxed');
+            if (inviteSub) inviteSub.textContent = '邀請次數已用滿';
+          } else {
+            inviteCard.classList.remove('maxed');
+            if (inviteSub) inviteSub.textContent = '還可再邀請 ' + Math.ceil(bonusLeft / q.referral_bonus_per) + ' 位拿 +' + bonusLeft + ' 次';
+          }
+        }
+      }
+
+      // ----- 分享按鈕（LIFF Share Target Picker）-----
+      var inviteBtn = document.getElementById('invite-btn');
+      if (inviteBtn) {
+        inviteBtn.addEventListener('click', shareWithFriend);
+      }
+      async function shareWithFriend() {
+        if (!profile || !profile.userId) {
+          alert('身分驗證中，稍等一下再試');
+          return;
+        }
+        // 邀請連結：LIFF 短網址帶 ref query 跟 sub-path
+        // 注意：LIFF 短網址子路徑會被 append 到 endpoint URL
+        // /wheel/<slug>?ref=<my_id> 會解析到 /games/wheel/<slug>?ref=<my_id>
+        var inviteUrl = 'https://liff.line.me/' + liffId +
+          '/wheel/' + encodeURIComponent(slug) + '?ref=' + encodeURIComponent(profile.userId);
+        var msg = '快來抽「' + activityMeta.name + '」！我已經抽過了，你也來試試 🎁';
+
+        try {
+          if (liff.isApiAvailable && liff.isApiAvailable('shareTargetPicker')) {
+            var res = await liff.shareTargetPicker([{
+              type: 'text',
+              text: msg + '\n' + inviteUrl
+            }]);
+            if (res) {
+              // 分享成功（不一定代表對方點開，只代表用戶選擇了對象）
+              flashStatus('已分享！朋友打開後就加 ' + activityMeta.referral_bonus_per + ' 次');
+            }
+            return;
+          }
+        } catch (e) {
+          console.warn('shareTargetPicker failed:', e);
+        }
+        // fallback: 複製連結
+        try {
+          await navigator.clipboard.writeText(inviteUrl);
+          flashStatus('連結已複製，傳給朋友吧');
+        } catch (e) {
+          prompt('複製這個連結傳給朋友：', inviteUrl);
+        }
+      }
+      function flashStatus(msg) {
+        var orig = statusEl.textContent;
+        statusEl.textContent = msg;
+        setTimeout(function () {
+          // 重新拉 quota 確保 UI sync
+          refreshQuota();
+          if (statusEl.textContent === msg && profile) {
+            statusEl.innerHTML = '哈囉，<span class="name">' + (profile.displayName || '') + '</span>';
+          }
+        }, 2400);
+      }
+
+      // spin 成功後也要 refresh quota
+      var origAnimate = animateToPrize;
+      animateToPrize = function (prize) {
+        return origAnimate(prize).then(function () {
+          // 不要 await（讓 modal 先彈），但稍後 refresh
+          setTimeout(refreshQuota, 600);
+        });
+      };
     })();
   </script>
 </body>

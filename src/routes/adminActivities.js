@@ -130,15 +130,17 @@ function registerAdminActivitiesRoutes(app, deps) {
       const sql = `
         INSERT INTO activities
           (slug, name, description, game_type, status, start_at, end_at,
-           cover_image_url, rules, daily_plays_per_user, require_follow_oa, liff_id_override)
-        VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9::jsonb,$10,$11,$12)
+           cover_image_url, rules, daily_plays_per_user, require_follow_oa, liff_id_override,
+           base_plays_per_user, referral_bonus_per, referral_bonus_max)
+        VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9::jsonb,$10,$11,$12,$13,$14,$15)
         RETURNING *
       `;
       const { rows } = await query(sql, [
         data.slug, data.name, data.description, data.game_type, data.status,
         data.start_at, data.end_at, data.cover_image_url,
         JSON.stringify(data.rules || {}),
-        data.daily_plays_per_user, data.require_follow_oa, data.liff_id_override
+        data.daily_plays_per_user, data.require_follow_oa, data.liff_id_override,
+        data.base_plays_per_user, data.referral_bonus_per, data.referral_bonus_max
       ]);
       res.json({ ok: true, activity: rows[0] });
     } catch (err) {
@@ -161,14 +163,16 @@ function registerAdminActivitiesRoutes(app, deps) {
           slug = $1, name = $2, description = $3, game_type = $4, status = $5,
           start_at = $6, end_at = $7, cover_image_url = $8,
           rules = $9::jsonb, daily_plays_per_user = $10, require_follow_oa = $11,
-          liff_id_override = $12
-        WHERE id = $13 RETURNING *
+          liff_id_override = $12,
+          base_plays_per_user = $13, referral_bonus_per = $14, referral_bonus_max = $15
+        WHERE id = $16 RETURNING *
       `;
       const { rows } = await query(sql, [
         data.slug, data.name, data.description, data.game_type, data.status,
         data.start_at, data.end_at, data.cover_image_url,
         JSON.stringify(data.rules || {}),
-        data.daily_plays_per_user, data.require_follow_oa, data.liff_id_override, id
+        data.daily_plays_per_user, data.require_follow_oa, data.liff_id_override,
+        data.base_plays_per_user, data.referral_bonus_per, data.referral_bonus_max, id
       ]);
       if (rows.length === 0) return res.status(404).json({ ok: false, error: 'not_found' });
       res.json({ ok: true, activity: rows[0] });
@@ -337,7 +341,11 @@ function sanitizeActivityInput(body) {
     require_follow_oa: Boolean(body.require_follow_oa),
     liff_id_override: body.liff_id_override
       ? String(body.liff_id_override).trim() || null
-      : null
+      : null,
+    // MGM 邀請拉新
+    base_plays_per_user: Math.max(1, Number(body.base_plays_per_user || 1)),
+    referral_bonus_per: Math.max(0, Number(body.referral_bonus_per || 0)),
+    referral_bonus_max: Math.max(0, Number(body.referral_bonus_max || 0))
   };
 }
 

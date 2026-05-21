@@ -130,7 +130,8 @@ function registerGamesWheelRoutes(app, deps) {
       const slug = String(req.params.slug || '').trim();
       const { rows } = await query(
         `SELECT id, slug, name, description, game_type, status, start_at, end_at,
-                cover_image_url, daily_plays_per_user, require_follow_oa, liff_id_override
+                cover_image_url, daily_plays_per_user, require_follow_oa, liff_id_override,
+                base_plays_per_user, referral_bonus_per, referral_bonus_max
          FROM activities WHERE slug = $1 LIMIT 1`,
         [slug]
       );
@@ -163,14 +164,16 @@ function registerGamesWheelRoutes(app, deps) {
   });
 
   // ----------------------------------------------------------------------
-  // API: 取活動 meta + 獎品列表（給前端輪盤畫圖用）
+  // API: 取活動 meta + 獎品列表 + 該用戶 quota 狀態
   // ----------------------------------------------------------------------
   app.get('/api/games/wheel/:slug/meta', async (req, res) => {
     try {
       const slug = String(req.params.slug || '').trim();
+      const lineUserId = String(req.query.line_user_id || '').trim();
       const { rows: act } = await query(
         `SELECT id, slug, name, description, status, start_at, end_at,
-                cover_image_url, daily_plays_per_user, require_follow_oa
+                cover_image_url, daily_plays_per_user, require_follow_oa,
+                base_plays_per_user, referral_bonus_per, referral_bonus_max
          FROM activities WHERE slug = $1 AND game_type = 'wheel' LIMIT 1`,
         [slug]
       );
@@ -185,10 +188,60 @@ function registerGamesWheelRoutes(app, deps) {
          ORDER BY position ASC, id ASC`,
         [a.id]
       );
-      res.json({ ok: true, activity: a, prizes });
+      // 如果帶了 user id，算 quota
+      let quota = null;
+      if (lineUserId) {
+        quota = await computeUserQuota(query, a, lineUserId);
+      }
+      res.json({ ok: true, activity: a, prizes, quota });
     } catch (err) {
       console.error('wheel meta error:', err && err.message);
       res.status(500).json({ ok: false, error: 'meta_failed', detail: String(err.message || '').slice(0, 300) });
+    }
+  });
+
+  // ----------------------------------------------------------------------
+  // API: 邀請拉新 — 被邀請者首次打開時呼叫，寫入 activity_referrals
+  // POST { line_user_id (invitee), inviter_line_user_id }
+  // ----------------------------------------------------------------------
+  app.post('/api/games/wheel/:slug/referral', async (req, res) => {
+    try {
+      const slug = String(req.params.slug || '').trim();
+      const inviteeId = String((req.body || {}).line_user_id || '').trim();
+      const inviterId = String((req.body || {}).inviter_line_user_id || '').trim();
+
+      if (!inviteeId || !inviterId) {
+        return res.status(400).json({ ok: false, error: 'missing_ids' });
+      }
+      if (inviteeId === inviterId) {
+        return res.status(400).json({ ok: false, error: 'self_referral', detail: '不能邀請自己' });
+      }
+
+      // 取活動
+      const { rows: act } = await query(
+        `SELECT id, referral_bonus_per, referral_bonus_max
+         FROM activities WHERE slug = $1 AND game_type = 'wheel' LIMIT 1`,
+        [slug]
+      );
+      if (act.length === 0) return res.status(404).json({ ok: false, error: 'activity_not_found' });
+      const a = act[0];
+      if (!a.referral_bonus_per || a.referral_bonus_per <= 0) {
+        return res.status(400).json({ ok: false, error: 'mgm_disabled', detail: '此活動未啟用邀請機制' });
+      }
+
+      // ON CONFLICT DO NOTHING — 同 invitee 只算一次
+      const ins = await query(
+        `INSERT INTO activity_referrals (activity_id, inviter_line_user_id, invitee_line_user_id)
+         VALUES ($1, $2, $3)
+         ON CONFLICT (activity_id, invitee_line_user_id) DO NOTHING
+         RETURNING id`,
+        [a.id, inviterId, inviteeId]
+      );
+      const newlyCounted = ins.rows.length > 0;
+      res.json({ ok: true, counted: newlyCounted });
+    } catch (err) {
+      console.error('wheel referral error:', err && err.message);
+      res.status(500).json({ ok: false, error: 'referral_failed', detail: String(err.message || '').slice(0, 300) });
     }
   });
 
@@ -233,7 +286,36 @@ function registerGamesWheelRoutes(app, deps) {
         return res.status(403).json({ ok: false, error: 'activity_ended', detail: '活動已結束' });
       }
 
-      // 2) daily limit 檢查
+      // 2a) 累積 quota 檢查（base + referral bonus）
+      const { rows: totalCount } = await client.query(
+        'SELECT COUNT(*) AS c FROM activity_plays WHERE activity_id = $1 AND line_user_id = $2',
+        [a.id, lineUserId]
+      );
+      const playedTotal = Number(totalCount[0].c);
+      const { rows: refRow } = await client.query(
+        `SELECT COUNT(*) AS c FROM activity_referrals
+         WHERE activity_id = $1 AND inviter_line_user_id = $2`,
+        [a.id, lineUserId]
+      );
+      const referralCount = Number(refRow[0].c);
+      const basePlays = Number(a.base_plays_per_user || 1);
+      const refPer = Number(a.referral_bonus_per || 0);
+      const refMax = Number(a.referral_bonus_max || 0);
+      const referralBonus = Math.min(refMax, referralCount * refPer);
+      const totalQuota = basePlays + referralBonus;
+      if (playedTotal >= totalQuota) {
+        await client.query('ROLLBACK');
+        const canEarnMore = refPer > 0 && referralBonus < refMax;
+        return res.status(429).json({
+          ok: false, error: 'quota_exhausted',
+          detail: canEarnMore
+            ? '次數已用完！邀請朋友來玩可以再加 ' + refPer + ' 次。'
+            : '抽獎次數已用完。',
+          quota: { total: totalQuota, played: playedTotal, remaining: 0, referrals: referralCount, base: basePlays, referral_bonus: referralBonus, referral_bonus_max: refMax, referral_bonus_per: refPer }
+        });
+      }
+
+      // 2b) daily limit 檢查（額外限制，若有設）
       if (a.daily_plays_per_user != null) {
         const { rows: dCount } = await client.query(
           `SELECT COUNT(*) AS c FROM activity_plays
@@ -336,6 +418,39 @@ function registerGamesWheelRoutes(app, deps) {
       client.release();
     }
   });
+}
+
+/**
+ * 算特定用戶在此活動的 quota 狀態
+ * @returns { total, played, remaining, referrals, base, referral_bonus, referral_bonus_max, referral_bonus_per }
+ */
+async function computeUserQuota(query, activity, lineUserId) {
+  const basePlays = Number(activity.base_plays_per_user || 1);
+  const refPer = Number(activity.referral_bonus_per || 0);
+  const refMax = Number(activity.referral_bonus_max || 0);
+  const { rows: playedRows } = await query(
+    'SELECT COUNT(*) AS c FROM activity_plays WHERE activity_id = $1 AND line_user_id = $2',
+    [activity.id, lineUserId]
+  );
+  const played = Number(playedRows[0].c);
+  const { rows: refRows } = await query(
+    `SELECT COUNT(*) AS c FROM activity_referrals
+     WHERE activity_id = $1 AND inviter_line_user_id = $2`,
+    [activity.id, lineUserId]
+  );
+  const referrals = Number(refRows[0].c);
+  const referralBonus = Math.min(refMax, referrals * refPer);
+  const total = basePlays + referralBonus;
+  return {
+    total,
+    played,
+    remaining: Math.max(0, total - played),
+    referrals,
+    base: basePlays,
+    referral_bonus: referralBonus,
+    referral_bonus_max: refMax,
+    referral_bonus_per: refPer
+  };
 }
 
 module.exports = { registerGamesWheelRoutes };

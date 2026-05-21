@@ -46,6 +46,18 @@
           <input type="number" id="ae-daily-limit" min="0" placeholder="1" />
         </label>
         <label class="ae-field">
+          <span>每用戶基礎可玩次數 *</span>
+          <input type="number" id="ae-base-plays" min="1" value="1" />
+        </label>
+        <label class="ae-field">
+          <span>每邀請 1 人 +N 次（0 = 關閉邀請）</span>
+          <input type="number" id="ae-ref-per" min="0" value="0" />
+        </label>
+        <label class="ae-field">
+          <span>透過邀請最多可加幾次（cap）</span>
+          <input type="number" id="ae-ref-max" min="0" value="0" />
+        </label>
+        <label class="ae-field">
           <span>封面圖 URL（可選）</span>
           <input type="text" id="ae-cover" placeholder="https://..." />
         </label>
@@ -224,6 +236,9 @@
           daily_plays_per_user: $('ae-daily-limit').value ? Number($('ae-daily-limit').value) : null,
           require_follow_oa: $('ae-require-follow').checked,
           liff_id_override: $('ae-liff-override').value.trim() || null,
+          base_plays_per_user: Number($('ae-base-plays').value || 1),
+          referral_bonus_per: Number($('ae-ref-per').value || 0),
+          referral_bonus_max: Number($('ae-ref-max').value || 0),
           rules: {}
         };
       }
@@ -240,6 +255,9 @@
         $('ae-daily-limit').value = a.daily_plays_per_user || '';
         $('ae-require-follow').checked = Boolean(a.require_follow_oa);
         $('ae-liff-override').value = a.liff_id_override || '';
+        $('ae-base-plays').value = a.base_plays_per_user != null ? a.base_plays_per_user : 1;
+        $('ae-ref-per').value = a.referral_bonus_per != null ? a.referral_bonus_per : 0;
+        $('ae-ref-max').value = a.referral_bonus_max != null ? a.referral_bonus_max : 0;
       }
 
       function loadActivity() {
