@@ -1200,6 +1200,8 @@
         box-shadow: 0 6px 16px rgba(0,0,0,0.25);
         user-select: none;
       }
+      /* hidden attribute 必須贏過 display:flex（否則 hidden 失效） */
+      .text-format-toolbar[hidden] { display: none !important; }
       .text-format-toolbar::after {
         content: '';
         position: absolute;
