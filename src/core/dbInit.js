@@ -63,153 +63,18 @@ END $$;
 }
 
 /**
- * Netlify 等 serverless：冷啟動若跑完整 DDL（30+ 次往返 DB）會讓首個請求極慢。
- * 資料庫結構已就緒後，設環境變數 SKIP_DB_DDL_ON_BOOT=1 僅做 SELECT 1 驗證連線。
+ * Netlify 等 serverless：冷啟動若跑完整 DDL（100+ 次往返 DB）會撞 10s timeout
+ * → user 看到 server error。
+ *
+ * Schema 已透過 Supabase MCP migrations 管理（活動框架、user_events、
+ * admin_* 表等都在 DB 上），dbInit 不需要再跑 DDL。
+ *
+ * skipDdl=true（推薦 production）→ 純 SELECT 1 驗連線，~50ms 完成
+ * skipDdl=false（legacy）→ 跑完整 DDL，僅限本機初始化新環境
  */
 async function initDb({ query, adminUsername, adminPassword, skipDdl = false }) {
   if (skipDdl) {
     await query('SELECT 1');
-    await query(`CREATE TABLE IF NOT EXISTS admin_manual_bonus_logs (
-      id BIGSERIAL PRIMARY KEY,
-      created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-      target_user_id INTEGER NOT NULL,
-      target_username TEXT NOT NULL,
-      bonus_count INTEGER NOT NULL,
-      adjust_extra BOOLEAN NOT NULL DEFAULT false,
-      admin_username TEXT NOT NULL,
-      draws_left_after INTEGER NOT NULL,
-      extra_draws_after INTEGER NOT NULL
-    )`);
-    await query('ALTER TABLE admin_manual_bonus_logs ENABLE ROW LEVEL SECURITY');
-    await query(`CREATE TABLE IF NOT EXISTS admin_broadcasts (
-      id BIGSERIAL PRIMARY KEY,
-      created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-      updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-      status TEXT NOT NULL DEFAULT 'draft',
-      scheduled_at TIMESTAMPTZ,
-      started_at TIMESTAMPTZ,
-      finished_at TIMESTAMPTZ,
-      admin_username TEXT NOT NULL,
-      audience_config JSONB NOT NULL,
-      message_config JSONB NOT NULL,
-      recipient_total INTEGER NOT NULL DEFAULT 0,
-      recipient_ok INTEGER NOT NULL DEFAULT 0,
-      recipient_fail INTEGER NOT NULL DEFAULT 0,
-      recipient_skip INTEGER NOT NULL DEFAULT 0
-    )`);
-    await query('ALTER TABLE admin_broadcasts ENABLE ROW LEVEL SECURITY');
-    await query(`CREATE TABLE IF NOT EXISTS admin_broadcast_recipients (
-      id BIGSERIAL PRIMARY KEY,
-      broadcast_id BIGINT NOT NULL REFERENCES admin_broadcasts(id) ON DELETE CASCADE,
-      user_id INTEGER,
-      line_user_id TEXT NOT NULL,
-      status TEXT NOT NULL DEFAULT 'pending',
-      pushed_at TIMESTAMPTZ,
-      error TEXT,
-      created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
-    )`);
-    await query('ALTER TABLE admin_broadcast_recipients ENABLE ROW LEVEL SECURITY');
-    await query(`CREATE TABLE IF NOT EXISTS admin_test_recipients (
-      id BIGSERIAL PRIMARY KEY,
-      label TEXT NOT NULL,
-      line_user_id TEXT NOT NULL,
-      added_by TEXT,
-      created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
-    )`);
-    await query('ALTER TABLE admin_test_recipients ENABLE ROW LEVEL SECURITY');
-    await query(
-      'CREATE UNIQUE INDEX IF NOT EXISTS admin_test_recipients_line_user_id_unique ON admin_test_recipients (line_user_id)'
-    );
-    await query(`CREATE TABLE IF NOT EXISTS admin_recipient_lists (
-      id BIGSERIAL PRIMARY KEY,
-      name TEXT NOT NULL,
-      description TEXT,
-      total INTEGER NOT NULL DEFAULT 0,
-      created_by TEXT,
-      created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-      updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
-    )`);
-    await query(`CREATE TABLE IF NOT EXISTS admin_recipient_list_members (
-      id BIGSERIAL PRIMARY KEY,
-      list_id BIGINT NOT NULL REFERENCES admin_recipient_lists(id) ON DELETE CASCADE,
-      line_user_id TEXT NOT NULL,
-      created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
-    )`);
-    await query('ALTER TABLE admin_recipient_lists ENABLE ROW LEVEL SECURITY');
-    await query('ALTER TABLE admin_recipient_list_members ENABLE ROW LEVEL SECURITY');
-    await query(
-      'CREATE INDEX IF NOT EXISTS admin_recipient_list_members_list_id_idx ON admin_recipient_list_members (list_id)'
-    );
-    await query(
-      'CREATE UNIQUE INDEX IF NOT EXISTS admin_recipient_list_members_list_id_line_user_id_unique ON admin_recipient_list_members (list_id, line_user_id)'
-    );
-    await query(`CREATE TABLE IF NOT EXISTS admin_broadcast_clicks (
-      id BIGSERIAL PRIMARY KEY,
-      broadcast_id BIGINT NOT NULL REFERENCES admin_broadcasts(id) ON DELETE CASCADE,
-      target_url TEXT NOT NULL,
-      user_agent TEXT,
-      referer TEXT,
-      clicked_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
-    )`);
-    await query('ALTER TABLE admin_broadcast_clicks ENABLE ROW LEVEL SECURITY');
-    await query(
-      'CREATE INDEX IF NOT EXISTS admin_broadcast_clicks_broadcast_id_idx ON admin_broadcast_clicks (broadcast_id)'
-    );
-    await query(
-      'CREATE INDEX IF NOT EXISTS admin_broadcast_clicks_clicked_at_idx ON admin_broadcast_clicks (clicked_at DESC)'
-    );
-    await query(`CREATE TABLE IF NOT EXISTS admin_broadcast_views (
-      id BIGSERIAL PRIMARY KEY,
-      broadcast_id BIGINT NOT NULL REFERENCES admin_broadcasts(id) ON DELETE CASCADE,
-      user_agent TEXT,
-      viewed_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
-    )`);
-    await query('ALTER TABLE admin_broadcast_views ENABLE ROW LEVEL SECURITY');
-    await query(
-      'CREATE INDEX IF NOT EXISTS admin_broadcast_views_broadcast_id_idx ON admin_broadcast_views (broadcast_id)'
-    );
-    await query(
-      'CREATE INDEX IF NOT EXISTS admin_broadcast_views_viewed_at_idx ON admin_broadcast_views (viewed_at DESC)'
-    );
-    await query(`CREATE TABLE IF NOT EXISTS admin_message_templates (
-      id BIGSERIAL PRIMARY KEY,
-      name TEXT NOT NULL,
-      description TEXT,
-      message_config JSONB NOT NULL,
-      created_by TEXT,
-      created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-      updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
-    )`);
-    await query('ALTER TABLE admin_message_templates ENABLE ROW LEVEL SECURITY');
-    await query(
-      'CREATE UNIQUE INDEX IF NOT EXISTS admin_message_templates_name_unique ON admin_message_templates (BTRIM(name))'
-    );
-    // A/B test columns（後加）
-    await query('ALTER TABLE admin_broadcasts ADD COLUMN IF NOT EXISTS is_ab_test BOOLEAN NOT NULL DEFAULT false');
-    await query('ALTER TABLE admin_broadcasts ADD COLUMN IF NOT EXISTS variant_b_message_config JSONB');
-    await query("ALTER TABLE admin_broadcast_recipients ADD COLUMN IF NOT EXISTS variant TEXT NOT NULL DEFAULT 'a'");
-    await query('ALTER TABLE admin_broadcast_clicks ADD COLUMN IF NOT EXISTS variant TEXT');
-    await query('ALTER TABLE admin_broadcast_views ADD COLUMN IF NOT EXISTS variant TEXT');
-    await query(
-      'CREATE INDEX IF NOT EXISTS admin_broadcast_recipients_broadcast_variant_idx ON admin_broadcast_recipients (broadcast_id, variant)'
-    );
-    await query(
-      'CREATE INDEX IF NOT EXISTS admin_broadcast_clicks_broadcast_variant_idx ON admin_broadcast_clicks (broadcast_id, variant)'
-    );
-    await query(
-      'CREATE INDEX IF NOT EXISTS admin_broadcast_views_broadcast_variant_idx ON admin_broadcast_views (broadcast_id, variant)'
-    );
-    await query(
-      'CREATE INDEX IF NOT EXISTS admin_broadcasts_created_id_desc_idx ON admin_broadcasts (created_at DESC, id DESC)'
-    );
-    await query(
-      'CREATE INDEX IF NOT EXISTS admin_broadcasts_status_idx ON admin_broadcasts (status)'
-    );
-    await query(
-      'CREATE INDEX IF NOT EXISTS admin_broadcast_recipients_broadcast_status_idx ON admin_broadcast_recipients (broadcast_id, status)'
-    );
-    await ensureAppServerRlsPolicies(query);
-    await query('ALTER TABLE admin_push_settings ADD COLUMN IF NOT EXISTS flex_json JSONB');
     return;
   }
 

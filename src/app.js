@@ -197,7 +197,9 @@ pool.on('error', err => {
   console.error('pg pool idle client error:', err && (err.stack || err.message));
 });
 
-const skipDbDdlOnBoot = process.env.SKIP_DB_DDL_ON_BOOT === '1';
+// Production 預設 skip DDL（Schema 已透過 Supabase migrations 管理）
+// 想跑完整 DDL（譬如本機初始化）→ 顯式設 RUN_DB_DDL_ON_BOOT=1
+const skipDbDdlOnBoot = process.env.RUN_DB_DDL_ON_BOOT !== '1' && (isProduction || process.env.SKIP_DB_DDL_ON_BOOT === '1');
 
 async function query(text, params = []) {
   return pool.query(text, params);
