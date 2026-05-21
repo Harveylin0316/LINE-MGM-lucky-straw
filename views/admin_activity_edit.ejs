@@ -98,11 +98,24 @@
     </section>
 
     <section class="card">
-      <h2>3. 預覽連結</h2>
-      <p class="muted" style="font-size:12px;">把這個連結貼到 LINE OA 圖文選單、推播訊息或 QR Code，用戶點開就能玩。</p>
+      <h2>3. 活動連結</h2>
+
+      <div class="ae-link-title">給用戶用（LIFF 分享短網址）</div>
+      <p class="muted" style="font-size:12px;margin:4px 0 8px;">
+        把這個貼到 LINE OA 圖文選單、推播訊息或 QR Code。用戶在 LINE 內點開會自動 login 進活動頁。
+      </p>
       <div class="ae-link-box">
-        <code id="ae-liff-url">—</code>
-        <button type="button" class="ae-secondary-btn" id="ae-copy-link">複製連結</button>
+        <code id="ae-liff-share-url">—</code>
+        <button type="button" class="ae-secondary-btn" id="ae-copy-liff">複製</button>
+      </div>
+
+      <div class="ae-link-title" style="margin-top:16px;">桌機預覽用（直連）</div>
+      <p class="muted" style="font-size:12px;margin:4px 0 8px;">
+        在電腦瀏覽器看 UI，<strong>不能真抽</strong>（避免汙染資料）。
+      </p>
+      <div class="ae-link-box">
+        <code id="ae-direct-url">—</code>
+        <button type="button" class="ae-secondary-btn" id="ae-copy-direct">複製</button>
         <a href="#" target="_blank" rel="noopener" id="ae-preview-link" class="ae-secondary-btn">在新視窗開啟</a>
       </div>
     </section>
@@ -177,6 +190,7 @@
       var currentActivity = null;
       var currentPrizes = [];
       var editingPrizeId = null;
+      var effectiveLiffId = '';
 
       function escapeHtml(s) {
         return String(s == null ? '' : s)
@@ -236,6 +250,7 @@
             if (!resp.ok) { alert('載入失敗'); return; }
             currentActivity = resp.activity;
             currentPrizes = resp.prizes || [];
+            effectiveLiffId = resp.effective_liff_id || '';
             fillActivityForm(resp.activity);
             renderPrizes();
             updateLiffLink();
@@ -244,12 +259,17 @@
 
       function updateLiffLink() {
         if (!currentActivity) return;
-        var url = location.origin + '/games/wheel/' + encodeURIComponent(currentActivity.slug);
-        var el = $('ae-liff-url');
+        var directUrl = location.origin + '/games/wheel/' + encodeURIComponent(currentActivity.slug);
+        // LIFF 短網址：用 effective LIFF ID + 子路徑（LIFF SDK 會 append 到 Endpoint URL）
+        var liffShareUrl = effectiveLiffId
+          ? 'https://liff.line.me/' + effectiveLiffId + '/wheel/' + encodeURIComponent(currentActivity.slug)
+          : '（尚未設定 GAMES_LIFF_ID 環境變數，或活動未設 liff_id_override）';
+        var liffEl = $('ae-liff-share-url');
+        var directEl = $('ae-direct-url');
         var prev = $('ae-preview-link');
-        if (el) el.textContent = url;
-        // 預覽連結加 ?preview=1，桌機可看 UI 但不能真抽（避免汙染資料）
-        if (prev) prev.href = url + '?preview=1';
+        if (liffEl) liffEl.textContent = liffShareUrl;
+        if (directEl) directEl.textContent = directUrl;
+        if (prev) prev.href = directUrl + '?preview=1';
       }
 
       // ---- save activity ----
@@ -282,18 +302,22 @@
           .catch(function (e) { statusEl.textContent = '錯誤：' + e.message; });
       });
 
-      // ---- copy link ----
-      var copyBtn = $('ae-copy-link');
-      if (copyBtn) {
-        copyBtn.addEventListener('click', function () {
-          var t = $('ae-liff-url').textContent;
+      // ---- copy link helpers ----
+      function bindCopyBtn(btnId, sourceElId) {
+        var btn = $(btnId);
+        if (!btn) return;
+        btn.addEventListener('click', function () {
+          var t = $(sourceElId).textContent;
+          if (!t || t.startsWith('（')) return;
           navigator.clipboard.writeText(t).then(function () {
-            var orig = copyBtn.textContent;
-            copyBtn.textContent = '已複製';
-            setTimeout(function () { copyBtn.textContent = orig; }, 1200);
+            var orig = btn.textContent;
+            btn.textContent = '已複製';
+            setTimeout(function () { btn.textContent = orig; }, 1200);
           }).catch(function () { alert(t); });
         });
       }
+      bindCopyBtn('ae-copy-liff', 'ae-liff-share-url');
+      bindCopyBtn('ae-copy-direct', 'ae-direct-url');
 
       // ---- prizes ----
       function renderPrizes() {
@@ -544,6 +568,12 @@
         font-weight: 600;
       }
 
+      .ae-link-title {
+        font-weight: 600;
+        font-size: 13px;
+        color: #1f2937;
+        margin-top: 4px;
+      }
       .ae-link-box {
         display: flex;
         align-items: center;
@@ -555,7 +585,7 @@
         font-size: 12px;
         flex-wrap: wrap;
       }
-      .ae-link-box code { color: #1f2937; flex: 1; word-break: break-all; }
+      .ae-link-box code { color: #1f2937; flex: 1; word-break: break-all; min-width: 0; }
 
       .ae-modal {
         position: fixed;

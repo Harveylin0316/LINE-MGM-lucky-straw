@@ -86,7 +86,10 @@
               return;
             }
             tbody.innerHTML = list.map(function (a) {
-              var liffUrl = location.origin + '/games/wheel/' + encodeURIComponent(a.slug);
+              // 給用戶用的 LIFF 短網址（讓 LINE login redirect 後能保留 path）
+              var shareUrl = a.effective_liff_id
+                ? 'https://liff.line.me/' + a.effective_liff_id + '/wheel/' + encodeURIComponent(a.slug)
+                : (location.origin + '/games/wheel/' + encodeURIComponent(a.slug));
               return '<tr>' +
                 '<td>' +
                   '<div class="act-name">' + escapeHtml(a.name) + '</div>' +
@@ -98,7 +101,7 @@
                 '<td style="text-align:right;">' + a.prize_count + '</td>' +
                 '<td style="text-align:right;">' + a.player_count + '</td>' +
                 '<td style="text-align:right;">' + a.play_count + '</td>' +
-                '<td><button type="button" class="act-link-btn" data-url="' + escapeHtml(liffUrl) + '">複製連結</button></td>' +
+                '<td><button type="button" class="act-link-btn" data-url="' + escapeHtml(shareUrl) + '" title="LIFF 短網址：給用戶分享用">複製連結</button></td>' +
                 '<td>' +
                   '<a href="/admin/activities/' + a.id + '" class="act-edit-btn">編輯</a>' +
                   '<button type="button" class="act-del-btn" data-id="' + a.id + '" data-name="' + escapeHtml(a.name) + '">刪除</button>' +

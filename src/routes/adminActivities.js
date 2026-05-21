@@ -81,7 +81,7 @@ function registerAdminActivitiesRoutes(app, deps) {
         SELECT
           a.id, a.slug, a.name, a.description, a.game_type, a.status,
           a.start_at, a.end_at, a.cover_image_url, a.daily_plays_per_user,
-          a.require_follow_oa, a.created_at, a.updated_at,
+          a.require_follow_oa, a.liff_id_override, a.created_at, a.updated_at,
           (SELECT COUNT(*) FROM activity_prizes p WHERE p.activity_id = a.id) AS prize_count,
           (SELECT COUNT(*) FROM activity_plays pl WHERE pl.activity_id = a.id) AS play_count,
           (SELECT COUNT(DISTINCT pl.line_user_id) FROM activity_plays pl WHERE pl.activity_id = a.id) AS player_count
@@ -89,7 +89,12 @@ function registerAdminActivitiesRoutes(app, deps) {
         ORDER BY a.created_at DESC
       `;
       const { rows } = await query(sql);
-      res.json({ ok: true, activities: rows });
+      const defaultLiff = process.env.GAMES_LIFF_ID || process.env.WHEEL_LIFF_ID || process.env.LIFF_ID || '';
+      const enriched = rows.map(r => ({
+        ...r,
+        effective_liff_id: (r.liff_id_override && r.liff_id_override.trim()) || defaultLiff
+      }));
+      res.json({ ok: true, activities: enriched });
     } catch (err) {
       console.error('activities list error:', err && err.message);
       res.status(500).json({ ok: false, error: 'list_failed', detail: String(err.message || '').slice(0, 300) });
@@ -106,7 +111,11 @@ function registerAdminActivitiesRoutes(app, deps) {
         'SELECT * FROM activity_prizes WHERE activity_id = $1 ORDER BY position ASC, id ASC',
         [id]
       );
-      res.json({ ok: true, activity: rows[0], prizes });
+      const a = rows[0];
+      // 算出此活動實際會用的 LIFF ID（給後台組短網址用）
+      const effectiveLiffId = (a.liff_id_override && a.liff_id_override.trim()) ||
+        process.env.GAMES_LIFF_ID || process.env.WHEEL_LIFF_ID || process.env.LIFF_ID || '';
+      res.json({ ok: true, activity: a, prizes, effective_liff_id: effectiveLiffId });
     } catch (err) {
       console.error('activity get error:', err && err.message);
       res.status(500).json({ ok: false, error: 'get_failed', detail: String(err.message || '').slice(0, 300) });
