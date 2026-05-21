@@ -1,0 +1,400 @@
+<%-
+  include('layout', {
+    user: user,
+    isAdmin: isAdmin,
+    bodyClass: bodyClass,
+    body: `
+    <section class="card liff-hero">
+      <div class="liff-hero-inner">
+        <h1>今天吃什麼 — 用戶行為分析</h1>
+        <p class="muted" style="margin-top:6px;">
+          Random Rice LIFF 的即時概覽、核心轉換漏斗與每日趨勢。資料源同步自 Supabase user_events 表。
+        </p>
+        <div class="liff-hero-meta">
+          <span class="liff-meta-pill">即時更新</span>
+          <span class="liff-meta-pill liff-meta-pill--muted" id="liff-last-updated">載入中…</span>
+          <button type="button" class="liff-refresh-btn" id="btn-liff-refresh">重新整理</button>
+        </div>
+      </div>
+    </section>
+
+    <section class="card">
+      <h2>今日即時概覽</h2>
+      <div class="muted" style="font-size:12px;margin-bottom:12px;">以台灣時區 00:00 為起點計算。</div>
+      <div class="liff-kpi-grid">
+        <div class="liff-kpi-card">
+          <div class="liff-kpi-label">今日 DAU</div>
+          <div class="liff-kpi-value" id="kpi-dau">—</div>
+          <div class="liff-kpi-hint">distinct line_id（已登入 LIFF）</div>
+        </div>
+        <div class="liff-kpi-card">
+          <div class="liff-kpi-label">今日總抽次</div>
+          <div class="liff-kpi-value" id="kpi-draws">—</div>
+          <div class="liff-kpi-hint">submit_draw + redraw</div>
+        </div>
+        <div class="liff-kpi-card">
+          <div class="liff-kpi-label">點訂位次數</div>
+          <div class="liff-kpi-value" id="kpi-clicks">—</div>
+          <div class="liff-kpi-hint">restaurant_click（核心轉換）</div>
+        </div>
+        <div class="liff-kpi-card liff-kpi-card--highlight">
+          <div class="liff-kpi-label">抽 → 點訂位 轉換率</div>
+          <div class="liff-kpi-value" id="kpi-conv">—</div>
+          <div class="liff-kpi-hint">clicks / result_shown</div>
+        </div>
+      </div>
+    </section>
+
+    <section class="card">
+      <div class="liff-section-head">
+        <h2>核心轉換漏斗</h2>
+        <div class="liff-range-toggle">
+          <label><input type="radio" name="funnel-days" value="7" checked /> 過去 7 天</label>
+          <label><input type="radio" name="funnel-days" value="30" /> 過去 30 天</label>
+        </div>
+      </div>
+      <div class="muted" style="font-size:12px;margin-bottom:12px;">打開 LIFF → 首次抽選 → 看到結果 → 點訂位。每一步顯示總人次與相對於前一步的轉換率。</div>
+      <div class="liff-funnel-wrap">
+        <canvas id="funnel-chart"></canvas>
+      </div>
+      <table class="liff-funnel-table">
+        <thead>
+          <tr>
+            <th>步驟</th>
+            <th style="text-align:right;">人次</th>
+            <th style="text-align:right;">相對上一步</th>
+            <th style="text-align:right;">相對 app_open</th>
+          </tr>
+        </thead>
+        <tbody id="funnel-tbody">
+          <tr><td colspan="4" class="muted" style="text-align:center;padding:18px 0;">載入中…</td></tr>
+        </tbody>
+      </table>
+    </section>
+
+    <section class="card">
+      <div class="liff-section-head">
+        <h2>每日趨勢</h2>
+        <div class="liff-range-toggle">
+          <label><input type="radio" name="trend-days" value="7" /> 7 天</label>
+          <label><input type="radio" name="trend-days" value="30" checked /> 30 天</label>
+        </div>
+      </div>
+      <div class="muted" style="font-size:12px;margin-bottom:12px;">DAU 與點訂位以左側 Y 軸；轉換率（%）以右側 Y 軸。</div>
+      <div class="liff-trend-wrap">
+        <canvas id="trend-chart"></canvas>
+      </div>
+    </section>
+
+    <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.js"></script>
+    <script>
+    (function () {
+      var $ = function (id) { return document.getElementById(id); };
+
+      var funnelChart = null;
+      var trendChart = null;
+
+      function fmt(n) {
+        if (n == null) return '—';
+        return Number(n).toLocaleString('zh-Hant-TW');
+      }
+      function fmtPct(p) {
+        if (p == null) return '—';
+        return Number(p).toFixed(2) + '%';
+      }
+      function nowLabel() {
+        var d = new Date();
+        var hh = String(d.getHours()).padStart(2, '0');
+        var mm = String(d.getMinutes()).padStart(2, '0');
+        return d.getFullYear() + '-' +
+          String(d.getMonth() + 1).padStart(2, '0') + '-' +
+          String(d.getDate()).padStart(2, '0') + ' ' +
+          hh + ':' + mm;
+      }
+
+      // ---------------- 今日即時概覽 ----------------
+      function loadOverview() {
+        return fetch('/admin/liff/random-rice/api/overview')
+          .then(function (r) { return r.json(); })
+          .then(function (resp) {
+            if (!resp.ok) throw new Error(resp.detail || 'overview failed');
+            var d = resp.data || {};
+            $('kpi-dau').textContent = fmt(d.dau);
+            $('kpi-draws').textContent = fmt(d.total_draws);
+            $('kpi-clicks').textContent = fmt(d.restaurant_clicks);
+            $('kpi-conv').textContent = fmtPct(d.conversion_rate_pct);
+          })
+          .catch(function (e) {
+            console.error('overview load failed:', e);
+            ['kpi-dau','kpi-draws','kpi-clicks','kpi-conv'].forEach(function (id) {
+              $(id).textContent = '錯誤';
+            });
+          });
+      }
+
+      // ---------------- 核心漏斗 ----------------
+      function loadFunnel(days) {
+        return fetch('/admin/liff/random-rice/api/funnel?days=' + encodeURIComponent(days))
+          .then(function (r) { return r.json(); })
+          .then(function (resp) {
+            if (!resp.ok) throw new Error(resp.detail || 'funnel failed');
+            renderFunnelChart(resp.data || []);
+            renderFunnelTable(resp.data || []);
+          })
+          .catch(function (e) {
+            console.error('funnel load failed:', e);
+            $('funnel-tbody').innerHTML = '<tr><td colspan="4" class="muted" style="text-align:center;padding:18px 0;">載入失敗</td></tr>';
+          });
+      }
+
+      function renderFunnelChart(steps) {
+        var labels = steps.map(function (s) { return s.label; });
+        var counts = steps.map(function (s) { return s.count; });
+        var ctx = $('funnel-chart').getContext('2d');
+        if (funnelChart) funnelChart.destroy();
+        funnelChart = new Chart(ctx, {
+          type: 'bar',
+          data: {
+            labels: labels,
+            datasets: [{
+              label: '人次',
+              data: counts,
+              backgroundColor: ['#fde68a','#fcd34d','#fbbf24','#FCC726'],
+              borderColor: '#facc15',
+              borderWidth: 1,
+              borderRadius: 6
+            }]
+          },
+          options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            plugins: {
+              legend: { display: false },
+              tooltip: {
+                callbacks: {
+                  afterLabel: function (ctx) {
+                    var step = steps[ctx.dataIndex];
+                    if (!step) return '';
+                    var lines = [];
+                    if (step.from_prev_pct != null) {
+                      lines.push('相對上一步: ' + step.from_prev_pct.toFixed(2) + '%');
+                    }
+                    if (step.from_first_pct != null) {
+                      lines.push('相對 app_open: ' + step.from_first_pct.toFixed(2) + '%');
+                    }
+                    return lines;
+                  }
+                }
+              }
+            },
+            scales: {
+              x: { grid: { display: false } },
+              y: { beginAtZero: true, ticks: { precision: 0 } }
+            }
+          }
+        });
+      }
+
+      function renderFunnelTable(steps) {
+        var tbody = $('funnel-tbody');
+        if (!steps.length) {
+          tbody.innerHTML = '<tr><td colspan="4" class="muted" style="text-align:center;padding:18px 0;">區間內沒有資料</td></tr>';
+          return;
+        }
+        tbody.innerHTML = steps.map(function (s) {
+          var prev = (s.from_prev_pct == null) ? '—' : fmtPct(s.from_prev_pct);
+          var first = (s.from_first_pct == null) ? '—' : fmtPct(s.from_first_pct);
+          return '<tr>' +
+            '<td>' + s.label + '<span class="liff-step-key">' + s.key + '</span></td>' +
+            '<td style="text-align:right;font-weight:600;">' + fmt(s.count) + '</td>' +
+            '<td style="text-align:right;">' + prev + '</td>' +
+            '<td style="text-align:right;">' + first + '</td>' +
+            '</tr>';
+        }).join('');
+      }
+
+      // ---------------- 每日趨勢 ----------------
+      function loadTrend(days) {
+        return fetch('/admin/liff/random-rice/api/trend?days=' + encodeURIComponent(days))
+          .then(function (r) { return r.json(); })
+          .then(function (resp) {
+            if (!resp.ok) throw new Error(resp.detail || 'trend failed');
+            renderTrendChart(resp.data || []);
+          })
+          .catch(function (e) {
+            console.error('trend load failed:', e);
+          });
+      }
+
+      function renderTrendChart(rows) {
+        var labels = rows.map(function (r) { return r.day; });
+        var dau = rows.map(function (r) { return r.dau; });
+        var clicks = rows.map(function (r) { return r.clicks; });
+        var conv = rows.map(function (r) { return r.conversion_rate_pct; });
+        var ctx = $('trend-chart').getContext('2d');
+        if (trendChart) trendChart.destroy();
+        trendChart = new Chart(ctx, {
+          data: {
+            labels: labels,
+            datasets: [
+              {
+                type: 'line', label: 'DAU', data: dau,
+                borderColor: '#1f2937', backgroundColor: 'rgba(31,41,55,0.08)',
+                fill: true, tension: 0.3, yAxisID: 'y'
+              },
+              {
+                type: 'line', label: '點訂位', data: clicks,
+                borderColor: '#facc15', backgroundColor: 'rgba(252,204,38,0.12)',
+                fill: true, tension: 0.3, yAxisID: 'y'
+              },
+              {
+                type: 'line', label: '轉換率 %', data: conv,
+                borderColor: '#dc2626', borderDash: [4, 4],
+                backgroundColor: 'transparent', fill: false,
+                tension: 0.3, yAxisID: 'y1', pointRadius: 2
+              }
+            ]
+          },
+          options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            interaction: { mode: 'index', intersect: false },
+            stacked: false,
+            plugins: { legend: { position: 'bottom' } },
+            scales: {
+              x: { grid: { display: false } },
+              y:  { type: 'linear', position: 'left',  beginAtZero: true, ticks: { precision: 0 } },
+              y1: {
+                type: 'linear', position: 'right',
+                beginAtZero: true,
+                grid: { drawOnChartArea: false },
+                ticks: {
+                  callback: function (v) { return v + '%'; }
+                }
+              }
+            }
+          }
+        });
+      }
+
+      // ---------------- 觸發 + 互動 ----------------
+      function refreshAll() {
+        $('liff-last-updated').textContent = '載入中…';
+        var funnelDays = (document.querySelector('input[name="funnel-days"]:checked') || {}).value || 7;
+        var trendDays = (document.querySelector('input[name="trend-days"]:checked') || {}).value || 30;
+        Promise.all([
+          loadOverview(),
+          loadFunnel(funnelDays),
+          loadTrend(trendDays)
+        ]).then(function () {
+          $('liff-last-updated').textContent = '最後更新: ' + nowLabel();
+        });
+      }
+
+      document.querySelectorAll('input[name="funnel-days"]').forEach(function (el) {
+        el.addEventListener('change', function () { loadFunnel(el.value); });
+      });
+      document.querySelectorAll('input[name="trend-days"]').forEach(function (el) {
+        el.addEventListener('change', function () { loadTrend(el.value); });
+      });
+      $('btn-liff-refresh').addEventListener('click', refreshAll);
+
+      refreshAll();
+    })();
+    </script>
+
+    <style>
+      .liff-hero {
+        background: linear-gradient(135deg, #fffbeb 0%, #ffffff 100%);
+        border: 1px solid #fde68a;
+      }
+      .liff-hero-meta {
+        margin-top: 12px;
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        flex-wrap: wrap;
+      }
+      .liff-meta-pill {
+        display: inline-block;
+        padding: 4px 10px;
+        font-size: 12px;
+        font-weight: 600;
+        border-radius: 9999px;
+        background: #FCC726;
+        color: #1f2937;
+      }
+      .liff-meta-pill--muted { background: #e5e7eb; color: #4b5563; }
+      .liff-refresh-btn {
+        margin-left: auto;
+        padding: 6px 12px;
+        font-size: 12px;
+        border: 1px solid #e5e7eb;
+        background: #fff;
+        border-radius: 6px;
+        cursor: pointer;
+        color: #374151;
+      }
+      .liff-refresh-btn:hover { background: #f9fafb; border-color: #d1d5db; }
+
+      .liff-kpi-grid {
+        display: grid;
+        grid-template-columns: repeat(auto-fill, minmax(180px, 1fr));
+        gap: 12px;
+      }
+      .liff-kpi-card {
+        padding: 16px;
+        border: 1px solid #e5e7eb;
+        border-radius: 10px;
+        background: #fff;
+      }
+      .liff-kpi-card--highlight {
+        background: #fffbeb;
+        border-color: #FCC726;
+      }
+      .liff-kpi-label { font-size: 12px; color: #6b7280; margin-bottom: 6px; }
+      .liff-kpi-value { font-size: 28px; font-weight: 700; color: #1f2937; line-height: 1.1; }
+      .liff-kpi-hint { font-size: 11px; color: #9ca3af; margin-top: 6px; }
+
+      .liff-section-head {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 12px;
+        margin-bottom: 8px;
+        flex-wrap: wrap;
+      }
+      .liff-section-head h2 { margin: 0; }
+      .liff-range-toggle {
+        display: flex;
+        gap: 12px;
+        font-size: 13px;
+        color: #374151;
+      }
+      .liff-range-toggle label { display: flex; gap: 4px; align-items: center; cursor: pointer; }
+
+      .liff-funnel-wrap { height: 240px; margin-bottom: 12px; }
+      .liff-funnel-table {
+        width: 100%;
+        border-collapse: collapse;
+        font-size: 13px;
+      }
+      .liff-funnel-table th,
+      .liff-funnel-table td {
+        padding: 8px 10px;
+        border-bottom: 1px solid #f3f4f6;
+      }
+      .liff-funnel-table th { color: #6b7280; font-weight: 600; font-size: 12px; }
+      .liff-step-key {
+        display: block;
+        font-size: 11px;
+        color: #9ca3af;
+        font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+        margin-top: 2px;
+      }
+
+      .liff-trend-wrap { height: 320px; }
+    </style>
+    `
+  })
+%>
