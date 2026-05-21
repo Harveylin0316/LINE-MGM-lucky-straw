@@ -597,28 +597,93 @@
     }
   }
 
-  // ✕ 刪除按鈕：給 image / CTA / 內嵌 box 加 hover-able 紅色刪除鈕
+  // 元件控制列（↑ ↓ ✕）：給 image / CTA / 內嵌 box 加 hover-able 控制鈕組
   function attachDeleteButton(el, componentPath, label) {
+    attachComponentControls(el, componentPath, label);
+  }
+
+  function attachComponentControls(el, componentPath, label) {
     if (!Array.isArray(componentPath) || componentPath.length < 1) return;
-    // ensure relative positioning so absolute ✕ 對齊容器
     if (window.getComputedStyle(el).position === 'static') {
       el.style.position = 'relative';
     }
+    var wrap = document.createElement('div');
+    wrap.className = 'lm-comp-ctrls';
+
+    var stopMD = function (e) { e.preventDefault(); e.stopPropagation(); };
+
+    var up = document.createElement('button');
+    up.type = 'button';
+    up.className = 'lm-ctrl-btn';
+    up.textContent = '↑';
+    up.title = '上移此' + (label || '元件');
+    up.setAttribute('aria-label', '上移');
+    up.addEventListener('mousedown', stopMD);
+    up.addEventListener('click', function (e) {
+      e.preventDefault(); e.stopPropagation();
+      moveComponentAtPath(componentPath, 'up');
+    });
+
+    var down = document.createElement('button');
+    down.type = 'button';
+    down.className = 'lm-ctrl-btn';
+    down.textContent = '↓';
+    down.title = '下移此' + (label || '元件');
+    down.setAttribute('aria-label', '下移');
+    down.addEventListener('mousedown', stopMD);
+    down.addEventListener('click', function (e) {
+      e.preventDefault(); e.stopPropagation();
+      moveComponentAtPath(componentPath, 'down');
+    });
+
     var del = document.createElement('button');
     del.type = 'button';
-    del.className = 'lm-del-btn';
+    del.className = 'lm-ctrl-btn lm-ctrl-del';
     del.textContent = '×';
-    del.title = '刪除' + (label ? '此' + label : '');
+    del.title = '刪除此' + (label || '元件');
     del.setAttribute('aria-label', '刪除' + (label || '元件'));
-    // 阻止冒泡 — 不要觸發 contentEditable focus 或 toolbar drag
-    del.addEventListener('mousedown', function (e) { e.preventDefault(); e.stopPropagation(); });
+    del.addEventListener('mousedown', stopMD);
     del.addEventListener('click', function (e) {
-      e.preventDefault();
-      e.stopPropagation();
+      e.preventDefault(); e.stopPropagation();
       if (!confirm('確定刪除這個' + (label || '元件') + '？')) return;
       deleteComponentAtPath(componentPath);
     });
-    el.appendChild(del);
+
+    wrap.appendChild(up);
+    wrap.appendChild(down);
+    wrap.appendChild(del);
+    el.appendChild(wrap);
+  }
+
+  function moveComponentAtPath(componentPath, direction) {
+    try {
+      var textarea = $('flex-json');
+      var parsed = JSON.parse(textarea.value);
+      if (!Array.isArray(componentPath) || componentPath.length < 1) return;
+      var parentPath = componentPath.slice(0, -1);
+      var idx = componentPath[componentPath.length - 1];
+      var ref = parsed.contents;
+      for (var i = 0; i < parentPath.length; i++) ref = ref[parentPath[i]];
+      if (!Array.isArray(ref)) {
+        alert('找不到容器陣列。');
+        return;
+      }
+      var swapIdx = direction === 'up' ? idx - 1 : idx + 1;
+      if (swapIdx < 0 || swapIdx >= ref.length) {
+        alert(direction === 'up' ? '已經在最上面了。' : '已經在最下面了。');
+        return;
+      }
+      var tmp = ref[swapIdx];
+      ref[swapIdx] = ref[idx];
+      ref[idx] = tmp;
+      textarea.value = JSON.stringify(parsed, null, 2);
+      saveDraft();
+      hideTextFormatToolbar();
+      schedulePreview();
+    } catch (e) {
+      console.warn('moveComponentAtPath failed:', e && e.message);
+      alert('移動失敗：' + (e && e.message));
+    }
   }
 
   function deleteComponentAtPath(componentPath) {
@@ -704,11 +769,21 @@
     if (!tb) return;
     tb.hidden = false;
     if (!toolbarUserPositioned) {
-      // 跟著 focus 的 text 自動定位（文字上方 -44px），位置 clamp 在視窗內
+      // 先量 toolbar 實際尺寸（hidden=false 才有 offsetWidth/Height）
       var rect = textEl.getBoundingClientRect();
-      tb.style.top = (rect.top + window.scrollY - 44) + 'px';
-      tb.style.left = (rect.left + window.scrollX) + 'px';
       var tbWidth = tb.offsetWidth || 0;
+      var tbHeight = tb.offsetHeight || 44;
+      var gap = 10;
+      // 上方候選 vs 下方候選；確保都在 viewport 內
+      var topAbove = rect.top + window.scrollY - tbHeight - gap;
+      var topBelow = rect.bottom + window.scrollY + gap;
+      var minTop = window.scrollY + 12;
+      var maxTop = window.scrollY + window.innerHeight - tbHeight - 12;
+      // 預設放上方；上方空間不夠（會超出 viewport 上邊）→ 改放下方
+      var top = (topAbove < minTop) ? topBelow : topAbove;
+      top = Math.max(minTop, Math.min(maxTop, top));
+      tb.style.top = top + 'px';
+      // left：跟文字左對齊，clamp 在 viewport [12, vw - tbW - 12]
       var maxLeft = window.scrollX + window.innerWidth - tbWidth - 12;
       var minLeft = window.scrollX + 12;
       var desiredLeft = rect.left + window.scrollX;

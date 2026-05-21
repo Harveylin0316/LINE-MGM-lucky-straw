@@ -1124,45 +1124,58 @@
         height: 100%;
         object-fit: cover;
       }
-      /* ✕ 刪除按鈕：常駐右上角，低透明度；hover 整個元件或 hover 按鈕本身變實 */
-      .line-mock .lm-del-btn {
+      /* 元件控制列（↑ ↓ ✕）：常駐右上角，hover 容器才顯示 */
+      .line-mock .lm-comp-ctrls {
         position: absolute;
         top: 4px;
         right: 4px;
+        display: flex;
+        gap: 3px;
+        opacity: 0;
+        transition: opacity 0.12s ease;
+        z-index: 5;
+        pointer-events: none;
+      }
+      .line-mock .lm-inline-image:hover > .lm-comp-ctrls,
+      .line-mock .lm-box:hover > .lm-comp-ctrls,
+      .line-mock .lm-cta:hover > .lm-comp-ctrls,
+      .line-mock .lm-comp-ctrls:focus-within {
+        opacity: 0.92;
+        pointer-events: auto;
+      }
+      .line-mock .lm-ctrl-btn {
         width: 22px;
         height: 22px;
-        border-radius: 50%;
+        border-radius: 4px;
         border: none;
-        background: rgba(220, 38, 38, 0.78);
+        background: rgba(31, 41, 55, 0.85);
         color: #fff;
-        font-size: 16px;
+        font-size: 13px;
         line-height: 1;
         font-weight: 600;
         cursor: pointer;
-        opacity: 0;
-        transition: opacity 0.12s ease, transform 0.12s ease;
-        z-index: 5;
         display: flex;
         align-items: center;
         justify-content: center;
         padding: 0;
         box-shadow: 0 1px 3px rgba(0,0,0,0.25);
+        transition: background 0.12s ease, transform 0.12s ease;
       }
-      .line-mock .lm-inline-image:hover > .lm-del-btn,
-      .line-mock .lm-box:hover > .lm-del-btn,
-      .line-mock .lm-cta:hover > .lm-del-btn,
-      .line-mock .lm-del-btn:focus {
-        opacity: 0.85;
-      }
-      .line-mock .lm-del-btn:hover {
-        opacity: 1;
+      .line-mock .lm-ctrl-btn:hover {
+        background: rgba(31, 41, 55, 1);
         transform: scale(1.08);
+      }
+      .line-mock .lm-ctrl-del {
+        background: rgba(220, 38, 38, 0.85);
+        font-size: 16px;
+      }
+      .line-mock .lm-ctrl-del:hover {
         background: rgba(220, 38, 38, 1);
       }
-      /* hover ✕ 時，被刪的元件本體加紅色虛線框，讓使用者知道哪個會被刪 */
-      .line-mock .lm-inline-image:has(> .lm-del-btn:hover),
-      .line-mock .lm-box:has(> .lm-del-btn:hover),
-      .line-mock .lm-cta:has(> .lm-del-btn:hover) {
+      /* hover ✕ 時被刪的元件本體加紅色虛線框，讓使用者知道哪個會被刪 */
+      .line-mock .lm-inline-image:has(.lm-ctrl-del:hover),
+      .line-mock .lm-box:has(> .lm-comp-ctrls > .lm-ctrl-del:hover),
+      .line-mock .lm-cta:has(.lm-ctrl-del:hover) {
         outline: 2px dashed #dc2626;
         outline-offset: -2px;
       }
