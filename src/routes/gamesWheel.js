@@ -21,7 +21,25 @@ function registerGamesWheelRoutes(app, deps) {
   //   LINE Console 驗證會打這裡；LIFF 短網址沒帶 path 也會落在這
   //   給一個友善的活動入口頁，user 從哪裡進來都不會走丟
   // ----------------------------------------------------------------------
-  const gamesLanding = async (_req, res) => {
+  const gamesLanding = async (req, res) => {
+    // Server-side LIFF dispatcher — 有 liff.state 直接 302，比 client-side JS 快一拍
+    const liffState = req.query && req.query['liff.state'];
+    if (typeof liffState === 'string' && liffState) {
+      try {
+        const decoded = decodeURIComponent(liffState);
+        // 補 prefix 變絕對 path；保留 sub-path 上原有的 query string
+        const targetPath = '/games' + (decoded.startsWith('/') ? decoded : '/' + decoded);
+        // 同時把 dispatch 入口的其他 query params 帶過去（除 liff.state 本身）
+        const otherParams = Object.entries(req.query)
+          .filter(([k]) => k !== 'liff.state')
+          .map(([k, v]) => encodeURIComponent(k) + '=' + encodeURIComponent(v))
+          .join('&');
+        const final = otherParams
+          ? targetPath + (targetPath.includes('?') ? '&' : '?') + otherParams
+          : targetPath;
+        return res.redirect(302, final);
+      } catch (_e) { /* fall through */ }
+    }
     res.setHeader('Cache-Control', 'no-store');
     let activities = [];
     try {
@@ -92,51 +110,13 @@ function registerGamesWheelRoutes(app, deps) {
   .arrow{flex-shrink:0;color:#9ca3af;font-size:24px;line-height:1;}
   .empty{padding:32px 20px;text-align:center;color:#6b7280;background:#fff;border-radius:14px;
     box-shadow:0 2px 8px rgba(0,0,0,0.05);}
-  /* LIFF dispatcher overlay：偵測到 liff.state 時用，避免 user 看到 landing 一閃 */
-  #dispatch{position:fixed;inset:0;background:linear-gradient(180deg,#fffbeb,#fef3c7);
-    display:flex;flex-direction:column;align-items:center;justify-content:center;
-    gap:12px;z-index:1000;}
-  .spinner{width:36px;height:36px;border:3px solid #fde68a;border-top-color:#FCC726;
-    border-radius:50%;animation:spin 0.8s linear infinite;}
-  @keyframes spin{to{transform:rotate(360deg);}}
 </style></head><body>
-<!-- LIFF dispatcher 過渡畫面，預設顯示；如果不是 LIFF flow 會立刻 hide -->
-<div id="dispatch">
-  <div class="spinner"></div>
-  <div style="color:#6b7280;font-size:13px;">載入中…</div>
-</div>
-<div class="wrap" style="display:none;" id="wrap">
+<!-- 純 web 訪客直接看 landing，不會閃 spinner（server 已處理 LIFF state 跳轉） -->
+<div class="wrap">
   <h1>OpenRice LINE 活動</h1>
   <p class="sub">選一個來玩吧</p>
   ${cardsHtml}
 </div>
-<script>
-(function () {
-  // LIFF dispatcher：若 URL 帶 ?liff.state=%2Fwheel%2Fxxx，解析後跳去對應路徑
-  // 這是 LINE 在 LIFF 短網址有子路徑時的標準行為（不直接 redirect 帶 path，而是塞在 liff.state）
-  var params = new URLSearchParams(location.search);
-  var liffState = params.get('liff.state');
-  if (liffState) {
-    try {
-      var decoded = decodeURIComponent(liffState);
-      // liff.state 通常是 /wheel/xxx 或 /wheel/xxx?key=val 格式
-      // 補上 /games prefix 變 /games/wheel/xxx
-      var target = '/games' + (decoded.startsWith('/') ? decoded : '/' + decoded);
-      // 保留原本 URL 上其他 query params（除了 liff.state 本身）
-      params.delete('liff.state');
-      var rest = params.toString();
-      if (rest) target += (target.includes('?') ? '&' : '?') + rest;
-      location.replace(target);
-      return;
-    } catch (e) {
-      console.error('LIFF dispatch decode failed:', e);
-    }
-  }
-  // 沒 liff.state → 不是 LIFF flow → 顯示 landing 列表
-  document.getElementById('dispatch').style.display = 'none';
-  document.getElementById('wrap').style.display = 'block';
-})();
-</script>
 </body></html>`);
   };
   app.get('/games', gamesLanding);
@@ -158,12 +138,22 @@ function registerGamesWheelRoutes(app, deps) {
         return res.status(404).send('活動不存在或類型不符');
       }
       const a = rows[0];
+      // 順手撈獎品池 — server 端塞進 page，省掉 client 額外一次 API call
+      const { rows: prizes } = await query(
+        `SELECT id, name, description, image_url, position, is_grand_prize,
+                CASE WHEN stock_total IS NULL THEN false
+                     ELSE stock_remaining <= 0 END AS sold_out
+         FROM activity_prizes WHERE activity_id = $1
+         ORDER BY position ASC, id ASC`,
+        [a.id]
+      );
       // 活動可覆寫；無則用環境變數預設
       const effectiveLiffId = (a.liff_id_override && a.liff_id_override.trim()) || defaultLiffId;
       res.render('game_wheel', {
         title: a.name + ' — OpenRice LINE',
         bodyClass: 'liff-shell wheel-shell',
         activity: a,
+        prizes,
         liffId: effectiveLiffId
       });
     } catch (err) {

@@ -243,6 +243,9 @@
     (function () {
       var slug = <%- JSON.stringify(activity.slug) %>;
       var liffId = <%- JSON.stringify(liffId || '') %>;
+      var dailyLimit = <%- JSON.stringify(activity.daily_plays_per_user) %>;
+      // 獎品由 server render 帶進來，省一次 client API call
+      var prizes = <%- JSON.stringify(prizes || []) %>;
       var canvas = document.getElementById('wheel-canvas');
       var ctx = canvas.getContext('2d');
       var spinBtn = document.getElementById('spin-btn');
@@ -250,10 +253,10 @@
       var infoEl = document.getElementById('info');
       var modal = document.getElementById('modal');
 
-      var prizes = [];      // 從 meta 載
       var spinning = false;
       var currentRotation = 0;
       var profile = null;   // LIFF profile { userId, displayName }
+      var liffReady = false;
 
       // ----- LIFF init -----
       async function initLiff() {
@@ -291,22 +294,9 @@
         profile = await liff.getProfile();
       }
 
-      // ----- 載 meta -----
-      function loadMeta() {
-        return fetch('/api/games/wheel/' + encodeURIComponent(slug) + '/meta')
-          .then(function (r) { return r.json(); })
-          .then(function (resp) {
-            if (!resp.ok) throw new Error(resp.error || 'meta 失敗');
-            prizes = resp.prizes || [];
-            if (prizes.length < 2) throw new Error('獎品數量不足，無法開始遊戲（至少需 2 個）');
-            renderInfo(resp.activity);
-            drawWheel();
-          });
-      }
-
-      function renderInfo(a) {
-        if (a.daily_plays_per_user != null) {
-          infoEl.textContent = '每人每天可玩 ' + a.daily_plays_per_user + ' 次';
+      function renderInfo() {
+        if (dailyLimit != null) {
+          infoEl.textContent = '每人每天可玩 ' + dailyLimit + ' 次';
         } else {
           infoEl.textContent = '';
         }
@@ -391,8 +381,9 @@
       // ----- spin -----
       async function spin() {
         if (spinning) return;
-        if (!profile) {
-          alert('尚未取得 LINE 身分，請稍候');
+        if (!liffReady || !profile) {
+          // 還沒準備好就點 — 顯示 status 不彈 alert（不打斷）
+          statusEl.textContent = 'LINE 身分準備中，稍等一下…';
           return;
         }
         spinning = true;
@@ -475,13 +466,30 @@
       spinBtn.addEventListener('click', spin);
 
       // ----- bootstrap -----
+      // 立即動作（不等 LIFF）：畫輪盤、顯示資訊、設 SPIN 為「準備中」
+      if (prizes.length < 2) {
+        statusEl.textContent = '獎品數量不足，無法開始遊戲（至少需 2 個）';
+        spinBtn.disabled = true;
+        spinBtn.textContent = '—';
+      } else {
+        drawWheel();
+        renderInfo();
+        spinBtn.disabled = true;
+        spinBtn.textContent = '準備中';
+        statusEl.textContent = '載入 LINE 身分…';
+      }
+
+      // 並行：LIFF init，完成後 enable SPIN
       (async function () {
+        if (prizes.length < 2) return;
         try {
           await initLiff();
+          liffReady = true;
+          spinBtn.disabled = false;
+          spinBtn.textContent = 'SPIN';
           statusEl.textContent = '哈囉 ' + (profile.displayName || '') + '，點 SPIN 開始抽';
-          await loadMeta();
         } catch (e) {
-          statusEl.textContent = '初始化失敗：' + e.message;
+          statusEl.textContent = e.message || '初始化失敗';
           console.error(e);
         }
       })();
