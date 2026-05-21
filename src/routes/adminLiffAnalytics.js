@@ -136,6 +136,55 @@ function registerAdminLiffAnalyticsRoutes(app, deps) {
   });
 
   // ------------------------------------------------------------------
+  // API 2.5: 玩過的用戶清單（依 line_id 聚合，JOIN CRM users 拿 line_display_name）
+  // 目的：辨識「員工自測 vs 真實用戶」
+  // ------------------------------------------------------------------
+  app.get('/admin/liff/random-rice/api/users', requireAdmin, async (req, res) => {
+    try {
+      const days = clampInt(req.query.days, 1, 90, 7);
+      const limit = clampInt(req.query.limit, 1, 500, 100);
+      const sql = `
+        SELECT
+          ue.line_id,
+          u.line_display_name,
+          u.line_picture_url,
+          COUNT(DISTINCT ue.session_id) AS sessions,
+          COUNT(*) FILTER (WHERE ue.event_name = 'app_open') AS opens,
+          COUNT(*) FILTER (WHERE ue.event_name IN ('submit_draw','redraw')) AS draws,
+          COUNT(*) FILTER (WHERE ue.event_name = 'result_shown') AS shown,
+          COUNT(*) FILTER (WHERE ue.event_name = 'restaurant_click') AS clicks,
+          MIN(ue.created_at) AS first_seen,
+          MAX(ue.created_at) AS last_seen
+        FROM user_events ue
+        LEFT JOIN users u ON u.line_user_id = ue.line_id
+        WHERE ue.line_id IS NOT NULL
+          AND ue.created_at > NOW() - ($1 || ' days')::INTERVAL
+        GROUP BY ue.line_id, u.line_display_name, u.line_picture_url
+        ORDER BY MAX(ue.created_at) DESC
+        LIMIT $2
+      `;
+      const { rows } = await query(sql, [String(days), limit]);
+      const data = rows.map(r => ({
+        line_id: r.line_id,
+        display_name: r.line_display_name || null,
+        picture_url: r.line_picture_url || null,
+        in_crm: Boolean(r.line_display_name),
+        sessions: Number(r.sessions || 0),
+        opens: Number(r.opens || 0),
+        draws: Number(r.draws || 0),
+        shown: Number(r.shown || 0),
+        clicks: Number(r.clicks || 0),
+        first_seen: r.first_seen,
+        last_seen: r.last_seen
+      }));
+      res.json({ ok: true, days, count: data.length, data });
+    } catch (err) {
+      console.error('liff users error:', err && err.message);
+      res.status(500).json({ ok: false, error: 'users_failed', detail: String(err.message || '').slice(0, 300) });
+    }
+  });
+
+  // ------------------------------------------------------------------
   // API 3: 每日趨勢 — DAU / 總抽次 / 點訂位 / 轉換率
   // ------------------------------------------------------------------
   app.get('/admin/liff/random-rice/api/trend', requireAdmin, async (req, res) => {

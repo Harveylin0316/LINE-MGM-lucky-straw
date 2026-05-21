@@ -117,6 +117,37 @@
 
     <section class="card">
       <div class="liff-section-head">
+        <h2>玩過的用戶</h2>
+        <div class="liff-range-toggle">
+          <label><input type="radio" name="users-days" value="1" /> 今日</label>
+          <label><input type="radio" name="users-days" value="7" checked /> 7 天</label>
+          <label><input type="radio" name="users-days" value="30" /> 30 天</label>
+        </div>
+      </div>
+      <div class="muted" style="font-size:12px;margin-bottom:12px;">
+        顯示有抽過或打開過 LIFF 的真實用戶。「已在 CRM」表示這位有過 LINE login 紀錄（可對到顯示名稱）；「未在 CRM」可能是新訪客或測試帳號。點 line_id 可複製。
+      </div>
+      <div class="table-wrap">
+        <table class="liff-users-table">
+          <thead>
+            <tr>
+              <th>用戶</th>
+              <th style="text-align:right;">Session</th>
+              <th style="text-align:right;">抽次</th>
+              <th style="text-align:right;">點訂位</th>
+              <th style="text-align:right;">轉換率</th>
+              <th>最後活動</th>
+            </tr>
+          </thead>
+          <tbody id="users-tbody">
+            <tr><td colspan="6" class="muted" style="text-align:center;padding:18px 0;">載入中…</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </section>
+
+    <section class="card">
+      <div class="liff-section-head">
         <h2>每日趨勢</h2>
         <div class="liff-range-toggle">
           <label><input type="radio" name="trend-days" value="7" /> 7 天</label>
@@ -265,6 +296,88 @@
         }).join('');
       }
 
+      // ---------------- 玩過的用戶清單 ----------------
+      function loadUsers(days) {
+        return fetch('/admin/liff/random-rice/api/users?days=' + encodeURIComponent(days))
+          .then(function (r) { return r.json(); })
+          .then(function (resp) {
+            if (!resp.ok) throw new Error(resp.detail || 'users failed');
+            renderUsersTable(resp.data || []);
+          })
+          .catch(function (e) {
+            console.error('users load failed:', e);
+            $('users-tbody').innerHTML = '<tr><td colspan="6" class="muted" style="text-align:center;padding:18px 0;">載入失敗</td></tr>';
+          });
+      }
+      function escapeHtml(s) {
+        return String(s == null ? '' : s)
+          .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
+          .replace(/"/g, '&quot;').replace(/'/g, '&#039;');
+      }
+      function fmtTime(ts) {
+        if (!ts) return '—';
+        var d = new Date(ts);
+        if (isNaN(d.getTime())) return String(ts);
+        var pad = function (n) { return String(n).padStart(2, '0'); };
+        return d.getFullYear() + '-' + pad(d.getMonth() + 1) + '-' + pad(d.getDate()) +
+               ' ' + pad(d.getHours()) + ':' + pad(d.getMinutes());
+      }
+      function shortUid(uid) {
+        if (!uid) return '';
+        return uid.slice(0, 6) + '…' + uid.slice(-4);
+      }
+      function renderUsersTable(rows) {
+        var tbody = $('users-tbody');
+        if (!rows.length) {
+          tbody.innerHTML = '<tr><td colspan="6" class="muted" style="text-align:center;padding:18px 0;">區間內沒有用戶</td></tr>';
+          return;
+        }
+        tbody.innerHTML = rows.map(function (u) {
+          var displayName = u.display_name || '<span class="liff-user-anon">未在 CRM 用戶表</span>';
+          var convPct = u.shown > 0 ? (Math.round(u.clicks / u.shown * 10000) / 100).toFixed(2) + '%' : '—';
+          var avatarHtml = u.picture_url
+            ? '<img src="' + escapeHtml(u.picture_url) + '" alt="" class="liff-user-avatar" />'
+            : '<div class="liff-user-avatar liff-user-avatar--blank">' + escapeHtml((u.display_name || '?').slice(0, 1)) + '</div>';
+          var crmBadge = u.in_crm
+            ? '<span class="liff-user-badge liff-user-badge--in">已在 CRM</span>'
+            : '<span class="liff-user-badge liff-user-badge--out">未在 CRM</span>';
+          return '<tr>' +
+            '<td class="liff-user-cell">' +
+              '<div class="liff-user-row">' +
+                avatarHtml +
+                '<div class="liff-user-meta">' +
+                  '<div class="liff-user-name">' + displayName + ' ' + crmBadge + '</div>' +
+                  '<button type="button" class="liff-user-uid" data-uid="' + escapeHtml(u.line_id) + '" title="點擊複製完整 line_id">' +
+                    escapeHtml(shortUid(u.line_id)) +
+                  '</button>' +
+                '</div>' +
+              '</div>' +
+            '</td>' +
+            '<td style="text-align:right;">' + fmt(u.sessions) + '</td>' +
+            '<td style="text-align:right;">' + fmt(u.draws) + '</td>' +
+            '<td style="text-align:right;font-weight:600;">' + fmt(u.clicks) + '</td>' +
+            '<td style="text-align:right;">' + convPct + '</td>' +
+            '<td>' + fmtTime(u.last_seen) + '</td>' +
+          '</tr>';
+        }).join('');
+        // wire up uid copy
+        tbody.querySelectorAll('.liff-user-uid').forEach(function (btn) {
+          btn.addEventListener('click', function () {
+            var uid = btn.getAttribute('data-uid');
+            if (!uid) return;
+            navigator.clipboard.writeText(uid).then(function () {
+              var orig = btn.textContent;
+              btn.textContent = '已複製';
+              btn.classList.add('copied');
+              setTimeout(function () {
+                btn.textContent = orig;
+                btn.classList.remove('copied');
+              }, 1200);
+            }).catch(function () { alert('line_id: ' + uid); });
+          });
+        });
+      }
+
       // ---------------- 每日趨勢 ----------------
       function loadTrend(days) {
         return fetch('/admin/liff/random-rice/api/trend?days=' + encodeURIComponent(days))
@@ -334,9 +447,11 @@
         $('liff-last-updated').textContent = '載入中…';
         var funnelDays = (document.querySelector('input[name="funnel-days"]:checked') || {}).value || 7;
         var trendDays = (document.querySelector('input[name="trend-days"]:checked') || {}).value || 30;
+        var usersDays = (document.querySelector('input[name="users-days"]:checked') || {}).value || 7;
         Promise.all([
           loadOverview(),
           loadFunnel(funnelDays),
+          loadUsers(usersDays),
           loadTrend(trendDays)
         ]).then(function () {
           $('liff-last-updated').textContent = '最後更新: ' + nowLabel();
@@ -348,6 +463,9 @@
       });
       document.querySelectorAll('input[name="trend-days"]').forEach(function (el) {
         el.addEventListener('change', function () { loadTrend(el.value); });
+      });
+      document.querySelectorAll('input[name="users-days"]').forEach(function (el) {
+        el.addEventListener('change', function () { loadUsers(el.value); });
       });
       $('btn-liff-refresh').addEventListener('click', refreshAll);
 
@@ -472,6 +590,78 @@
       }
 
       .liff-trend-wrap { height: 320px; }
+
+      .table-wrap { overflow-x: auto; }
+      .liff-users-table {
+        width: 100%;
+        border-collapse: collapse;
+        font-size: 13px;
+      }
+      .liff-users-table th,
+      .liff-users-table td {
+        padding: 10px 12px;
+        border-bottom: 1px solid #f3f4f6;
+        vertical-align: middle;
+      }
+      .liff-users-table th {
+        color: #6b7280;
+        font-weight: 600;
+        font-size: 12px;
+        text-align: left;
+        background: #fafafa;
+      }
+      .liff-user-cell { min-width: 240px; }
+      .liff-user-row {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+      }
+      .liff-user-avatar {
+        width: 36px;
+        height: 36px;
+        border-radius: 50%;
+        object-fit: cover;
+        background: #fde68a;
+        color: #1f2937;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        font-weight: 700;
+        font-size: 14px;
+        flex-shrink: 0;
+      }
+      .liff-user-avatar--blank { text-transform: uppercase; }
+      .liff-user-meta { min-width: 0; }
+      .liff-user-name {
+        font-weight: 600;
+        color: #1f2937;
+        display: flex;
+        align-items: center;
+        gap: 6px;
+        flex-wrap: wrap;
+      }
+      .liff-user-anon { color: #9ca3af; font-style: italic; font-weight: 400; }
+      .liff-user-badge {
+        font-size: 10px;
+        padding: 2px 6px;
+        border-radius: 4px;
+        font-weight: 600;
+        letter-spacing: 0.02em;
+      }
+      .liff-user-badge--in { background: #d1fae5; color: #065f46; }
+      .liff-user-badge--out { background: #f3f4f6; color: #6b7280; }
+      .liff-user-uid {
+        background: none;
+        border: none;
+        padding: 2px 0;
+        font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+        font-size: 11px;
+        color: #6b7280;
+        cursor: pointer;
+        margin-top: 2px;
+      }
+      .liff-user-uid:hover { color: #1f2937; text-decoration: underline; }
+      .liff-user-uid.copied { color: #065f46; }
     </style>
     `
   })
