@@ -846,24 +846,46 @@
   // ------------------------------------------------------------------
   function loadMessageTemplates() {
     var sel = $('template-select');
+    var grid = $('template-grid');
     fetch('/admin/broadcast/templates')
       .then(function (r) { return r.json(); })
       .then(function (data) {
         if (!data.ok) {
-          sel.innerHTML = '<option value="">— 載入失敗 —</option>';
+          grid.innerHTML = '<div class="muted" style="font-size:12px;">載入失敗</div>';
           return;
         }
         var list = data.templates || [];
         if (list.length === 0) {
-          sel.innerHTML = '<option value="">— 尚無模板 —</option>';
+          grid.innerHTML = '<div class="muted" style="font-size:12px;">尚無模板。點右上「儲存目前為新模板」可建立第一個。</div>';
+          sel.innerHTML = '<option value="">—</option>';
           return;
         }
-        sel.innerHTML = '<option value="">— 載入既有模板 —</option>' +
+        // 隱藏 dropdown 同步給 internal logic 用
+        sel.innerHTML = '<option value="">—</option>' +
           list.map(function (t) {
             return '<option value="' + t.id + '">' + escapeHtml(t.name) + '</option>';
           }).join('');
+        // 顯示 card grid
+        grid.innerHTML = list.map(function (t) {
+          return '<div class="template-card" data-id="' + t.id + '">' +
+            '<div class="template-card-name">' + escapeHtml(t.name) + '</div>' +
+            '<div class="template-card-desc">' + escapeHtml(t.description || '') + '</div>' +
+            '</div>';
+        }).join('');
+        $$('.template-card', grid).forEach(function (card) {
+          card.addEventListener('click', function () {
+            var id = card.getAttribute('data-id');
+            sel.value = id;
+            sel.dispatchEvent(new Event('change'));
+            // mark active
+            $$('.template-card', grid).forEach(function (c) { c.classList.remove('active'); });
+            card.classList.add('active');
+          });
+        });
       })
-      .catch(function () { sel.innerHTML = '<option value="">— 載入失敗 —</option>'; });
+      .catch(function () {
+        grid.innerHTML = '<div class="muted" style="font-size:12px;">載入失敗</div>';
+      });
   }
 
   function applyMessageConfigToForm(messageConfig) {
