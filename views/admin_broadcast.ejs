@@ -380,6 +380,7 @@
 
         <!-- floating text format toolbar (跟著 focus 的 text) -->
         <div id="text-format-toolbar" class="text-format-toolbar" hidden>
+          <span class="tft-grip" title="按住拖曳移動工具列" aria-label="拖曳把手">⋮⋮</span>
           <button type="button" class="tft-btn" data-action="add-above" title="在上方插入一列文字">＋上方</button>
           <button type="button" class="tft-btn" data-action="add-below" title="在下方插入一列文字">＋下方</button>
           <button type="button" class="tft-btn" data-action="add-box" title="在下方插入一個區塊（box，可有背景色）">＋區塊</button>
@@ -1221,6 +1222,21 @@
       }
       /* hidden attribute 必須贏過 display:flex（否則 hidden 失效） */
       .text-format-toolbar[hidden] { display: none !important; }
+      .text-format-toolbar.dragging { opacity: 0.92; transition: none; }
+      .text-format-toolbar .tft-grip {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        padding: 0 4px;
+        cursor: grab;
+        color: rgba(255,255,255,0.6);
+        font-size: 14px;
+        letter-spacing: -2px;
+        user-select: none;
+        height: 22px;
+      }
+      .text-format-toolbar .tft-grip:hover { color: #fff; }
+      .text-format-toolbar.dragging .tft-grip { cursor: grabbing; }
       .text-format-toolbar::after {
         content: '';
         position: absolute;

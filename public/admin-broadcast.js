@@ -639,24 +639,26 @@
   // Floating text format toolbar
   // ------------------------------------------------------------------
   var currentEditingText = null;
+  // 使用者手動拖過 toolbar 後，切換不同 text 不再 reset 位置；按 ✕ 關閉才會重置
+  var toolbarUserPositioned = false;
 
   function showTextFormatToolbar(textEl) {
     currentEditingText = textEl;
     var tb = $('text-format-toolbar');
     if (!tb) return;
-    // 計算位置：text 上方 + scrollY 補正
-    var rect = textEl.getBoundingClientRect();
-    // toolbar 用 absolute 定位（page-relative）
     tb.hidden = false;
-    // 先顯示再量寬高（hidden 時 width=0），才能 clamp 到不超出畫面
-    tb.style.top = (rect.top + window.scrollY - 44) + 'px';
-    tb.style.left = (rect.left + window.scrollX) + 'px';
-    var tbWidth = tb.offsetWidth || 0;
-    var maxLeft = window.scrollX + window.innerWidth - tbWidth - 12;
-    var minLeft = window.scrollX + 12;
-    var desiredLeft = rect.left + window.scrollX;
-    var clampedLeft = Math.max(minLeft, Math.min(maxLeft, desiredLeft));
-    tb.style.left = clampedLeft + 'px';
+    if (!toolbarUserPositioned) {
+      // 跟著 focus 的 text 自動定位（文字上方 -44px），位置 clamp 在視窗內
+      var rect = textEl.getBoundingClientRect();
+      tb.style.top = (rect.top + window.scrollY - 44) + 'px';
+      tb.style.left = (rect.left + window.scrollX) + 'px';
+      var tbWidth = tb.offsetWidth || 0;
+      var maxLeft = window.scrollX + window.innerWidth - tbWidth - 12;
+      var minLeft = window.scrollX + 12;
+      var desiredLeft = rect.left + window.scrollX;
+      var clampedLeft = Math.max(minLeft, Math.min(maxLeft, desiredLeft));
+      tb.style.left = clampedLeft + 'px';
+    }
     syncToolbarFromText(textEl);
   }
 
@@ -735,6 +737,8 @@
     var tb = $('text-format-toolbar');
     if (tb) tb.hidden = true;
     currentEditingText = null;
+    // 關閉時重置「手動定位」狀態，下次打開回到「跟著文字」模式
+    toolbarUserPositioned = false;
   }
 
   // 點外面 hide（但 toolbar 內部、預覽內 editable 點擊都不 hide）
@@ -812,6 +816,45 @@
         var f = e.target.files && e.target.files[0];
         if (f) uploadAndInsertImage(f);
         e.target.value = ''; // 清空讓同檔可再選
+      });
+    }
+    // 拖曳把手 — 按住 grip 自由移動 toolbar
+    var grip = tb.querySelector('.tft-grip');
+    if (grip) {
+      var dragging = false;
+      var dragOffsetX = 0;
+      var dragOffsetY = 0;
+      grip.addEventListener('mousedown', function (e) {
+        dragging = true;
+        // 計算 cursor 對 toolbar 左上角的偏移（拖拉時保持相對位置）
+        var rect = tb.getBoundingClientRect();
+        dragOffsetX = e.clientX - rect.left;
+        dragOffsetY = e.clientY - rect.top;
+        tb.classList.add('dragging');
+        document.body.style.userSelect = 'none';
+        e.preventDefault();
+        e.stopPropagation();
+      });
+      document.addEventListener('mousemove', function (e) {
+        if (!dragging) return;
+        var newLeft = e.clientX + window.scrollX - dragOffsetX;
+        var newTop = e.clientY + window.scrollY - dragOffsetY;
+        // clamp 在 viewport 內，避免拖出畫面找不回來
+        var tbWidth = tb.offsetWidth || 0;
+        var tbHeight = tb.offsetHeight || 0;
+        var minLeft = window.scrollX + 4;
+        var maxLeft = window.scrollX + window.innerWidth - tbWidth - 4;
+        var minTop = window.scrollY + 4;
+        var maxTop = window.scrollY + window.innerHeight - tbHeight - 4;
+        tb.style.left = Math.max(minLeft, Math.min(maxLeft, newLeft)) + 'px';
+        tb.style.top = Math.max(minTop, Math.min(maxTop, newTop)) + 'px';
+      });
+      document.addEventListener('mouseup', function () {
+        if (!dragging) return;
+        dragging = false;
+        tb.classList.remove('dragging');
+        document.body.style.userSelect = '';
+        toolbarUserPositioned = true; // 拖過後切 text 不再自動跑回去
       });
     }
   })();
