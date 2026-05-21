@@ -17,6 +17,38 @@ function registerGamesWheelRoutes(app, deps) {
     process.env.GAMES_LIFF_ID || process.env.WHEEL_LIFF_ID || process.env.LIFF_ID || '';
 
   // ----------------------------------------------------------------------
+  // /games/ 跟 /games landing — LIFF Endpoint URL 驗證會打這裡
+  // 給一個簡單頁面（避免 LINE Console 顯示 Cannot GET 觸發 400）
+  // ----------------------------------------------------------------------
+  const gamesLanding = (_req, res) => {
+    res.setHeader('Cache-Control', 'no-store');
+    res.send(`<!DOCTYPE html>
+<html lang="zh-Hant"><head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>OpenRice LINE 活動</title>
+<style>
+  body { margin:0; min-height:100vh; display:flex; align-items:center; justify-content:center;
+    font-family:-apple-system,BlinkMacSystemFont,"PingFang TC","Microsoft JhengHei",sans-serif;
+    background:linear-gradient(180deg,#fffbeb,#fef3c7); color:#1f2937; padding:24px; }
+  .card { background:#fff; border-radius:16px; padding:28px 24px; max-width:360px;
+    text-align:center; box-shadow:0 8px 24px rgba(0,0,0,0.08); }
+  h1 { margin:0 0 8px; font-size:20px; }
+  p { margin:0; color:#6b7280; font-size:14px; line-height:1.6; }
+  .pill { display:inline-block; padding:4px 12px; background:#FCC726; color:#1f2937;
+    border-radius:9999px; font-size:12px; font-weight:600; margin-top:12px; }
+</style></head><body>
+  <div class="card">
+    <h1>OpenRice LINE 活動</h1>
+    <p>這裡是 LIFF 入口。請點擊我們發給你的活動連結，才能進入對應的遊戲。</p>
+    <div class="pill">LIFF Endpoint OK</div>
+  </div>
+</body></html>`);
+  };
+  app.get('/games', gamesLanding);
+  app.get('/games/', gamesLanding);
+
+  // ----------------------------------------------------------------------
   // 頁面
   // ----------------------------------------------------------------------
   app.get('/games/wheel/:slug', async (req, res) => {
