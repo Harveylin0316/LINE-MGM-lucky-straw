@@ -130,10 +130,13 @@ function buildYellowFlexFromTemplate(t, { heroImageUrl, heroIsBrandBar } = {}) {
       borderWidth: '1px',
       borderColor: COLORS.couponBorder,
       backgroundColor: COLORS.couponBoxBg,
+      // 點整個優惠碼框 → 自動複製到剪貼簿（clipboardText 由 server post-process
+      // 從 contents 內 bold text 同步，這裡先給原值）
+      action: { type: 'clipboard', label: '複製優惠碼', clipboardText: t.couponCode },
       contents: [
         {
           type: 'text',
-          text: '優惠碼',
+          text: '優惠碼（點此複製）',
           size: 'xs',
           color: COLORS.couponLabel,
           align: 'center'
@@ -235,6 +238,62 @@ function buildYellowFlexFromTemplate(t, { heroImageUrl, heroIsBrandBar } = {}) {
  *          給 redirect / view endpoint 寫進對應的 variant 欄位。
  */
 /**
+ * 把 text 內「* item * item * item」這種以 * 開頭的多項清單，
+ * 自動轉成「• item\n• item\n• item」bullet list 換行版。
+ * 只在偵測到 ≥2 個項目、每段 ≥6 字才轉換（避免誤觸 markdown emphasis）。
+ */
+function normalizeBullets(s) {
+  if (typeof s !== 'string') return s;
+  if (s.indexOf('*') < 0) return s;
+  const splits = s.split(/(?:^|\s)\*\s*/).filter(Boolean);
+  if (splits.length < 2) return s;
+  const allValid = splits.every(p => p.trim().length >= 6);
+  if (!allValid) return s;
+  return splits.map(p => '• ' + p.trim()).join('\n');
+}
+
+/**
+ * 走訪 Flex tree 對 text 做 bullet normalize，對 box.action.type='clipboard'
+ * 自動把 box.contents 內第一個 weight=bold 的 text（或第一個 text）同步到
+ * action.clipboardText —— user 不需要兩邊都填。
+ */
+function postProcessFlexTree(node) {
+  if (!node || typeof node !== 'object') return;
+  if (Array.isArray(node)) {
+    node.forEach(postProcessFlexTree);
+    return;
+  }
+  // text bullet normalize
+  if (node.type === 'text' && typeof node.text === 'string') {
+    const normalized = normalizeBullets(node.text);
+    if (normalized !== node.text) node.text = normalized;
+  }
+  // clipboard action auto-sync from box.contents
+  if (
+    node.type === 'box' && node.action && node.action.type === 'clipboard' &&
+    Array.isArray(node.contents)
+  ) {
+    let target = null;
+    // 優先：weight=bold 的 text
+    for (const c of node.contents) {
+      if (c && c.type === 'text' && c.weight === 'bold' && c.text) { target = c.text; break; }
+    }
+    // 退回：任何 text
+    if (!target) {
+      for (const c of node.contents) {
+        if (c && c.type === 'text' && c.text) { target = c.text; break; }
+      }
+    }
+    if (target) node.action.clipboardText = String(target);
+  }
+  // walk children
+  Object.keys(node).forEach(k => {
+    const v = node[k];
+    if (v && typeof v === 'object') postProcessFlexTree(v);
+  });
+}
+
+/**
  * 走訪 Flex tree 移除 url 仍含 REPLACE_* placeholder 的 image。
  * 這樣 user 載入 JSON 模板沒上傳 hero 就送出時，LINE 那邊看到的不是
  * broken image，而是直接沒這個區塊。
@@ -285,9 +344,10 @@ function buildLineMessages(messageConfig, { heroImageBaseUrl, broadcastId, varia
     if (!flex.contents || typeof flex.contents !== 'object') {
       return { ok: false, error: '缺少 contents（氣泡內容）。' };
     }
-    // Clone 後移除尚未替換的 placeholder image（沒上傳 hero 時，LINE 不會看到 broken image）
+    // Clone 後移除 placeholder image + bullet normalize + clipboard auto-sync
     const cloned = JSON.parse(JSON.stringify(flex));
     stripPlaceholderImages(cloned.contents);
+    postProcessFlexTree(cloned.contents);
     return { ok: true, messages: [cloned] };
   }
   // template mode（預設）
@@ -326,8 +386,9 @@ function buildLineMessages(messageConfig, { heroImageBaseUrl, broadcastId, varia
   }
 
   const flex = buildYellowFlexFromTemplate(tForBuild, { heroImageUrl, heroIsBrandBar });
-  // 防呆：即使是模板模式，也 strip 殘留 placeholder image
+  // 防呆：strip placeholder image + bullet normalize + clipboard sync
   stripPlaceholderImages(flex.contents);
+  postProcessFlexTree(flex.contents);
   return { ok: true, messages: [flex] };
 }
 
