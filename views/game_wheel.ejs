@@ -3,216 +3,244 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, viewport-fit=cover" />
-  <meta name="theme-color" content="#FBF6E9" />
+  <meta name="theme-color" content="#FAFAFA" />
   <title><%= title %></title>
-  <link rel="preconnect" href="https://fonts.googleapis.com" />
-  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
-  <link href="https://fonts.googleapis.com/css2?family=Noto+Serif+TC:wght@500;700;900&family=Inter:wght@400;500;700&display=swap" rel="stylesheet" />
   <script src="https://static.line-scdn.net/liff/edge/2/sdk.js"></script>
   <style>
     :root {
-      --paper:     #FBF6E9;
-      --paper-2:   #F4EDDB;
-      --or-yellow: #FCC726;
-      --or-red:    #DC2127;
-      --or-red-2:  #A8161B;
-      --ink:       #1A1410;
-      --ink-2:     #5C544A;
-      --ink-3:     #A39B8E;
-      --line:      #1A1410;
+      --bg:         #FAFAFA;
+      --surface:    #FFFFFF;
+      --or-yellow:  #FCC726;
+      --or-yellow-d: #E8B400;
+      --or-red:     #E11D27;
+      --ink:        #0F0F10;
+      --ink-2:      #6B6B70;
+      --ink-3:      #A0A0A6;
+      --border:     #ECECEE;
+      --border-2:   #E0E0E4;
     }
     * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
     html, body { margin: 0; padding: 0; }
     body {
-      background: var(--paper);
+      background: var(--bg);
       color: var(--ink);
       min-height: 100vh;
-      font-family: "Inter", -apple-system, BlinkMacSystemFont, "PingFang TC", sans-serif;
-      letter-spacing: -0.005em;
-      position: relative;
-    }
-    /* 紙感 noise texture */
-    body::before {
-      content: '';
-      position: fixed;
-      inset: 0;
-      z-index: -1;
-      pointer-events: none;
-      background:
-        radial-gradient(circle at 20% 10%, rgba(220, 33, 39, 0.04), transparent 40%),
-        radial-gradient(circle at 80% 90%, rgba(252, 199, 38, 0.08), transparent 50%);
-    }
-    body::after {
-      content: '';
-      position: fixed;
-      inset: 0;
-      z-index: -1;
-      pointer-events: none;
-      opacity: 0.4;
-      background-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='160' height='160'><filter id='n'><feTurbulence type='fractalNoise' baseFrequency='0.85' numOctaves='2' stitchTiles='stitch'/><feColorMatrix values='0 0 0 0 0.1 0 0 0 0 0.08 0 0 0 0 0.06 0 0 0 0.5 0'/></filter><rect width='100%25' height='100%25' filter='url(%23n)'/></svg>");
+      font-family: -apple-system, BlinkMacSystemFont, "SF Pro Display", "SF Pro Text",
+        "Inter", "PingFang TC", "Microsoft JhengHei", sans-serif;
+      letter-spacing: -0.011em;
+      -webkit-font-smoothing: antialiased;
     }
 
-    .frame {
+    .page {
       max-width: 480px;
       margin: 0 auto;
-      padding: 32px 20px 56px;
-      position: relative;
+      padding: 16px 16px 56px;
     }
-    /* 4 角裝飾 — 像舊海報的折角線 */
-    .frame::before, .frame::after,
-    .frame > .corner-tl, .frame > .corner-tr {
-      content: '';
-      position: absolute;
-      width: 20px;
-      height: 20px;
-      border: 2px solid var(--ink);
-    }
-    .frame::before { top: 12px; left: 12px; border-right: none; border-bottom: none; }
-    .frame::after  { bottom: 12px; right: 12px; border-left: none; border-top: none; }
-    .frame > .corner-tr { top: 12px; right: 12px; border-left: none; border-bottom: none; }
-    .frame > .corner-bl { position: absolute; bottom: 12px; left: 12px; width: 20px; height: 20px; border: 2px solid var(--ink); border-right: none; border-top: none; }
 
-    /* ----- Header ----- */
+    /* ========== Brand bar ========== */
     .brand-bar {
       display: flex;
       align-items: center;
       justify-content: space-between;
-      margin-bottom: 18px;
+      padding: 6px 0 16px;
     }
-    .brand-bar .left {
-      font-family: "Inter", sans-serif;
-      font-size: 10px;
+    .brand-bar .logo {
+      display: inline-flex;
+      align-items: center;
+      gap: 7px;
+      font-size: 13px;
       font-weight: 700;
-      letter-spacing: 0.32em;
-      color: var(--ink-2);
-    }
-    .brand-bar .right {
-      font-family: "Inter", sans-serif;
-      font-size: 10px;
-      letter-spacing: 0.18em;
-      color: var(--ink-3);
-      font-weight: 500;
-    }
-
-    .divider-wave {
-      display: block;
-      width: 100%;
-      height: 10px;
-      margin: 14px 0 20px;
-    }
-
-    .title-block {
-      text-align: center;
-      margin-bottom: 24px;
-    }
-    .title-eng {
-      font-family: "Inter", sans-serif;
-      font-size: 11px;
-      letter-spacing: 0.5em;
-      font-weight: 500;
-      color: var(--or-red);
-      margin-bottom: 10px;
-      padding-left: 0.5em;  /* compensate letter-spacing */
-    }
-    .title-zh {
-      font-family: "Noto Serif TC", serif;
-      font-weight: 900;
-      font-size: 34px;
-      letter-spacing: 0.04em;
-      line-height: 1.15;
+      letter-spacing: -0.01em;
       color: var(--ink);
-      margin: 0;
     }
-    .title-zh .accent {
-      color: var(--or-red);
+    .brand-bar .logo .dot {
+      width: 18px; height: 18px; border-radius: 6px;
+      background: var(--or-yellow);
+      display: inline-block;
       position: relative;
+      flex-shrink: 0;
     }
-    .desc {
-      font-family: "Noto Serif TC", serif;
+    .brand-bar .logo .dot::after {
+      content: '';
+      position: absolute;
+      inset: 4px;
+      border-radius: 50%;
+      background: var(--ink);
+    }
+    .brand-bar .chip {
+      display: inline-flex;
+      align-items: center;
+      gap: 5px;
+      font-size: 11px;
       font-weight: 500;
-      margin: 14px auto 0;
-      max-width: 22em;
       color: var(--ink-2);
-      font-size: 14px;
-      line-height: 1.7;
+      background: var(--surface);
+      border: 1px solid var(--border);
+      padding: 5px 10px;
+      border-radius: 999px;
     }
-    .cover {
-      width: 100%;
-      max-width: 320px;
+    .brand-bar .chip::before {
+      content: '';
+      width: 5px; height: 5px;
+      border-radius: 50%;
+      background: #22C55E;
+      box-shadow: 0 0 0 2px rgba(34, 197, 94, 0.15);
+    }
+
+    /* ========== Hero card ========== */
+    .hero {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 20px;
+      padding: 22px 22px 24px;
+      position: relative;
+      overflow: hidden;
+    }
+    .hero::before {
+      content: '';
+      position: absolute;
+      top: -40px;
+      right: -40px;
+      width: 180px;
+      height: 180px;
+      background: radial-gradient(circle, rgba(252, 199, 38, 0.18), transparent 70%);
+      pointer-events: none;
+    }
+    .hero-tag {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      font-size: 11px;
+      font-weight: 600;
+      letter-spacing: 0.06em;
+      color: var(--or-red);
+      text-transform: uppercase;
+      margin-bottom: 14px;
+    }
+    .hero-tag::before {
+      content: '';
+      width: 6px; height: 6px;
+      background: var(--or-red);
+      border-radius: 50%;
+    }
+    .hero h1 {
+      margin: 0 0 8px;
+      font-size: 26px;
+      font-weight: 700;
+      letter-spacing: -0.028em;
+      line-height: 1.2;
+    }
+    .hero p {
+      margin: 0;
+      font-size: 14px;
+      line-height: 1.55;
+      color: var(--ink-2);
+    }
+    .hero-cover {
+      width: calc(100% + 44px);
+      margin: 18px -22px -24px;
       aspect-ratio: 16 / 9;
       object-fit: cover;
       display: block;
-      margin: 18px auto 0;
-      border: 2px solid var(--ink);
+      border-top: 1px solid var(--border);
     }
 
-    /* ----- 印章 badge ----- */
-    .seal {
-      position: absolute;
-      top: 100px;
-      right: 28px;
-      width: 56px;
-      height: 56px;
-      border-radius: 50%;
-      background: var(--or-red);
-      color: #fff;
-      display: flex;
-      flex-direction: column;
-      align-items: center;
-      justify-content: center;
-      font-family: "Noto Serif TC", serif;
-      font-weight: 900;
-      transform: rotate(8deg);
-      box-shadow: 0 1px 0 var(--or-red-2);
+    /* ========== Stats strip ========== */
+    .stats {
+      display: grid;
+      grid-template-columns: 1fr 1fr 1fr;
+      gap: 8px;
+      margin-top: 12px;
     }
-    .seal .seal-top { font-size: 10px; letter-spacing: 0.2em; margin-bottom: 1px; }
-    .seal .seal-main { font-size: 19px; letter-spacing: 0.05em; line-height: 1; }
-
-    /* ----- Stage ----- */
-    .stage-shell {
-      position: relative;
-      padding: 24px 0 12px;
-      margin: 8px 0 0;
+    .stat {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 14px;
+      padding: 12px 12px;
     }
-    /* 兩側垂直書寫小標 */
-    .side-label {
-      position: absolute;
-      top: 50%;
-      transform: translateY(-50%);
-      writing-mode: vertical-rl;
-      font-family: "Inter", sans-serif;
-      font-size: 10px;
-      letter-spacing: 0.4em;
-      color: var(--ink-3);
+    .stat .v {
+      font-size: 20px;
       font-weight: 700;
+      letter-spacing: -0.02em;
+      line-height: 1;
+      font-variant-numeric: tabular-nums;
     }
-    .side-label.left { left: 0; }
-    .side-label.right { right: 0; }
+    .stat .v .unit { font-size: 11px; font-weight: 500; color: var(--ink-2); margin-left: 2px; }
+    .stat .k {
+      font-size: 11px;
+      color: var(--ink-2);
+      margin-top: 5px;
+      font-weight: 500;
+    }
 
+    /* ========== Stage card ========== */
+    .stage-card {
+      margin-top: 12px;
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 24px;
+      padding: 24px 20px 20px;
+      position: relative;
+      overflow: hidden;
+    }
+    .stage-card::before {
+      content: '';
+      position: absolute;
+      bottom: -80px;
+      left: -60px;
+      width: 240px; height: 240px;
+      background: radial-gradient(circle, rgba(225, 29, 39, 0.05), transparent 70%);
+      pointer-events: none;
+    }
+    .stage-head {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      margin-bottom: 12px;
+      position: relative;
+    }
+    .stage-head .label {
+      font-size: 11px;
+      font-weight: 600;
+      letter-spacing: 0.06em;
+      text-transform: uppercase;
+      color: var(--ink-3);
+    }
+    .stage-head .count {
+      font-size: 11px;
+      color: var(--ink-2);
+      font-weight: 500;
+      font-variant-numeric: tabular-nums;
+    }
+    .stage-wrap {
+      display: flex;
+      justify-content: center;
+      padding: 8px 0 4px;
+      position: relative;
+    }
     .stage {
       position: relative;
-      width: min(78vw, 300px);
+      width: min(76vw, 300px);
       aspect-ratio: 1;
-      margin: 0 auto;
     }
     .pointer {
       position: absolute;
-      top: -10px;
+      top: -6px;
       left: 50%;
       transform: translateX(-50%);
-      width: 0;
-      height: 0;
-      border-left: 10px solid transparent;
-      border-right: 10px solid transparent;
-      border-top: 22px solid var(--ink);
       z-index: 5;
     }
+    .pointer svg { display: block; }
     .canvas-wrap {
       position: relative;
       width: 100%;
       height: 100%;
       border-radius: 50%;
       overflow: hidden;
+      box-shadow:
+        0 0 0 1px rgba(15, 15, 16, 0.06),
+        0 12px 36px -8px rgba(15, 15, 16, 0.18),
+        0 4px 12px -2px rgba(15, 15, 16, 0.08);
     }
     #wheel {
       width: 100%;
@@ -220,140 +248,202 @@
       display: block;
       transition: transform 5.6s cubic-bezier(0.16, 0.74, 0.24, 1);
     }
-    /* 中央按鈕：紅色印章感 */
+
+    /* 中央按鈕 — 黃色 + 微陰影，現代 web product 風 */
     .center {
       position: absolute;
       top: 50%; left: 50%;
       transform: translate(-50%, -50%);
-      width: 26%;
-      height: 26%;
+      width: 27%;
+      height: 27%;
       z-index: 4;
+    }
+    .center::before {
+      content: '';
+      position: absolute;
+      inset: -5px;
+      border-radius: 50%;
+      background: var(--surface);
+      box-shadow:
+        0 0 0 1px var(--border),
+        0 6px 16px -4px rgba(15, 15, 16, 0.12);
+      z-index: -1;
     }
     .spin-btn {
       width: 100%;
       height: 100%;
       border-radius: 50%;
-      border: 2px solid var(--ink);
-      background: var(--or-red);
-      color: #fff;
-      font-family: "Noto Serif TC", serif;
-      font-weight: 900;
-      font-size: 22px;
-      letter-spacing: 0.18em;
+      border: none;
+      background: var(--or-yellow);
+      color: var(--ink);
+      font-family: inherit;
+      font-weight: 700;
+      font-size: 15px;
+      letter-spacing: 0.08em;
       cursor: pointer;
-      transition: transform 0.15s cubic-bezier(0.34, 1.56, 0.64, 1);
-      padding-left: 0.2em;
-      line-height: 1;
+      transition: transform 0.18s cubic-bezier(0.34, 1.56, 0.64, 1),
+                  background 0.15s ease;
+      position: relative;
     }
-    .spin-btn:active:not(:disabled) { transform: scale(0.92); }
+    .spin-btn:hover:not(:disabled) { background: var(--or-yellow-d); }
+    .spin-btn:active:not(:disabled) { transform: scale(0.93); }
     .spin-btn:disabled {
-      background: var(--ink-3);
+      background: #F0F0F2;
+      color: var(--ink-3);
       cursor: default;
     }
 
-    /* ----- 按下中央 prompt ----- */
-    .prompt {
-      text-align: center;
-      margin: 22px 0 0;
-      font-family: "Noto Serif TC", serif;
-      font-size: 13px;
-      letter-spacing: 0.4em;
-      color: var(--ink-2);
-      padding-left: 0.4em;
-      min-height: 18px;
-    }
-    .prompt .hand {
-      display: inline-block;
-      margin: 0 6px;
-      transform: translateY(1px);
-    }
-
-    /* ----- 獎項清單 ----- */
-    .prizes {
-      margin-top: 40px;
-    }
-    .prizes-head {
+    /* ========== Status line ========== */
+    .status-row {
       display: flex;
       align-items: center;
       justify-content: center;
-      gap: 14px;
-      margin-bottom: 18px;
+      gap: 8px;
+      margin-top: 18px;
+      font-size: 13px;
+      color: var(--ink-2);
+      min-height: 22px;
     }
-    .prizes-head .dash {
-      flex: 0 0 24px;
-      height: 1px;
-      background: var(--line);
+    .status-row .arrow {
+      color: var(--ink-3);
+      font-size: 14px;
+      animation: bounce 1.4s ease-in-out infinite;
     }
-    .prizes-head .label {
-      font-family: "Noto Serif TC", serif;
-      font-size: 15px;
-      font-weight: 700;
-      letter-spacing: 0.5em;
+    @keyframes bounce {
+      0%, 100% { transform: translateY(0); }
+      50% { transform: translateY(-3px); }
+    }
+    .status-row.ready .arrow { display: inline-block; }
+    .status-row:not(.ready) .arrow { display: none; }
+    .status-row .name {
       color: var(--ink);
-      padding-left: 0.5em;
+      font-weight: 600;
     }
-    .prize-list {
-      list-style: none;
-      margin: 0;
-      padding: 0;
-      border-top: 2px solid var(--line);
-      border-bottom: 2px solid var(--line);
+
+    /* ========== Prize section ========== */
+    .section {
+      margin-top: 24px;
     }
-    .prize-row {
-      display: grid;
-      grid-template-columns: 32px 1fr auto;
+    .section-head {
+      display: flex;
       align-items: baseline;
-      gap: 14px;
-      padding: 14px 4px;
-      border-bottom: 1px dashed rgba(26,20,16,0.2);
+      justify-content: space-between;
+      padding: 0 4px;
+      margin-bottom: 10px;
     }
-    .prize-row:last-child { border-bottom: none; }
-    .prize-num {
-      font-family: "Noto Serif TC", serif;
-      font-size: 22px;
-      font-weight: 900;
-      color: var(--or-red);
-      line-height: 1;
-    }
-    .prize-row.grand .prize-num { font-size: 26px; }
-    .prize-info { min-width: 0; }
-    .prize-name {
-      font-family: "Noto Serif TC", serif;
+    .section-head h2 {
+      margin: 0;
       font-size: 17px;
       font-weight: 700;
-      color: var(--ink);
-      letter-spacing: 0.02em;
-      line-height: 1.3;
+      letter-spacing: -0.015em;
     }
-    .prize-tag {
-      font-family: "Inter", sans-serif;
+    .section-head .meta {
+      font-size: 11px;
+      color: var(--ink-2);
+      font-weight: 500;
+      font-variant-numeric: tabular-nums;
+    }
+
+    .prize-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 8px;
+    }
+    .prize-card {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 14px;
+      padding: 14px;
+      position: relative;
+      transition: transform 0.15s ease, border-color 0.15s ease;
+    }
+    .prize-card.grand {
+      grid-column: span 2;
+      border-color: var(--or-red);
+      background: linear-gradient(180deg, rgba(225, 29, 39, 0.04), transparent);
+    }
+    .prize-card .top {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      margin-bottom: 8px;
+    }
+    .prize-card .icon {
+      width: 32px; height: 32px;
+      border-radius: 10px;
+      background: linear-gradient(135deg, #FFF7DA, var(--or-yellow));
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      color: var(--ink);
+      font-weight: 700;
+      font-size: 14px;
+      font-variant-numeric: tabular-nums;
+      flex-shrink: 0;
+    }
+    .prize-card.grand .icon {
+      background: var(--or-red);
+      color: #fff;
+    }
+    .prize-card .badge {
+      font-size: 10px;
+      font-weight: 700;
+      letter-spacing: 0.06em;
+      padding: 3px 8px;
+      border-radius: 999px;
+      background: var(--or-red);
+      color: #fff;
+    }
+    .prize-card .name {
+      font-size: 14px;
+      font-weight: 600;
+      letter-spacing: -0.005em;
+      line-height: 1.35;
+      color: var(--ink);
+    }
+    .prize-card .desc {
+      margin-top: 3px;
       font-size: 12px;
       color: var(--ink-2);
-      margin-top: 3px;
-      letter-spacing: 0;
-    }
-    .prize-mark {
-      font-family: "Noto Serif TC", serif;
-      font-size: 11px;
-      letter-spacing: 0.25em;
-      color: #fff;
-      font-weight: 700;
-      background: var(--or-red);
-      padding: 3px 9px 3px 10px;
-      align-self: center;
+      line-height: 1.4;
+      display: -webkit-box;
+      -webkit-line-clamp: 2;
+      -webkit-box-orient: vertical;
+      overflow: hidden;
     }
 
-    /* ----- Footer ----- */
+    /* ========== Footer ========== */
     .foot {
-      margin-top: 32px;
-      text-align: center;
-      font-family: "Inter", sans-serif;
+      margin-top: 28px;
+      padding: 14px 16px;
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 14px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      font-size: 12px;
+      color: var(--ink-2);
+    }
+    .foot .l { display: flex; align-items: center; gap: 8px; }
+    .foot .i {
+      width: 20px; height: 20px;
+      border-radius: 6px;
+      background: var(--bg);
+      border: 1px solid var(--border);
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
       font-size: 11px;
-      letter-spacing: 0.18em;
-      color: var(--ink-3);
+      color: var(--ink-2);
+    }
+    .foot .r {
+      font-weight: 600;
+      color: var(--ink);
+      font-variant-numeric: tabular-nums;
     }
 
-    /* ----- Modal ----- */
+    /* ========== Modal ========== */
     .modal {
       position: fixed;
       inset: 0;
@@ -361,7 +451,9 @@
       pointer-events: none;
       opacity: 0;
       transition: opacity 0.3s ease;
-      background: rgba(26, 20, 16, 0.6);
+      background: rgba(15, 15, 16, 0.55);
+      backdrop-filter: blur(8px);
+      -webkit-backdrop-filter: blur(8px);
       display: flex;
       align-items: flex-end;
       justify-content: center;
@@ -370,198 +462,193 @@
     .sheet {
       width: 100%;
       max-width: 480px;
-      background: var(--paper);
-      border-top: 3px solid var(--ink);
-      padding: 24px 28px 36px;
-      padding-bottom: max(36px, env(safe-area-inset-bottom));
+      background: var(--surface);
+      border-radius: 28px 28px 0 0;
+      padding: 14px 24px 32px;
+      padding-bottom: max(32px, env(safe-area-inset-bottom));
       transform: translateY(100%);
       transition: transform 0.5s cubic-bezier(0.32, 0.72, 0, 1);
-      position: relative;
     }
     .modal.open .sheet { transform: translateY(0); }
-    .sheet::before, .sheet::after {
-      content: '';
-      position: absolute;
-      top: 12px;
-      width: 16px;
-      height: 16px;
-      border: 2px solid var(--ink);
+    .handle {
+      width: 36px; height: 5px;
+      border-radius: 999px;
+      background: var(--border-2);
+      margin: 0 auto 22px;
     }
-    .sheet::before { left: 12px; border-right: none; border-bottom: none; }
-    .sheet::after { right: 12px; border-left: none; border-bottom: none; }
     .modal-eyebrow {
       text-align: center;
-      font-family: "Inter", sans-serif;
-      font-size: 10px;
-      letter-spacing: 0.45em;
+      font-size: 11px;
+      font-weight: 600;
+      letter-spacing: 0.1em;
+      text-transform: uppercase;
       color: var(--or-red);
-      font-weight: 700;
-      margin-bottom: 4px;
-      padding-left: 0.5em;
-    }
-    .modal-zh-tag {
-      text-align: center;
-      font-family: "Noto Serif TC", serif;
-      font-size: 14px;
-      letter-spacing: 0.4em;
-      color: var(--ink-2);
-      margin-bottom: 18px;
-      padding-left: 0.4em;
+      margin-bottom: 16px;
     }
     .modal-img-wrap {
       width: 88px; height: 88px;
       margin: 0 auto 16px;
-      border-radius: 50%;
-      background: var(--or-yellow);
-      border: 2px solid var(--ink);
+      border-radius: 22px;
+      background: linear-gradient(135deg, #FFF7DA, var(--or-yellow));
       display: flex;
       align-items: center;
       justify-content: center;
       overflow: hidden;
     }
-    .modal.grand .modal-img-wrap { background: var(--or-red); }
+    .modal.grand .modal-img-wrap {
+      background: linear-gradient(135deg, var(--or-red), #B61118);
+    }
     .modal-img-wrap img { width: 100%; height: 100%; object-fit: cover; }
     .modal-img-wrap .glyph {
-      font-family: "Noto Serif TC", serif;
-      font-size: 34px;
-      font-weight: 900;
+      font-size: 36px;
+      font-weight: 700;
       color: var(--ink);
     }
     .modal.grand .modal-img-wrap .glyph { color: #fff; }
     .modal-prize {
       text-align: center;
-      font-family: "Noto Serif TC", serif;
-      font-size: 32px;
-      font-weight: 900;
-      letter-spacing: 0.02em;
+      font-size: 26px;
+      font-weight: 700;
+      letter-spacing: -0.025em;
       color: var(--ink);
-      margin-bottom: 6px;
+      margin-bottom: 8px;
       line-height: 1.15;
     }
-    .modal.grand .modal-prize { color: var(--or-red); }
     .modal-desc {
       text-align: center;
       color: var(--ink-2);
-      font-family: "Noto Serif TC", serif;
       font-size: 14px;
-      line-height: 1.7;
+      line-height: 1.55;
       margin-bottom: 24px;
     }
     .modal-btn {
       display: block;
       width: 100%;
-      padding: 16px;
+      padding: 15px;
       background: var(--ink);
-      color: var(--paper);
+      color: #fff;
       border: none;
-      border-radius: 0;
-      font-family: "Noto Serif TC", serif;
+      border-radius: 14px;
       font-size: 15px;
-      font-weight: 700;
-      letter-spacing: 0.6em;
+      font-weight: 600;
+      font-family: inherit;
+      letter-spacing: -0.005em;
       cursor: pointer;
-      padding-left: 0.6em;
       transition: transform 0.15s cubic-bezier(0.34, 1.56, 0.64, 1);
     }
     .modal-btn:active { transform: scale(0.98); }
   </style>
 </head>
 <body>
-  <div class="frame">
-    <span class="corner-tr"></span>
-    <span class="corner-bl"></span>
+  <div class="page">
 
-    <div class="brand-bar">
-      <div class="left">OPENRICE</div>
-      <div class="right">No.<%= activity.id %></div>
-    </div>
+    <header class="brand-bar">
+      <div class="logo">
+        <span class="dot"></span>
+        OpenRice
+      </div>
+      <div class="chip">活動進行中</div>
+    </header>
 
-    <!-- 雙波浪線分隔 -->
-    <svg class="divider-wave" viewBox="0 0 400 10" preserveAspectRatio="none">
-      <path d="M0,3 Q20,0 40,3 T80,3 T120,3 T160,3 T200,3 T240,3 T280,3 T320,3 T360,3 T400,3" stroke="#1A1410" stroke-width="1" fill="none"/>
-      <path d="M0,7 Q20,4 40,7 T80,7 T120,7 T160,7 T200,7 T240,7 T280,7 T320,7 T360,7 T400,7" stroke="#1A1410" stroke-width="1" fill="none"/>
-    </svg>
-
-    <div class="title-block">
-      <div class="title-eng">LUCKY DRAW</div>
-      <h1 class="title-zh"><%= activity.name %></h1>
+    <section class="hero">
+      <div class="hero-tag">幸運抽獎</div>
+      <h1><%= activity.name %></h1>
       <% if (activity.description) { %>
-        <p class="desc"><%= activity.description %></p>
+        <p><%= activity.description %></p>
       <% } %>
       <% if (activity.cover_image_url) { %>
-        <img class="cover" src="<%= activity.cover_image_url %>" alt="" />
+        <img class="hero-cover" src="<%= activity.cover_image_url %>" alt="" />
       <% } %>
-    </div>
+    </section>
 
-    <!-- 紅色印章 -->
-    <div class="seal" aria-hidden="true">
-      <div class="seal-top">福</div>
-      <div class="seal-main">抽獎</div>
-    </div>
+    <section class="stats">
+      <div class="stat">
+        <div class="v"><%= prizes && prizes.length || 0 %><span class="unit">種</span></div>
+        <div class="k">獎品</div>
+      </div>
+      <div class="stat">
+        <div class="v">100<span class="unit">%</span></div>
+        <div class="k">中獎率</div>
+      </div>
+      <div class="stat">
+        <div class="v"><%= activity.daily_plays_per_user || '∞' %><% if (activity.daily_plays_per_user) { %><span class="unit">次</span><% } %></div>
+        <div class="k">每日限額</div>
+      </div>
+    </section>
 
-    <div class="stage-shell">
-      <span class="side-label left">FORTUNE</span>
-      <span class="side-label right">福運臨門</span>
-      <div class="stage">
-        <div class="pointer"></div>
-        <div class="canvas-wrap">
-          <canvas id="wheel" width="720" height="720"></canvas>
-        </div>
-        <div class="center">
-          <button type="button" id="spin-btn" class="spin-btn">抽</button>
+    <section class="stage-card">
+      <div class="stage-head">
+        <span class="label">轉盤</span>
+        <span class="count">準備好按下中央按鈕</span>
+      </div>
+      <div class="stage-wrap">
+        <div class="stage">
+          <div class="pointer">
+            <svg width="22" height="26" viewBox="0 0 22 26" fill="none">
+              <path d="M11 26 L1 8 Q1 1 11 1 Q21 1 21 8 Z" fill="#0F0F10"/>
+              <circle cx="11" cy="9" r="3" fill="#FCC726"/>
+            </svg>
+          </div>
+          <div class="canvas-wrap">
+            <canvas id="wheel" width="720" height="720"></canvas>
+          </div>
+          <div class="center">
+            <button type="button" id="spin-btn" class="spin-btn">SPIN</button>
+          </div>
         </div>
       </div>
-    </div>
-
-    <p class="prompt" id="status">準備中</p>
+      <div class="status-row" id="status-row">
+        <span id="status">準備中</span>
+      </div>
+    </section>
 
     <% if (prizes && prizes.length > 0) { %>
-    <section class="prizes">
-      <div class="prizes-head">
-        <span class="dash"></span>
-        <span class="label">獎項</span>
-        <span class="dash"></span>
+    <section class="section">
+      <div class="section-head">
+        <h2>本次獎項</h2>
+        <span class="meta"><%= prizes.length %> 種</span>
       </div>
-      <ul class="prize-list">
-        <% var cnChars = ['壹','貳','參','肆','伍','陸','柒','捌','玖','拾'];
-           prizes.forEach(function (p, i) { %>
-          <li class="prize-row <%= p.is_grand_prize ? 'grand' : '' %>">
-            <span class="prize-num"><%= cnChars[i] || (i + 1) %></span>
-            <div class="prize-info">
-              <div class="prize-name"><%= p.name %></div>
-              <% if (p.description) { %>
-                <div class="prize-tag"><%= p.description %></div>
+      <div class="prize-grid">
+        <% prizes.forEach(function (p, i) { %>
+          <div class="prize-card <%= p.is_grand_prize ? 'grand' : '' %>">
+            <div class="top">
+              <div class="icon"><%= String(i + 1).padStart(2, '0') %></div>
+              <% if (p.is_grand_prize) { %>
+                <span class="badge">頭獎</span>
               <% } %>
             </div>
-            <% if (p.is_grand_prize) { %>
-              <span class="prize-mark">頭獎</span>
-            <% } else { %>
-              <span></span>
+            <div class="name"><%= p.name %></div>
+            <% if (p.description) { %>
+              <div class="desc"><%= p.description %></div>
             <% } %>
-          </li>
+          </div>
         <% }); %>
-      </ul>
+      </div>
     </section>
     <% } %>
 
-    <% if (activity.daily_plays_per_user != null) { %>
-      <p class="foot">每 日 限 <%= activity.daily_plays_per_user %> 次</p>
-    <% } %>
+    <div class="foot">
+      <div class="l">
+        <span class="i">i</span>
+        <span>遊戲規則</span>
+      </div>
+      <span class="r">公平隨機</span>
+    </div>
 
   </div>
 
   <!-- Result -->
   <div id="modal" class="modal" aria-hidden="true">
     <div class="sheet">
-      <div class="modal-eyebrow">CONGRATULATIONS</div>
-      <div class="modal-zh-tag">恭 喜 抽 中</div>
+      <div class="handle"></div>
+      <div class="modal-eyebrow">恭喜抽中</div>
       <div class="modal-img-wrap" id="modal-img-wrap">
         <img id="modal-img" alt="" hidden />
-        <span class="glyph" id="modal-glyph">福</span>
+        <span class="glyph" id="modal-glyph">★</span>
       </div>
       <div class="modal-prize" id="modal-prize">—</div>
       <div class="modal-desc" id="modal-desc"></div>
-      <button type="button" class="modal-btn" id="modal-close">收 下</button>
+      <button type="button" class="modal-btn" id="modal-close">完成</button>
     </div>
   </div>
 
@@ -575,6 +662,7 @@
       var ctx = canvas.getContext('2d');
       var spinBtn = document.getElementById('spin-btn');
       var statusEl = document.getElementById('status');
+      var statusRow = document.getElementById('status-row');
       var modal = document.getElementById('modal');
 
       var spinning = false;
@@ -583,13 +671,13 @@
       var liffReady = false;
 
       // ===========================================================
-      // 畫輪盤 — 紙感、純色、黑線分隔；扇形交替 黃 / 白 / 紅(大獎)
+      // 畫輪盤 — 純色配色（黃白交替、紅大獎）+ 細邊分隔
       // ===========================================================
       function drawWheel() {
         var W = canvas.width;
         var H = canvas.height;
         var cx = W / 2, cy = H / 2;
-        var R = W / 2 - 4;
+        var R = W / 2 - 3;
         var n = prizes.length;
         var anglePer = (Math.PI * 2) / n;
 
@@ -603,30 +691,30 @@
           ctx.moveTo(cx, cy);
           ctx.arc(cx, cy, R, start, end);
           ctx.closePath();
-          if (p.is_grand_prize) ctx.fillStyle = '#DC2127';
-          else ctx.fillStyle = (i % 2 === 0) ? '#FBF6E9' : '#FCC726';
+          if (p.is_grand_prize) ctx.fillStyle = '#E11D27';
+          else ctx.fillStyle = (i % 2 === 0) ? '#FFFFFF' : '#FCC726';
           ctx.fill();
         });
 
-        // 扇形分隔線（粗黑）
+        // 扇形分隔線（細）
         prizes.forEach(function (p, i) {
           var angle = i * anglePer - Math.PI / 2;
           ctx.beginPath();
           ctx.moveTo(cx, cy);
           ctx.lineTo(cx + Math.cos(angle) * R, cy + Math.sin(angle) * R);
-          ctx.lineWidth = 2.5;
-          ctx.strokeStyle = '#1A1410';
+          ctx.lineWidth = 1.5;
+          ctx.strokeStyle = 'rgba(15, 15, 16, 0.1)';
           ctx.stroke();
         });
 
-        // 外圈黑線
+        // 外圈細線
         ctx.beginPath();
         ctx.arc(cx, cy, R, 0, Math.PI * 2);
-        ctx.lineWidth = 4;
-        ctx.strokeStyle = '#1A1410';
+        ctx.lineWidth = 2;
+        ctx.strokeStyle = '#0F0F10';
         ctx.stroke();
 
-        // 文字（粗 serif 中文）
+        // 文字 — sans-serif 粗體，水平擺放
         prizes.forEach(function (p, i) {
           var start = i * anglePer - Math.PI / 2;
           var midAngle = start + anglePer / 2;
@@ -640,11 +728,11 @@
 
           ctx.textAlign = 'center';
           ctx.textBaseline = 'middle';
-          ctx.fillStyle = p.is_grand_prize ? '#FFFFFF' : '#1A1410';
-          ctx.font = '900 22px "Noto Serif TC", serif';
+          ctx.fillStyle = p.is_grand_prize ? '#FFFFFF' : '#0F0F10';
+          ctx.font = '700 19px -apple-system, "SF Pro Display", "Inter", "PingFang TC", sans-serif';
 
           var label = String(p.name || '');
-          if (label.length > 7) label = label.slice(0, 7) + '…';
+          if (label.length > 8) label = label.slice(0, 8) + '…';
           ctx.fillText(label, 0, 0);
           ctx.restore();
         });
@@ -661,6 +749,7 @@
         if (qs.get('preview') === '1') {
           profile = { userId: 'PREVIEW', displayName: '預覽' };
           spinBtn.disabled = true;
+          spinBtn.textContent = '預覽';
           return;
         }
         if (!liffId) throw new Error('LIFF ID 未設定');
@@ -692,10 +781,14 @@
       // ----- spin -----
       async function spin() {
         if (spinning) return;
-        if (!liffReady || !profile) { statusEl.textContent = '請 稍 等'; return; }
+        if (!liffReady || !profile) {
+          statusEl.textContent = '請稍候';
+          return;
+        }
         spinning = true;
         spinBtn.disabled = true;
-        statusEl.textContent = '抽 選 中';
+        statusRow.classList.remove('ready');
+        statusEl.textContent = '抽選中⋯';
 
         try {
           var resp = await fetch('/api/games/wheel/' + encodeURIComponent(slug) + '/spin', {
@@ -736,7 +829,7 @@
         } else {
           imgEl.hidden = true;
           glyphEl.style.display = 'block';
-          glyphEl.textContent = prize.is_grand_prize ? '中' : '福';
+          glyphEl.textContent = prize.is_grand_prize ? '★' : '◆';
         }
         var descParts = [];
         if (prize.prize_value) {
@@ -745,7 +838,7 @@
           if (prize.prize_value.label) descParts.push(prize.prize_value.label);
           if (prize.prize_value.note) descParts.push(prize.prize_value.note);
         }
-        document.getElementById('modal-desc').textContent = descParts.join(' ｜ ');
+        document.getElementById('modal-desc').textContent = descParts.join(' · ');
         if (prize.is_grand_prize) modal.classList.add('grand');
         else modal.classList.remove('grand');
         requestAnimationFrame(function () { modal.classList.add('open'); });
@@ -764,10 +857,11 @@
       if (prizes.length < 2) {
         statusEl.textContent = '獎品不足';
         spinBtn.disabled = true;
+        spinBtn.textContent = '—';
       } else {
         drawWheel();
         spinBtn.disabled = true;
-        statusEl.textContent = '驗 證 身 分';
+        statusEl.textContent = '驗證身分中⋯';
       }
 
       (async function () {
@@ -776,9 +870,10 @@
           await initLiff();
           liffReady = true;
           spinBtn.disabled = false;
-          statusEl.textContent = '按 下 中 央 開 始';
+          statusRow.classList.add('ready');
+          statusEl.innerHTML = '哈囉，<span class="name">' + (profile.displayName || '') + '</span>';
         } catch (e) {
-          statusEl.textContent = e.message || '初 始 化 失 敗';
+          statusEl.textContent = e.message || '初始化失敗';
         }
       })();
     })();
