@@ -90,42 +90,58 @@ function registerAdminLiffAnalyticsRoutes(app, deps) {
 
   // ------------------------------------------------------------------
   // API 2: 核心轉換漏斗 — app_open → submit_draw → result_shown → restaurant_click
-  // 預設過去 7 天
+  // 每 step 同時算「次（events）」跟「人（distinct line_id）」兩組指標
   // ------------------------------------------------------------------
   app.get('/admin/liff/random-rice/api/funnel', requireAdmin, async (req, res) => {
     try {
       const days = clampInt(req.query.days, 1, 90, 7);
       const sql = `
         SELECT
-          COUNT(*) FILTER (WHERE event_name = 'app_open') AS app_open,
-          COUNT(*) FILTER (WHERE event_name = 'submit_draw') AS submit_draw,
-          COUNT(*) FILTER (WHERE event_name = 'result_shown') AS result_shown,
-          COUNT(*) FILTER (WHERE event_name = 'restaurant_click') AS restaurant_click
+          COUNT(*) FILTER (WHERE event_name = 'app_open') AS app_open_events,
+          COUNT(DISTINCT line_id) FILTER (WHERE event_name = 'app_open' AND line_id IS NOT NULL) AS app_open_users,
+          COUNT(*) FILTER (WHERE event_name = 'submit_draw') AS submit_draw_events,
+          COUNT(DISTINCT line_id) FILTER (WHERE event_name = 'submit_draw' AND line_id IS NOT NULL) AS submit_draw_users,
+          COUNT(*) FILTER (WHERE event_name = 'result_shown') AS result_shown_events,
+          COUNT(DISTINCT line_id) FILTER (WHERE event_name = 'result_shown' AND line_id IS NOT NULL) AS result_shown_users,
+          COUNT(*) FILTER (WHERE event_name = 'restaurant_click') AS restaurant_click_events,
+          COUNT(DISTINCT line_id) FILTER (WHERE event_name = 'restaurant_click' AND line_id IS NOT NULL) AS restaurant_click_users
         FROM user_events
         WHERE created_at > NOW() - ($1 || ' days')::INTERVAL
       `;
       const { rows } = await query(sql, [String(days)]);
       const r = rows[0] || {};
-      const steps = [
-        { key: 'app_open',         label: '打開 LIFF',       count: Number(r.app_open || 0) },
-        { key: 'submit_draw',      label: '首次抽選',         count: Number(r.submit_draw || 0) },
-        { key: 'result_shown',     label: '看到結果',         count: Number(r.result_shown || 0) },
-        { key: 'restaurant_click', label: '點訂位（轉換）',   count: Number(r.restaurant_click || 0) }
+      const stepDefs = [
+        { key: 'app_open',         label: '打開 LIFF' },
+        { key: 'submit_draw',      label: '首次抽選' },
+        { key: 'result_shown',     label: '看到結果' },
+        { key: 'restaurant_click', label: '點訂位（轉換）' }
       ];
-      const first = steps[0].count;
+      const steps = stepDefs.map(d => ({
+        key: d.key,
+        label: d.label,
+        events: Number(r[d.key + '_events'] || 0),
+        users: Number(r[d.key + '_users'] || 0)
+      }));
+      // 計算「相對上一步」「相對第一步」轉換率，兩個 metric 都算
+      const firstE = steps[0].events;
+      const firstU = steps[0].users;
       steps.forEach((step, i) => {
-        // drop_pct = 跟上一步比的流失率
         if (i === 0) {
-          step.from_prev_pct = null;
-          step.from_first_pct = 100;
+          step.events_from_prev_pct = null;
+          step.events_from_first_pct = 100;
+          step.users_from_prev_pct = null;
+          step.users_from_first_pct = 100;
         } else {
-          const prev = steps[i - 1].count;
-          step.from_prev_pct = prev > 0
-            ? Math.round((step.count / prev) * 10000) / 100
-            : 0;
-          step.from_first_pct = first > 0
-            ? Math.round((step.count / first) * 10000) / 100
-            : 0;
+          const prevE = steps[i - 1].events;
+          const prevU = steps[i - 1].users;
+          step.events_from_prev_pct = prevE > 0
+            ? Math.round((step.events / prevE) * 10000) / 100 : 0;
+          step.events_from_first_pct = firstE > 0
+            ? Math.round((step.events / firstE) * 10000) / 100 : 0;
+          step.users_from_prev_pct = prevU > 0
+            ? Math.round((step.users / prevU) * 10000) / 100 : 0;
+          step.users_from_first_pct = firstU > 0
+            ? Math.round((step.users / firstU) * 10000) / 100 : 0;
         }
       });
       res.json({ ok: true, days, data: steps });

@@ -92,25 +92,36 @@
       <div class="liff-section-head">
         <h2>核心轉換漏斗</h2>
         <div class="liff-range-toggle">
-          <label><input type="radio" name="funnel-days" value="7" checked /> 過去 7 天</label>
-          <label><input type="radio" name="funnel-days" value="30" /> 過去 30 天</label>
+          <label><input type="radio" name="funnel-metric" value="users" checked /> 以人數</label>
+          <label><input type="radio" name="funnel-metric" value="events" /> 以次數</label>
+        </div>
+        <div class="liff-range-toggle">
+          <label><input type="radio" name="funnel-days" value="7" checked /> 7 天</label>
+          <label><input type="radio" name="funnel-days" value="30" /> 30 天</label>
         </div>
       </div>
-      <div class="muted" style="font-size:12px;margin-bottom:12px;">打開 LIFF → 首次抽選 → 看到結果 → 點訂位。每一步顯示總人次與相對於前一步的轉換率。</div>
+      <div class="muted" style="font-size:12px;margin-bottom:12px;">打開 LIFF → 首次抽選 → 看到結果 → 點訂位。「人數」= distinct line_id；「次數」= 事件總數。表格同時顯示兩者方便比對。</div>
       <div class="liff-funnel-wrap">
         <canvas id="funnel-chart"></canvas>
       </div>
       <table class="liff-funnel-table">
         <thead>
           <tr>
-            <th>步驟</th>
-            <th style="text-align:right;">人次</th>
+            <th rowspan="2">步驟</th>
+            <th colspan="3" class="liff-col-group">人數</th>
+            <th colspan="3" class="liff-col-group">次數</th>
+          </tr>
+          <tr>
+            <th style="text-align:right;">人</th>
             <th style="text-align:right;">相對上一步</th>
-            <th style="text-align:right;">相對 app_open</th>
+            <th style="text-align:right;">相對首步</th>
+            <th style="text-align:right;">次</th>
+            <th style="text-align:right;">相對上一步</th>
+            <th style="text-align:right;">相對首步</th>
           </tr>
         </thead>
         <tbody id="funnel-tbody">
-          <tr><td colspan="4" class="muted" style="text-align:center;padding:18px 0;">載入中…</td></tr>
+          <tr><td colspan="7" class="muted" style="text-align:center;padding:18px 0;">載入中…</td></tr>
         </tbody>
       </table>
     </section>
@@ -216,23 +227,35 @@
       }
 
       // ---------------- 核心漏斗 ----------------
+      var lastFunnelSteps = [];
       function loadFunnel(days) {
         return fetch('/admin/liff/random-rice/api/funnel?days=' + encodeURIComponent(days))
           .then(function (r) { return r.json(); })
           .then(function (resp) {
             if (!resp.ok) throw new Error(resp.detail || 'funnel failed');
-            renderFunnelChart(resp.data || []);
-            renderFunnelTable(resp.data || []);
+            lastFunnelSteps = resp.data || [];
+            renderFunnel();
           })
           .catch(function (e) {
             console.error('funnel load failed:', e);
-            $('funnel-tbody').innerHTML = '<tr><td colspan="4" class="muted" style="text-align:center;padding:18px 0;">載入失敗</td></tr>';
+            $('funnel-tbody').innerHTML = '<tr><td colspan="7" class="muted" style="text-align:center;padding:18px 0;">載入失敗</td></tr>';
           });
       }
 
-      function renderFunnelChart(steps) {
+      function currentFunnelMetric() {
+        return (document.querySelector('input[name="funnel-metric"]:checked') || {}).value || 'users';
+      }
+
+      function renderFunnel() {
+        renderFunnelChart(lastFunnelSteps, currentFunnelMetric());
+        renderFunnelTable(lastFunnelSteps);
+      }
+
+      function renderFunnelChart(steps, metric) {
+        var isUsers = metric === 'users';
         var labels = steps.map(function (s) { return s.label; });
-        var counts = steps.map(function (s) { return s.count; });
+        var counts = steps.map(function (s) { return isUsers ? s.users : s.events; });
+        var datasetLabel = isUsers ? '人數（distinct line_id）' : '事件次數';
         var ctx = $('funnel-chart').getContext('2d');
         if (funnelChart) funnelChart.destroy();
         funnelChart = new Chart(ctx, {
@@ -240,10 +263,12 @@
           data: {
             labels: labels,
             datasets: [{
-              label: '人次',
+              label: datasetLabel,
               data: counts,
-              backgroundColor: ['#fde68a','#fcd34d','#fbbf24','#FCC726'],
-              borderColor: '#facc15',
+              backgroundColor: isUsers
+                ? ['#bfdbfe','#93c5fd','#60a5fa','#3b82f6']
+                : ['#fde68a','#fcd34d','#fbbf24','#FCC726'],
+              borderColor: isUsers ? '#2563eb' : '#facc15',
               borderWidth: 1,
               borderRadius: 6
             }]
@@ -252,19 +277,17 @@
             responsive: true,
             maintainAspectRatio: false,
             plugins: {
-              legend: { display: false },
+              legend: { display: true, position: 'bottom' },
               tooltip: {
                 callbacks: {
                   afterLabel: function (ctx) {
                     var step = steps[ctx.dataIndex];
                     if (!step) return '';
+                    var fromPrev = isUsers ? step.users_from_prev_pct : step.events_from_prev_pct;
+                    var fromFirst = isUsers ? step.users_from_first_pct : step.events_from_first_pct;
                     var lines = [];
-                    if (step.from_prev_pct != null) {
-                      lines.push('相對上一步: ' + step.from_prev_pct.toFixed(2) + '%');
-                    }
-                    if (step.from_first_pct != null) {
-                      lines.push('相對 app_open: ' + step.from_first_pct.toFixed(2) + '%');
-                    }
+                    if (fromPrev != null) lines.push('相對上一步: ' + fromPrev.toFixed(2) + '%');
+                    if (fromFirst != null) lines.push('相對首步: ' + fromFirst.toFixed(2) + '%');
                     return lines;
                   }
                 }
@@ -281,17 +304,22 @@
       function renderFunnelTable(steps) {
         var tbody = $('funnel-tbody');
         if (!steps.length) {
-          tbody.innerHTML = '<tr><td colspan="4" class="muted" style="text-align:center;padding:18px 0;">區間內沒有資料</td></tr>';
+          tbody.innerHTML = '<tr><td colspan="7" class="muted" style="text-align:center;padding:18px 0;">區間內沒有資料</td></tr>';
           return;
         }
         tbody.innerHTML = steps.map(function (s) {
-          var prev = (s.from_prev_pct == null) ? '—' : fmtPct(s.from_prev_pct);
-          var first = (s.from_first_pct == null) ? '—' : fmtPct(s.from_first_pct);
+          var uPrev = (s.users_from_prev_pct == null) ? '—' : fmtPct(s.users_from_prev_pct);
+          var uFirst = (s.users_from_first_pct == null) ? '—' : fmtPct(s.users_from_first_pct);
+          var ePrev = (s.events_from_prev_pct == null) ? '—' : fmtPct(s.events_from_prev_pct);
+          var eFirst = (s.events_from_first_pct == null) ? '—' : fmtPct(s.events_from_first_pct);
           return '<tr>' +
             '<td>' + s.label + '<span class="liff-step-key">' + s.key + '</span></td>' +
-            '<td style="text-align:right;font-weight:600;">' + fmt(s.count) + '</td>' +
-            '<td style="text-align:right;">' + prev + '</td>' +
-            '<td style="text-align:right;">' + first + '</td>' +
+            '<td style="text-align:right;font-weight:600;color:#2563eb;">' + fmt(s.users) + '</td>' +
+            '<td style="text-align:right;">' + uPrev + '</td>' +
+            '<td style="text-align:right;">' + uFirst + '</td>' +
+            '<td style="text-align:right;font-weight:600;color:#b45309;">' + fmt(s.events) + '</td>' +
+            '<td style="text-align:right;">' + ePrev + '</td>' +
+            '<td style="text-align:right;">' + eFirst + '</td>' +
             '</tr>';
         }).join('');
       }
@@ -461,6 +489,9 @@
       document.querySelectorAll('input[name="funnel-days"]').forEach(function (el) {
         el.addEventListener('change', function () { loadFunnel(el.value); });
       });
+      document.querySelectorAll('input[name="funnel-metric"]').forEach(function (el) {
+        el.addEventListener('change', function () { renderFunnel(); });
+      });
       document.querySelectorAll('input[name="trend-days"]').forEach(function (el) {
         el.addEventListener('change', function () { loadTrend(el.value); });
       });
@@ -581,6 +612,13 @@
         border-bottom: 1px solid #f3f4f6;
       }
       .liff-funnel-table th { color: #6b7280; font-weight: 600; font-size: 12px; }
+      .liff-funnel-table .liff-col-group {
+        text-align: center;
+        border-bottom: 1px solid #e5e7eb;
+        background: #fafafa;
+      }
+      .liff-funnel-table thead tr:first-child .liff-col-group:nth-child(2) { color: #1d4ed8; }
+      .liff-funnel-table thead tr:first-child .liff-col-group:nth-child(3) { color: #b45309; }
       .liff-step-key {
         display: block;
         font-size: 11px;
