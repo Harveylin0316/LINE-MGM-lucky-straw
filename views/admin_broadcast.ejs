@@ -178,12 +178,19 @@
                   優惠碼（選填，會顯示為置中的「強調框」）
                   <input type="text" id="tpl-coupon-code" maxlength="60" placeholder="例如：spring100" />
                 </label>
+                <div class="muted field-hint">
+                  在 LINE 上用戶點此框會自動複製到剪貼簿，方便他們貼到 OpenRice 兌換頁。
+                </div>
               </div>
               <div class="broadcast-field">
                 <label>
                   注意事項（選填，顯示為小灰字）
                   <input type="text" id="tpl-disclaimer" maxlength="300" placeholder="例如：每位會員限使用一次，使用期限 30 天" />
                 </label>
+                <div class="muted field-hint">
+                  多個項目用「<code>*</code>」隔開（譬如 <code>*項目A *項目B *項目C</code>），LINE 上會自動拆成
+                  <code>•</code> bullet 換行顯示。
+                </div>
               </div>
               <div class="broadcast-field">
                 <label>
@@ -475,6 +482,19 @@
         font-size: 13px;
       }
       .broadcast-field { margin-bottom: 12px; }
+      .field-hint {
+        font-size: 12px;
+        margin-top: 4px;
+        line-height: 1.5;
+        color: #6b7280;
+      }
+      .field-hint code {
+        background: #f3f4f6;
+        padding: 1px 5px;
+        border-radius: 4px;
+        font-size: 11px;
+        color: #1f2937;
+      }
       .broadcast-field-label {
         font-size: 13px;
         color: #374151;
