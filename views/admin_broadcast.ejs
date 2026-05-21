@@ -380,8 +380,9 @@
 
         <!-- floating text format toolbar (跟著 focus 的 text) -->
         <div id="text-format-toolbar" class="text-format-toolbar" hidden>
-          <button type="button" class="tft-btn" data-action="add-above" title="在上方插入一列">＋上方</button>
-          <button type="button" class="tft-btn" data-action="add-below" title="在下方插入一列">＋下方</button>
+          <button type="button" class="tft-btn" data-action="add-above" title="在上方插入一列文字">＋上方</button>
+          <button type="button" class="tft-btn" data-action="add-below" title="在下方插入一列文字">＋下方</button>
+          <button type="button" class="tft-btn" data-action="add-box" title="在下方插入一個區塊（box，可有背景色）">＋區塊</button>
           <span class="tft-sep"></span>
           <label class="tft-label" title="字級">
             <span>字</span>
@@ -399,13 +400,18 @@
             <span>色</span>
             <input type="color" class="tft-color" value="#1f2937" />
           </label>
+          <label class="tft-label" title="此文字所在區塊的背景色">
+            <span>框</span>
+            <input type="color" class="tft-box-bg" value="#ffffff" />
+          </label>
           <button type="button" class="tft-btn tft-bold" data-action="bold" title="粗體切換"><strong>B</strong></button>
           <span class="tft-sep"></span>
           <button type="button" class="tft-btn tft-align" data-action="align-start" title="靠左">⟸</button>
           <button type="button" class="tft-btn tft-align" data-action="align-center" title="置中">⇔</button>
           <button type="button" class="tft-btn tft-align" data-action="align-end" title="靠右">⟹</button>
           <span class="tft-sep"></span>
-          <button type="button" class="tft-btn tft-danger" data-action="delete" title="刪除這一列">✕</button>
+          <button type="button" class="tft-btn tft-danger" data-action="delete-row" title="刪除這一列">刪這列</button>
+          <button type="button" class="tft-btn tft-close" data-action="close" title="關閉編輯工具列">✕</button>
         </div>
       </div>
     </section>
@@ -671,6 +677,16 @@
         border-color: #FCC726;
         background: #fffbeb;
         box-shadow: 0 0 0 2px rgba(252, 199, 38, 0.35);
+      }
+      .template-card-blank {
+        border-style: dashed;
+        background: #fafafa;
+      }
+      .template-card-blank:hover {
+        background: #fffbeb;
+      }
+      .template-card-blank .template-card-name {
+        color: #6b7280;
       }
       .template-card-name {
         font-size: 13px;
@@ -1209,6 +1225,7 @@
       .text-format-toolbar .tft-bold strong { font-family: serif; font-size: 13px; }
       .text-format-toolbar .tft-align { font-size: 13px; padding: 2px 6px; }
       .text-format-toolbar .tft-danger:hover { background: #dc2626; border-color: #dc2626; }
+      .text-format-toolbar .tft-close:hover { background: rgba(255,255,255,0.18); }
       .text-format-toolbar .tft-label {
         display: inline-flex;
         align-items: center;

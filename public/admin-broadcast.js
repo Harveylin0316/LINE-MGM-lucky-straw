@@ -653,13 +653,53 @@
         var btn = tb.querySelector('[data-action="align-' + a + '"]');
         if (btn) btn.classList.toggle('active', ref.align === a);
       });
+      // 框背景色：父 box 在 path.slice(0, -3) (剝掉 'text', idx, 'contents')
+      var bgInput = tb.querySelector('.tft-box-bg');
+      if (bgInput) {
+        var parentBox = getParentBoxFromPath(parsed, path);
+        bgInput.value = normalizeHexColor(parentBox && parentBox.backgroundColor, '#ffffff');
+      }
     } catch (e) {}
   }
 
-  function normalizeHexColor(c) {
-    if (typeof c !== 'string') return '#1f2937';
+  // 找 path 對應 text 所在的 box（path = [..., 'contents', idx, 'text']）
+  function getParentBoxFromPath(parsed, path) {
+    if (!Array.isArray(path) || path.length < 3) return null;
+    var boxPath = path.slice(0, -3); // 剝掉 'text', idx, 'contents'
+    var ref = parsed.contents;
+    for (var i = 0; i < boxPath.length; i++) {
+      if (ref == null) return null;
+      ref = ref[boxPath[i]];
+    }
+    return ref || null;
+  }
+
+  function handleBoxBgChange(val) {
+    if (!currentEditingText) return;
+    try {
+      var path = JSON.parse(currentEditingText.dataset.editPath || '[]');
+      if (path.length < 3) return;
+      var textarea = $('flex-json');
+      var parsed = JSON.parse(textarea.value);
+      var parentBox = getParentBoxFromPath(parsed, path);
+      if (!parentBox || typeof parentBox !== 'object') return;
+      if (!val) delete parentBox.backgroundColor;
+      else parentBox.backgroundColor = val;
+      textarea.value = JSON.stringify(parsed, null, 2);
+      saveDraft();
+      // DOM 即時 reflect 到 text 所在的 box 容器（.lm-box / .lm-body / .lm-header / .lm-footer）
+      var boxEl = currentEditingText.parentNode;
+      if (boxEl) boxEl.style.background = val || '';
+    } catch (e) {
+      console.warn('handleBoxBgChange failed:', e && e.message);
+    }
+  }
+
+  function normalizeHexColor(c, fallback) {
+    var fb = fallback || '#1f2937';
+    if (typeof c !== 'string') return fb;
     var m = c.match(/^#([0-9a-f]{6}|[0-9a-f]{3})$/i);
-    if (!m) return '#1f2937';
+    if (!m) return fb;
     if (m[1].length === 3) {
       return '#' + m[1].split('').map(function (x) { return x + x; }).join('');
     }
@@ -719,12 +759,23 @@
         handleStyleChange('align', a);
       });
     });
-    // 加上方 / 加下方 / 刪除（row 操作）
+    // 加上方 / 加下方 / 加區塊 / 刪除一列 / 關閉
     tb.querySelectorAll('.tft-btn[data-action]').forEach(function (btn) {
       var act = btn.getAttribute('data-action');
-      if (act !== 'add-above' && act !== 'add-below' && act !== 'delete') return;
-      btn.addEventListener('click', function () { handleRowAction(act); });
+      if (act !== 'add-above' && act !== 'add-below' &&
+          act !== 'add-box' && act !== 'delete-row' && act !== 'close') return;
+      btn.addEventListener('click', function () {
+        if (act === 'close') { hideTextFormatToolbar(); return; }
+        handleRowAction(act);
+      });
     });
+    // 框背景色（input 即時 reflect 到所在 box 的 backgroundColor）
+    var bgInput = tb.querySelector('.tft-box-bg');
+    if (bgInput) {
+      bgInput.addEventListener('input', function (e) {
+        handleBoxBgChange(e.target.value);
+      });
+    }
   })();
 
   // style 操作：JSON sync + DOM 即時 update（不 re-render preview，保留 focus / cursor）
@@ -780,7 +831,20 @@
         var newText = { type: 'text', text: '點此編輯', size: 'md', color: '#1f2937', wrap: true };
         var insertIdx = action === 'add-above' ? idx : idx + 1;
         ref.splice(insertIdx, 0, newText);
-      } else if (action === 'delete') {
+      } else if (action === 'add-box') {
+        var newBox = {
+          type: 'box',
+          layout: 'vertical',
+          backgroundColor: '#FFF7D6',
+          paddingAll: 'md',
+          cornerRadius: '8px',
+          margin: 'md',
+          contents: [
+            { type: 'text', text: '點此編輯區塊文字', size: 'md', color: '#1f2937', wrap: true }
+          ]
+        };
+        ref.splice(idx + 1, 0, newBox);
+      } else if (action === 'delete-row') {
         if (ref.length <= 1) {
           alert('這個 box 只有一列，不可刪除（會破壞 LINE Flex 規範）。');
           return;
@@ -1028,6 +1092,51 @@
   // ------------------------------------------------------------------
   // 9b. 訊息模板庫
   // ------------------------------------------------------------------
+  // 內建「空白訊息」卡（不入 DB），讓同事從零開始
+  var BLANK_TEMPLATE_CONFIG = {
+    mode: 'flex_json',
+    flex: {
+      type: 'flex',
+      altText: '新訊息',
+      contents: {
+        type: 'bubble',
+        size: 'mega',
+        body: {
+          type: 'box',
+          layout: 'vertical',
+          paddingAll: 'xl',
+          spacing: 'md',
+          contents: [
+            { type: 'text', text: '點此編輯標題', size: 'xl', weight: 'bold', color: '#1f2937', wrap: true },
+            { type: 'text', text: '點此編輯內文，按下「＋區塊」可加上有底色的區塊。', size: 'md', color: '#374151', wrap: true }
+          ]
+        }
+      }
+    }
+  };
+
+  function renderBlankCard(grid) {
+    var card = document.createElement('div');
+    card.className = 'template-card template-card-blank';
+    card.setAttribute('data-blank', '1');
+    card.innerHTML =
+      '<div class="template-card-name">＋ 空白訊息</div>' +
+      '<div class="template-card-desc">從零開始：自由新增文字、區塊與背景色</div>';
+    card.addEventListener('click', function () {
+      var sel = $('template-select');
+      if (sel) sel.value = '';
+      var delBtn = $('btn-delete-template');
+      if (delBtn) delBtn.hidden = true;
+      applyMessageConfigToForm(BLANK_TEMPLATE_CONFIG);
+      state.messagePreviewed = false;
+      updateSendButton();
+      saveDraft();
+      $$('.template-card', grid).forEach(function (c) { c.classList.remove('active'); });
+      card.classList.add('active');
+    });
+    return card;
+  }
+
   function loadMessageTemplates() {
     var sel = $('template-select');
     var grid = $('template-grid');
@@ -1035,40 +1144,43 @@
       .then(function (r) { return r.json(); })
       .then(function (data) {
         if (!data.ok) {
-          grid.innerHTML = '<div class="muted" style="font-size:12px;">載入失敗</div>';
+          grid.innerHTML = '';
+          grid.appendChild(renderBlankCard(grid));
+          var err = document.createElement('div');
+          err.className = 'muted';
+          err.style.fontSize = '12px';
+          err.textContent = '其他模板載入失敗';
+          grid.appendChild(err);
           return;
         }
         var list = data.templates || [];
-        if (list.length === 0) {
-          grid.innerHTML = '<div class="muted" style="font-size:12px;">尚無模板。點右上「儲存目前為新模板」可建立第一個。</div>';
-          sel.innerHTML = '<option value="">—</option>';
-          return;
-        }
         // 隱藏 dropdown 同步給 internal logic 用
         sel.innerHTML = '<option value="">—</option>' +
           list.map(function (t) {
             return '<option value="' + t.id + '">' + escapeHtml(t.name) + '</option>';
           }).join('');
-        // 顯示 card grid
-        grid.innerHTML = list.map(function (t) {
-          return '<div class="template-card" data-id="' + t.id + '">' +
+        // 顯示 card grid（空白卡永遠第一個）
+        grid.innerHTML = '';
+        grid.appendChild(renderBlankCard(grid));
+        list.forEach(function (t) {
+          var card = document.createElement('div');
+          card.className = 'template-card';
+          card.setAttribute('data-id', t.id);
+          card.innerHTML =
             '<div class="template-card-name">' + escapeHtml(t.name) + '</div>' +
-            '<div class="template-card-desc">' + escapeHtml(t.description || '') + '</div>' +
-            '</div>';
-        }).join('');
-        $$('.template-card', grid).forEach(function (card) {
+            '<div class="template-card-desc">' + escapeHtml(t.description || '') + '</div>';
           card.addEventListener('click', function () {
-            var id = card.getAttribute('data-id');
-            sel.value = id;
+            sel.value = t.id;
             sel.dispatchEvent(new Event('change'));
-            // mark active
             $$('.template-card', grid).forEach(function (c) { c.classList.remove('active'); });
             card.classList.add('active');
           });
+          grid.appendChild(card);
         });
       })
       .catch(function () {
-        grid.innerHTML = '<div class="muted" style="font-size:12px;">載入失敗</div>';
+        grid.innerHTML = '';
+        grid.appendChild(renderBlankCard(grid));
       });
   }
 
