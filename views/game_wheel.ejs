@@ -3,97 +3,208 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, viewport-fit=cover" />
-  <meta name="theme-color" content="#FFFFFF" />
+  <meta name="theme-color" content="#FBF6E9" />
   <title><%= title %></title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Noto+Serif+TC:wght@500;700;900&family=Inter:wght@400;500;700&display=swap" rel="stylesheet" />
   <script src="https://static.line-scdn.net/liff/edge/2/sdk.js"></script>
   <style>
     :root {
+      --paper:     #FBF6E9;
+      --paper-2:   #F4EDDB;
       --or-yellow: #FCC726;
-      --or-red:    #E81E25;
-      --ink:       #0A0A0A;
-      --ink-2:     #595959;
-      --ink-3:     #B3B3B3;
-      --line:      #0A0A0A;
-      --bg:        #FFFFFF;
+      --or-red:    #DC2127;
+      --or-red-2:  #A8161B;
+      --ink:       #1A1410;
+      --ink-2:     #5C544A;
+      --ink-3:     #A39B8E;
+      --line:      #1A1410;
     }
     * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
-    html, body { margin: 0; padding: 0; background: var(--bg); }
+    html, body { margin: 0; padding: 0; }
     body {
-      font-family: -apple-system, BlinkMacSystemFont, "PingFang TC", "Microsoft JhengHei", sans-serif;
+      background: var(--paper);
       color: var(--ink);
       min-height: 100vh;
+      font-family: "Inter", -apple-system, BlinkMacSystemFont, "PingFang TC", sans-serif;
       letter-spacing: -0.005em;
+      position: relative;
+    }
+    /* 紙感 noise texture */
+    body::before {
+      content: '';
+      position: fixed;
+      inset: 0;
+      z-index: -1;
+      pointer-events: none;
+      background:
+        radial-gradient(circle at 20% 10%, rgba(220, 33, 39, 0.04), transparent 40%),
+        radial-gradient(circle at 80% 90%, rgba(252, 199, 38, 0.08), transparent 50%);
+    }
+    body::after {
+      content: '';
+      position: fixed;
+      inset: 0;
+      z-index: -1;
+      pointer-events: none;
+      opacity: 0.4;
+      background-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='160' height='160'><filter id='n'><feTurbulence type='fractalNoise' baseFrequency='0.85' numOctaves='2' stitchTiles='stitch'/><feColorMatrix values='0 0 0 0 0.1 0 0 0 0 0.08 0 0 0 0 0.06 0 0 0 0.5 0'/></filter><rect width='100%25' height='100%25' filter='url(%23n)'/></svg>");
     }
 
-    .page {
+    .frame {
       max-width: 480px;
       margin: 0 auto;
-      padding: 28px 24px 48px;
+      padding: 32px 20px 56px;
+      position: relative;
     }
+    /* 4 角裝飾 — 像舊海報的折角線 */
+    .frame::before, .frame::after,
+    .frame > .corner-tl, .frame > .corner-tr {
+      content: '';
+      position: absolute;
+      width: 20px;
+      height: 20px;
+      border: 2px solid var(--ink);
+    }
+    .frame::before { top: 12px; left: 12px; border-right: none; border-bottom: none; }
+    .frame::after  { bottom: 12px; right: 12px; border-left: none; border-top: none; }
+    .frame > .corner-tr { top: 12px; right: 12px; border-left: none; border-bottom: none; }
+    .frame > .corner-bl { position: absolute; bottom: 12px; left: 12px; width: 20px; height: 20px; border: 2px solid var(--ink); border-right: none; border-top: none; }
 
-    /* ----- Header（編輯設計風：左對齊大字 + 細線分隔） ----- */
-    .head {
-      padding-bottom: 20px;
-      border-bottom: 1px solid var(--line);
-      margin-bottom: 32px;
-    }
-    .head .meta {
+    /* ----- Header ----- */
+    .brand-bar {
       display: flex;
+      align-items: center;
       justify-content: space-between;
-      align-items: baseline;
-      font-size: 11px;
-      letter-spacing: 0.14em;
-      text-transform: uppercase;
+      margin-bottom: 18px;
+    }
+    .brand-bar .left {
+      font-family: "Inter", sans-serif;
+      font-size: 10px;
+      font-weight: 700;
+      letter-spacing: 0.32em;
       color: var(--ink-2);
-      margin-bottom: 14px;
+    }
+    .brand-bar .right {
+      font-family: "Inter", sans-serif;
+      font-size: 10px;
+      letter-spacing: 0.18em;
+      color: var(--ink-3);
       font-weight: 500;
     }
-    .head .meta .no { font-variant-numeric: tabular-nums; }
-    .head h1 {
-      margin: 0 0 8px;
-      font-size: 36px;
-      font-weight: 800;
-      letter-spacing: -0.04em;
-      line-height: 1.05;
+
+    .divider-wave {
+      display: block;
+      width: 100%;
+      height: 10px;
+      margin: 14px 0 20px;
     }
-    .head p {
+
+    .title-block {
+      text-align: center;
+      margin-bottom: 24px;
+    }
+    .title-eng {
+      font-family: "Inter", sans-serif;
+      font-size: 11px;
+      letter-spacing: 0.5em;
+      font-weight: 500;
+      color: var(--or-red);
+      margin-bottom: 10px;
+      padding-left: 0.5em;  /* compensate letter-spacing */
+    }
+    .title-zh {
+      font-family: "Noto Serif TC", serif;
+      font-weight: 900;
+      font-size: 34px;
+      letter-spacing: 0.04em;
+      line-height: 1.15;
+      color: var(--ink);
       margin: 0;
-      font-size: 14px;
-      line-height: 1.55;
-      color: var(--ink-2);
-      max-width: 28em;
     }
-    .head .cover {
+    .title-zh .accent {
+      color: var(--or-red);
+      position: relative;
+    }
+    .desc {
+      font-family: "Noto Serif TC", serif;
+      font-weight: 500;
+      margin: 14px auto 0;
+      max-width: 22em;
+      color: var(--ink-2);
+      font-size: 14px;
+      line-height: 1.7;
+    }
+    .cover {
       width: 100%;
       max-width: 320px;
       aspect-ratio: 16 / 9;
       object-fit: cover;
       display: block;
-      margin-top: 16px;
+      margin: 18px auto 0;
+      border: 2px solid var(--ink);
     }
 
-    /* ----- Stage ----- */
-    .stage-outer {
+    /* ----- 印章 badge ----- */
+    .seal {
+      position: absolute;
+      top: 100px;
+      right: 28px;
+      width: 56px;
+      height: 56px;
+      border-radius: 50%;
+      background: var(--or-red);
+      color: #fff;
       display: flex;
+      flex-direction: column;
+      align-items: center;
       justify-content: center;
-      padding: 12px 0 8px;
+      font-family: "Noto Serif TC", serif;
+      font-weight: 900;
+      transform: rotate(8deg);
+      box-shadow: 0 1px 0 var(--or-red-2);
     }
+    .seal .seal-top { font-size: 10px; letter-spacing: 0.2em; margin-bottom: 1px; }
+    .seal .seal-main { font-size: 19px; letter-spacing: 0.05em; line-height: 1; }
+
+    /* ----- Stage ----- */
+    .stage-shell {
+      position: relative;
+      padding: 24px 0 12px;
+      margin: 8px 0 0;
+    }
+    /* 兩側垂直書寫小標 */
+    .side-label {
+      position: absolute;
+      top: 50%;
+      transform: translateY(-50%);
+      writing-mode: vertical-rl;
+      font-family: "Inter", sans-serif;
+      font-size: 10px;
+      letter-spacing: 0.4em;
+      color: var(--ink-3);
+      font-weight: 700;
+    }
+    .side-label.left { left: 0; }
+    .side-label.right { right: 0; }
+
     .stage {
       position: relative;
-      width: min(82vw, 320px);
+      width: min(78vw, 300px);
       aspect-ratio: 1;
+      margin: 0 auto;
     }
-    /* 指針：純黑小三角，最低限度的形狀 */
     .pointer {
       position: absolute;
-      top: -8px;
+      top: -10px;
       left: 50%;
       transform: translateX(-50%);
       width: 0;
       height: 0;
-      border-left: 9px solid transparent;
-      border-right: 9px solid transparent;
-      border-top: 18px solid var(--ink);
+      border-left: 10px solid transparent;
+      border-right: 10px solid transparent;
+      border-top: 22px solid var(--ink);
       z-index: 5;
     }
     .canvas-wrap {
@@ -109,7 +220,7 @@
       display: block;
       transition: transform 5.6s cubic-bezier(0.16, 0.74, 0.24, 1);
     }
-    /* 中央按鈕：純黑圓鈕、白字。按下 invert */
+    /* 中央按鈕：紅色印章感 */
     .center {
       position: absolute;
       top: 50%; left: 50%;
@@ -122,103 +233,127 @@
       width: 100%;
       height: 100%;
       border-radius: 50%;
-      border: none;
-      background: var(--ink);
-      color: var(--bg);
-      font-family: inherit;
-      font-weight: 700;
-      font-size: 15px;
-      letter-spacing: 0.12em;
+      border: 2px solid var(--ink);
+      background: var(--or-red);
+      color: #fff;
+      font-family: "Noto Serif TC", serif;
+      font-weight: 900;
+      font-size: 22px;
+      letter-spacing: 0.18em;
       cursor: pointer;
       transition: transform 0.15s cubic-bezier(0.34, 1.56, 0.64, 1);
+      padding-left: 0.2em;
+      line-height: 1;
     }
-    .spin-btn:active:not(:disabled) {
-      transform: scale(0.92);
-    }
+    .spin-btn:active:not(:disabled) { transform: scale(0.92); }
     .spin-btn:disabled {
-      cursor: default;
       background: var(--ink-3);
+      cursor: default;
     }
 
-    /* ----- Status line：印刷感 ----- */
-    .status {
-      margin: 28px 0 0;
+    /* ----- 按下中央 prompt ----- */
+    .prompt {
       text-align: center;
+      margin: 22px 0 0;
+      font-family: "Noto Serif TC", serif;
       font-size: 13px;
+      letter-spacing: 0.4em;
       color: var(--ink-2);
+      padding-left: 0.4em;
       min-height: 18px;
-      font-variant-numeric: tabular-nums;
     }
-    .status strong { color: var(--ink); font-weight: 600; }
+    .prompt .hand {
+      display: inline-block;
+      margin: 0 6px;
+      transform: translateY(1px);
+    }
 
-    /* ----- Prize list：純粹清單，黑線分隔 ----- */
-    .prize-section {
-      margin-top: 48px;
-      padding-top: 20px;
-      border-top: 1px solid var(--line);
+    /* ----- 獎項清單 ----- */
+    .prizes {
+      margin-top: 40px;
     }
-    .prize-section .label {
+    .prizes-head {
       display: flex;
-      justify-content: space-between;
-      align-items: baseline;
-      font-size: 11px;
-      letter-spacing: 0.14em;
-      text-transform: uppercase;
-      color: var(--ink-2);
-      margin-bottom: 16px;
-      font-weight: 500;
+      align-items: center;
+      justify-content: center;
+      gap: 14px;
+      margin-bottom: 18px;
     }
-    .prize-list { list-style: none; margin: 0; padding: 0; }
+    .prizes-head .dash {
+      flex: 0 0 24px;
+      height: 1px;
+      background: var(--line);
+    }
+    .prizes-head .label {
+      font-family: "Noto Serif TC", serif;
+      font-size: 15px;
+      font-weight: 700;
+      letter-spacing: 0.5em;
+      color: var(--ink);
+      padding-left: 0.5em;
+    }
+    .prize-list {
+      list-style: none;
+      margin: 0;
+      padding: 0;
+      border-top: 2px solid var(--line);
+      border-bottom: 2px solid var(--line);
+    }
     .prize-row {
-      display: flex;
-      justify-content: space-between;
+      display: grid;
+      grid-template-columns: 32px 1fr auto;
       align-items: baseline;
-      padding: 14px 0;
-      border-bottom: 1px solid #E8E8E8;
-      gap: 12px;
+      gap: 14px;
+      padding: 14px 4px;
+      border-bottom: 1px dashed rgba(26,20,16,0.2);
     }
     .prize-row:last-child { border-bottom: none; }
-    .prize-left { display: flex; align-items: baseline; gap: 12px; flex: 1; min-width: 0; }
     .prize-num {
-      font-size: 11px;
-      color: var(--ink-3);
-      font-variant-numeric: tabular-nums;
-      flex-shrink: 0;
-      min-width: 18px;
+      font-family: "Noto Serif TC", serif;
+      font-size: 22px;
+      font-weight: 900;
+      color: var(--or-red);
+      line-height: 1;
     }
+    .prize-row.grand .prize-num { font-size: 26px; }
+    .prize-info { min-width: 0; }
     .prize-name {
-      font-size: 15px;
-      font-weight: 600;
+      font-family: "Noto Serif TC", serif;
+      font-size: 17px;
+      font-weight: 700;
       color: var(--ink);
+      letter-spacing: 0.02em;
       line-height: 1.3;
     }
-    .prize-row.grand .prize-name { color: var(--or-red); }
     .prize-tag {
+      font-family: "Inter", sans-serif;
       font-size: 12px;
       color: var(--ink-2);
-      margin-top: 2px;
+      margin-top: 3px;
+      letter-spacing: 0;
     }
     .prize-mark {
-      flex-shrink: 0;
+      font-family: "Noto Serif TC", serif;
       font-size: 11px;
-      letter-spacing: 0.1em;
-      text-transform: uppercase;
-      color: var(--or-red);
+      letter-spacing: 0.25em;
+      color: #fff;
       font-weight: 700;
+      background: var(--or-red);
+      padding: 3px 9px 3px 10px;
+      align-self: center;
     }
 
     /* ----- Footer ----- */
     .foot {
-      margin-top: 40px;
-      padding-top: 16px;
-      border-top: 1px solid #E8E8E8;
+      margin-top: 32px;
       text-align: center;
+      font-family: "Inter", sans-serif;
       font-size: 11px;
+      letter-spacing: 0.18em;
       color: var(--ink-3);
-      letter-spacing: 0.05em;
     }
 
-    /* ----- Result modal：iOS sheet 但極簡 ----- */
+    /* ----- Modal ----- */
     .modal {
       position: fixed;
       inset: 0;
@@ -226,7 +361,7 @@
       pointer-events: none;
       opacity: 0;
       transition: opacity 0.3s ease;
-      background: rgba(10, 10, 10, 0.55);
+      background: rgba(26, 20, 16, 0.6);
       display: flex;
       align-items: flex-end;
       justify-content: center;
@@ -235,45 +370,50 @@
     .sheet {
       width: 100%;
       max-width: 480px;
-      background: var(--bg);
-      border-radius: 24px 24px 0 0;
-      padding: 20px 28px 32px;
-      padding-bottom: max(32px, env(safe-area-inset-bottom));
+      background: var(--paper);
+      border-top: 3px solid var(--ink);
+      padding: 24px 28px 36px;
+      padding-bottom: max(36px, env(safe-area-inset-bottom));
       transform: translateY(100%);
       transition: transform 0.5s cubic-bezier(0.32, 0.72, 0, 1);
+      position: relative;
     }
     .modal.open .sheet { transform: translateY(0); }
-    .handle {
-      width: 36px; height: 4px;
-      border-radius: 999px;
-      background: #D9D9D9;
-      margin: 0 auto 26px;
+    .sheet::before, .sheet::after {
+      content: '';
+      position: absolute;
+      top: 12px;
+      width: 16px;
+      height: 16px;
+      border: 2px solid var(--ink);
     }
+    .sheet::before { left: 12px; border-right: none; border-bottom: none; }
+    .sheet::after { right: 12px; border-left: none; border-bottom: none; }
     .modal-eyebrow {
       text-align: center;
-      font-size: 11px;
-      letter-spacing: 0.18em;
-      text-transform: uppercase;
-      color: var(--ink-2);
-      margin-bottom: 12px;
-      font-weight: 500;
+      font-family: "Inter", sans-serif;
+      font-size: 10px;
+      letter-spacing: 0.45em;
+      color: var(--or-red);
+      font-weight: 700;
+      margin-bottom: 4px;
+      padding-left: 0.5em;
     }
-    .modal-prize {
+    .modal-zh-tag {
       text-align: center;
-      font-size: 36px;
-      font-weight: 800;
-      letter-spacing: -0.035em;
-      color: var(--ink);
-      margin-bottom: 12px;
-      line-height: 1.1;
+      font-family: "Noto Serif TC", serif;
+      font-size: 14px;
+      letter-spacing: 0.4em;
+      color: var(--ink-2);
+      margin-bottom: 18px;
+      padding-left: 0.4em;
     }
-    .modal.grand .modal-prize { color: var(--or-red); }
     .modal-img-wrap {
-      width: 80px;
-      height: 80px;
-      margin: 0 auto 18px;
+      width: 88px; height: 88px;
+      margin: 0 auto 16px;
       border-radius: 50%;
       background: var(--or-yellow);
+      border: 2px solid var(--ink);
       display: flex;
       align-items: center;
       justify-content: center;
@@ -282,88 +422,121 @@
     .modal.grand .modal-img-wrap { background: var(--or-red); }
     .modal-img-wrap img { width: 100%; height: 100%; object-fit: cover; }
     .modal-img-wrap .glyph {
-      font-size: 32px;
+      font-family: "Noto Serif TC", serif;
+      font-size: 34px;
+      font-weight: 900;
       color: var(--ink);
-      font-weight: 700;
     }
-    .modal.grand .modal-img-wrap .glyph { color: #FFFFFF; }
+    .modal.grand .modal-img-wrap .glyph { color: #fff; }
+    .modal-prize {
+      text-align: center;
+      font-family: "Noto Serif TC", serif;
+      font-size: 32px;
+      font-weight: 900;
+      letter-spacing: 0.02em;
+      color: var(--ink);
+      margin-bottom: 6px;
+      line-height: 1.15;
+    }
+    .modal.grand .modal-prize { color: var(--or-red); }
     .modal-desc {
       text-align: center;
       color: var(--ink-2);
+      font-family: "Noto Serif TC", serif;
       font-size: 14px;
-      line-height: 1.6;
-      margin-bottom: 28px;
+      line-height: 1.7;
+      margin-bottom: 24px;
     }
     .modal-btn {
       display: block;
       width: 100%;
       padding: 16px;
       background: var(--ink);
-      color: var(--bg);
+      color: var(--paper);
       border: none;
       border-radius: 0;
+      font-family: "Noto Serif TC", serif;
       font-size: 15px;
       font-weight: 700;
-      font-family: inherit;
-      letter-spacing: 0.08em;
-      text-transform: uppercase;
+      letter-spacing: 0.6em;
       cursor: pointer;
+      padding-left: 0.6em;
       transition: transform 0.15s cubic-bezier(0.34, 1.56, 0.64, 1);
     }
     .modal-btn:active { transform: scale(0.98); }
   </style>
 </head>
 <body>
-  <div class="page">
+  <div class="frame">
+    <span class="corner-tr"></span>
+    <span class="corner-bl"></span>
 
-    <header class="head">
-      <div class="meta">
-        <span>OpenRice · 抽獎</span>
-        <span class="no" id="head-no">№ <%= activity.id %></span>
-      </div>
-      <h1><%= activity.name %></h1>
+    <div class="brand-bar">
+      <div class="left">OPENRICE</div>
+      <div class="right">No.<%= activity.id %></div>
+    </div>
+
+    <!-- 雙波浪線分隔 -->
+    <svg class="divider-wave" viewBox="0 0 400 10" preserveAspectRatio="none">
+      <path d="M0,3 Q20,0 40,3 T80,3 T120,3 T160,3 T200,3 T240,3 T280,3 T320,3 T360,3 T400,3" stroke="#1A1410" stroke-width="1" fill="none"/>
+      <path d="M0,7 Q20,4 40,7 T80,7 T120,7 T160,7 T200,7 T240,7 T280,7 T320,7 T360,7 T400,7" stroke="#1A1410" stroke-width="1" fill="none"/>
+    </svg>
+
+    <div class="title-block">
+      <div class="title-eng">LUCKY DRAW</div>
+      <h1 class="title-zh"><%= activity.name %></h1>
       <% if (activity.description) { %>
-        <p><%= activity.description %></p>
+        <p class="desc"><%= activity.description %></p>
       <% } %>
       <% if (activity.cover_image_url) { %>
         <img class="cover" src="<%= activity.cover_image_url %>" alt="" />
       <% } %>
-    </header>
+    </div>
 
-    <div class="stage-outer">
+    <!-- 紅色印章 -->
+    <div class="seal" aria-hidden="true">
+      <div class="seal-top">福</div>
+      <div class="seal-main">抽獎</div>
+    </div>
+
+    <div class="stage-shell">
+      <span class="side-label left">FORTUNE</span>
+      <span class="side-label right">福運臨門</span>
       <div class="stage">
         <div class="pointer"></div>
         <div class="canvas-wrap">
           <canvas id="wheel" width="720" height="720"></canvas>
         </div>
         <div class="center">
-          <button type="button" id="spin-btn" class="spin-btn">SPIN</button>
+          <button type="button" id="spin-btn" class="spin-btn">抽</button>
         </div>
       </div>
     </div>
 
-    <p class="status" id="status">準備中</p>
+    <p class="prompt" id="status">準備中</p>
 
     <% if (prizes && prizes.length > 0) { %>
-    <section class="prize-section">
-      <div class="label">
-        <span>獎項</span>
-        <span><%= prizes.length %> 項</span>
+    <section class="prizes">
+      <div class="prizes-head">
+        <span class="dash"></span>
+        <span class="label">獎項</span>
+        <span class="dash"></span>
       </div>
       <ul class="prize-list">
-        <% prizes.forEach(function (p, i) { %>
+        <% var cnChars = ['壹','貳','參','肆','伍','陸','柒','捌','玖','拾'];
+           prizes.forEach(function (p, i) { %>
           <li class="prize-row <%= p.is_grand_prize ? 'grand' : '' %>">
-            <div class="prize-left">
-              <span class="prize-num"><%= String(i + 1).padStart(2, '0') %></span>
-              <div>
-                <div class="prize-name"><%= p.name %></div>
-                <% if (p.description) { %>
-                  <div class="prize-tag"><%= p.description %></div>
-                <% } %>
-              </div>
+            <span class="prize-num"><%= cnChars[i] || (i + 1) %></span>
+            <div class="prize-info">
+              <div class="prize-name"><%= p.name %></div>
+              <% if (p.description) { %>
+                <div class="prize-tag"><%= p.description %></div>
+              <% } %>
             </div>
             <% if (p.is_grand_prize) { %>
               <span class="prize-mark">頭獎</span>
+            <% } else { %>
+              <span></span>
             <% } %>
           </li>
         <% }); %>
@@ -372,7 +545,7 @@
     <% } %>
 
     <% if (activity.daily_plays_per_user != null) { %>
-      <p class="foot">每人每天可抽 <%= activity.daily_plays_per_user %> 次</p>
+      <p class="foot">每 日 限 <%= activity.daily_plays_per_user %> 次</p>
     <% } %>
 
   </div>
@@ -380,15 +553,15 @@
   <!-- Result -->
   <div id="modal" class="modal" aria-hidden="true">
     <div class="sheet">
-      <div class="handle"></div>
-      <div class="modal-eyebrow">抽中</div>
+      <div class="modal-eyebrow">CONGRATULATIONS</div>
+      <div class="modal-zh-tag">恭 喜 抽 中</div>
       <div class="modal-img-wrap" id="modal-img-wrap">
         <img id="modal-img" alt="" hidden />
-        <span class="glyph" id="modal-glyph">★</span>
+        <span class="glyph" id="modal-glyph">福</span>
       </div>
       <div class="modal-prize" id="modal-prize">—</div>
       <div class="modal-desc" id="modal-desc"></div>
-      <button type="button" class="modal-btn" id="modal-close">完成</button>
+      <button type="button" class="modal-btn" id="modal-close">收 下</button>
     </div>
   </div>
 
@@ -410,19 +583,19 @@
       var liffReady = false;
 
       // ===========================================================
-      // 畫輪盤 — 純色 + 黑線、無漸層、無 shadow、無 LED 點點
+      // 畫輪盤 — 紙感、純色、黑線分隔；扇形交替 黃 / 白 / 紅(大獎)
       // ===========================================================
       function drawWheel() {
         var W = canvas.width;
         var H = canvas.height;
         var cx = W / 2, cy = H / 2;
-        var R = W / 2 - 2;
+        var R = W / 2 - 4;
         var n = prizes.length;
         var anglePer = (Math.PI * 2) / n;
 
         ctx.clearRect(0, 0, W, H);
 
-        // 1) 扇形 — 純色：白 / 黃 / 紅(大獎)
+        // 扇形填色
         prizes.forEach(function (p, i) {
           var start = i * anglePer - Math.PI / 2;
           var end = start + anglePer;
@@ -430,35 +603,34 @@
           ctx.moveTo(cx, cy);
           ctx.arc(cx, cy, R, start, end);
           ctx.closePath();
-
-          if (p.is_grand_prize) ctx.fillStyle = '#E81E25';
-          else ctx.fillStyle = (i % 2 === 0) ? '#FFFFFF' : '#FCC726';
+          if (p.is_grand_prize) ctx.fillStyle = '#DC2127';
+          else ctx.fillStyle = (i % 2 === 0) ? '#FBF6E9' : '#FCC726';
           ctx.fill();
         });
 
-        // 2) 扇形之間的黑線分隔（編輯設計感）
+        // 扇形分隔線（粗黑）
         prizes.forEach(function (p, i) {
           var angle = i * anglePer - Math.PI / 2;
           ctx.beginPath();
           ctx.moveTo(cx, cy);
           ctx.lineTo(cx + Math.cos(angle) * R, cy + Math.sin(angle) * R);
-          ctx.lineWidth = 2;
-          ctx.strokeStyle = '#0A0A0A';
+          ctx.lineWidth = 2.5;
+          ctx.strokeStyle = '#1A1410';
           ctx.stroke();
         });
 
-        // 3) 外圈黑線
+        // 外圈黑線
         ctx.beginPath();
         ctx.arc(cx, cy, R, 0, Math.PI * 2);
-        ctx.lineWidth = 3;
-        ctx.strokeStyle = '#0A0A0A';
+        ctx.lineWidth = 4;
+        ctx.strokeStyle = '#1A1410';
         ctx.stroke();
 
-        // 4) 文字 — 粗黑體、水平擺放
+        // 文字（粗 serif 中文）
         prizes.forEach(function (p, i) {
           var start = i * anglePer - Math.PI / 2;
           var midAngle = start + anglePer / 2;
-          var textRadius = R * 0.65;
+          var textRadius = R * 0.62;
 
           ctx.save();
           ctx.translate(cx, cy);
@@ -468,11 +640,11 @@
 
           ctx.textAlign = 'center';
           ctx.textBaseline = 'middle';
-          ctx.fillStyle = p.is_grand_prize ? '#FFFFFF' : '#0A0A0A';
-          ctx.font = '800 22px -apple-system, "SF Pro Display", "PingFang TC", sans-serif';
+          ctx.fillStyle = p.is_grand_prize ? '#FFFFFF' : '#1A1410';
+          ctx.font = '900 22px "Noto Serif TC", serif';
 
           var label = String(p.name || '');
-          if (label.length > 8) label = label.slice(0, 8) + '…';
+          if (label.length > 7) label = label.slice(0, 7) + '…';
           ctx.fillText(label, 0, 0);
           ctx.restore();
         });
@@ -489,20 +661,12 @@
         if (qs.get('preview') === '1') {
           profile = { userId: 'PREVIEW', displayName: '預覽' };
           spinBtn.disabled = true;
-          spinBtn.textContent = '預覽';
           return;
         }
-        if (!liffId) {
-          throw new Error('LIFF ID 未設定');
-        }
-        try {
-          await liff.init({ liffId: liffId });
-        } catch (e) {
-          throw new Error('LIFF 初始化失敗');
-        }
-        if (!liff.isInClient()) {
-          throw new Error('請在 LINE App 內打開');
-        }
+        if (!liffId) throw new Error('LIFF ID 未設定');
+        try { await liff.init({ liffId: liffId }); }
+        catch (e) { throw new Error('LIFF 初始化失敗'); }
+        if (!liff.isInClient()) throw new Error('請在 LINE App 內打開');
         if (!liff.isLoggedIn()) {
           liff.login();
           return new Promise(function () {});
@@ -528,13 +692,10 @@
       // ----- spin -----
       async function spin() {
         if (spinning) return;
-        if (!liffReady || !profile) {
-          statusEl.textContent = '稍等';
-          return;
-        }
+        if (!liffReady || !profile) { statusEl.textContent = '請 稍 等'; return; }
         spinning = true;
         spinBtn.disabled = true;
-        statusEl.textContent = '抽選中';
+        statusEl.textContent = '抽 選 中';
 
         try {
           var resp = await fetch('/api/games/wheel/' + encodeURIComponent(slug) + '/spin', {
@@ -575,7 +736,7 @@
         } else {
           imgEl.hidden = true;
           glyphEl.style.display = 'block';
-          glyphEl.textContent = prize.is_grand_prize ? '★' : '◆';
+          glyphEl.textContent = prize.is_grand_prize ? '中' : '福';
         }
         var descParts = [];
         if (prize.prize_value) {
@@ -584,7 +745,7 @@
           if (prize.prize_value.label) descParts.push(prize.prize_value.label);
           if (prize.prize_value.note) descParts.push(prize.prize_value.note);
         }
-        document.getElementById('modal-desc').textContent = descParts.join('  ／  ');
+        document.getElementById('modal-desc').textContent = descParts.join(' ｜ ');
         if (prize.is_grand_prize) modal.classList.add('grand');
         else modal.classList.remove('grand');
         requestAnimationFrame(function () { modal.classList.add('open'); });
@@ -603,11 +764,10 @@
       if (prizes.length < 2) {
         statusEl.textContent = '獎品不足';
         spinBtn.disabled = true;
-        spinBtn.textContent = '—';
       } else {
         drawWheel();
         spinBtn.disabled = true;
-        statusEl.textContent = '驗證身分';
+        statusEl.textContent = '驗 證 身 分';
       }
 
       (async function () {
@@ -616,9 +776,9 @@
           await initLiff();
           liffReady = true;
           spinBtn.disabled = false;
-          statusEl.innerHTML = '哈囉 <strong>' + (profile.displayName || '') + '</strong>　|　按下中央按鈕';
+          statusEl.textContent = '按 下 中 央 開 始';
         } catch (e) {
-          statusEl.textContent = e.message || '初始化失敗';
+          statusEl.textContent = e.message || '初 始 化 失 敗';
         }
       })();
     })();
