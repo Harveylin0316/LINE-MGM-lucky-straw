@@ -92,12 +92,51 @@ function registerGamesWheelRoutes(app, deps) {
   .arrow{flex-shrink:0;color:#9ca3af;font-size:24px;line-height:1;}
   .empty{padding:32px 20px;text-align:center;color:#6b7280;background:#fff;border-radius:14px;
     box-shadow:0 2px 8px rgba(0,0,0,0.05);}
+  /* LIFF dispatcher overlay：偵測到 liff.state 時用，避免 user 看到 landing 一閃 */
+  #dispatch{position:fixed;inset:0;background:linear-gradient(180deg,#fffbeb,#fef3c7);
+    display:flex;flex-direction:column;align-items:center;justify-content:center;
+    gap:12px;z-index:1000;}
+  .spinner{width:36px;height:36px;border:3px solid #fde68a;border-top-color:#FCC726;
+    border-radius:50%;animation:spin 0.8s linear infinite;}
+  @keyframes spin{to{transform:rotate(360deg);}}
 </style></head><body>
-<div class="wrap">
+<!-- LIFF dispatcher 過渡畫面，預設顯示；如果不是 LIFF flow 會立刻 hide -->
+<div id="dispatch">
+  <div class="spinner"></div>
+  <div style="color:#6b7280;font-size:13px;">載入中…</div>
+</div>
+<div class="wrap" style="display:none;" id="wrap">
   <h1>OpenRice LINE 活動</h1>
   <p class="sub">選一個來玩吧</p>
   ${cardsHtml}
 </div>
+<script>
+(function () {
+  // LIFF dispatcher：若 URL 帶 ?liff.state=%2Fwheel%2Fxxx，解析後跳去對應路徑
+  // 這是 LINE 在 LIFF 短網址有子路徑時的標準行為（不直接 redirect 帶 path，而是塞在 liff.state）
+  var params = new URLSearchParams(location.search);
+  var liffState = params.get('liff.state');
+  if (liffState) {
+    try {
+      var decoded = decodeURIComponent(liffState);
+      // liff.state 通常是 /wheel/xxx 或 /wheel/xxx?key=val 格式
+      // 補上 /games prefix 變 /games/wheel/xxx
+      var target = '/games' + (decoded.startsWith('/') ? decoded : '/' + decoded);
+      // 保留原本 URL 上其他 query params（除了 liff.state 本身）
+      params.delete('liff.state');
+      var rest = params.toString();
+      if (rest) target += (target.includes('?') ? '&' : '?') + rest;
+      location.replace(target);
+      return;
+    } catch (e) {
+      console.error('LIFF dispatch decode failed:', e);
+    }
+  }
+  // 沒 liff.state → 不是 LIFF flow → 顯示 landing 列表
+  document.getElementById('dispatch').style.display = 'none';
+  document.getElementById('wrap').style.display = 'block';
+})();
+</script>
 </body></html>`);
   };
   app.get('/games', gamesLanding);
