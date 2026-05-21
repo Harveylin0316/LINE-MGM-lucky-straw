@@ -37,7 +37,7 @@ function registerAdminLiffAnalyticsRoutes(app, deps) {
   });
 
   // ------------------------------------------------------------------
-  // API 1: 今日即時概覽 — 4 指標
+  // API 1: 今日即時概覽 — 4 指標，每個都拆「次數 / 人」（類 GA session/user）
   // ------------------------------------------------------------------
   app.get('/admin/liff/random-rice/api/overview', requireAdmin, async (_req, res) => {
     try {
@@ -48,37 +48,38 @@ function registerAdminLiffAnalyticsRoutes(app, deps) {
           WHERE created_at >= date_trunc('day', NOW())
         )
         SELECT
-          (SELECT COUNT(DISTINCT line_id) FROM today
-             WHERE event_name = 'app_open' AND line_id IS NOT NULL) AS dau,
-          (SELECT COUNT(*) FROM today
-             WHERE event_name IN ('submit_draw', 'redraw')) AS total_draws,
-          (SELECT COUNT(*) FROM today
-             WHERE event_name = 'restaurant_click') AS restaurant_clicks,
-          (SELECT COUNT(*) FROM today
-             WHERE event_name = 'result_shown') AS result_shown,
-          (SELECT COUNT(*) FROM today
-             WHERE event_name = 'submit_draw') AS submit_draw,
-          (SELECT COUNT(*) FROM today
-             WHERE event_name = 'app_open') AS app_open
+          -- 打開 LIFF（次 = distinct session, 人 = distinct line_id）
+          COUNT(DISTINCT session_id) FILTER (WHERE event_name = 'app_open') AS open_sessions,
+          COUNT(DISTINCT line_id) FILTER (WHERE event_name = 'app_open' AND line_id IS NOT NULL) AS open_users,
+          -- 抽選（submit_draw + redraw 都算）
+          COUNT(*) FILTER (WHERE event_name IN ('submit_draw', 'redraw')) AS draw_events,
+          COUNT(DISTINCT line_id) FILTER (WHERE event_name IN ('submit_draw', 'redraw') AND line_id IS NOT NULL) AS draw_users,
+          -- 點訂位
+          COUNT(*) FILTER (WHERE event_name = 'restaurant_click') AS click_events,
+          COUNT(DISTINCT line_id) FILTER (WHERE event_name = 'restaurant_click' AND line_id IS NOT NULL) AS click_users,
+          -- 看到結果（給轉換率分母用）
+          COUNT(*) FILTER (WHERE event_name = 'result_shown') AS shown_events,
+          COUNT(DISTINCT line_id) FILTER (WHERE event_name = 'result_shown' AND line_id IS NOT NULL) AS shown_users
+        FROM today
       `;
       const { rows } = await query(sql);
       const r = rows[0] || {};
-      const resultShown = Number(r.result_shown || 0);
-      const restaurantClicks = Number(r.restaurant_clicks || 0);
-      const conversionRate = resultShown > 0
-        ? Math.round((restaurantClicks / resultShown) * 10000) / 100
-        : 0;
+      const clickEvents = Number(r.click_events || 0);
+      const clickUsers = Number(r.click_users || 0);
+      const shownEvents = Number(r.shown_events || 0);
+      const shownUsers = Number(r.shown_users || 0);
+      // 轉換率：次數版 = clicks事件 / shown事件； 人版 = 有點過的人 / 有看過的人
+      const convByEvent = shownEvents > 0
+        ? Math.round((clickEvents / shownEvents) * 10000) / 100 : 0;
+      const convByUser = shownUsers > 0
+        ? Math.round((clickUsers / shownUsers) * 10000) / 100 : 0;
       res.json({
         ok: true,
         data: {
-          dau: Number(r.dau || 0),
-          total_draws: Number(r.total_draws || 0),
-          restaurant_clicks: restaurantClicks,
-          conversion_rate_pct: conversionRate,
-          // 細目（給 tooltip 用）
-          app_open: Number(r.app_open || 0),
-          submit_draw: Number(r.submit_draw || 0),
-          result_shown: resultShown
+          open:  { sessions: Number(r.open_sessions || 0), users: Number(r.open_users || 0) },
+          draw:  { events: Number(r.draw_events || 0),    users: Number(r.draw_users || 0) },
+          click: { events: clickEvents,                    users: clickUsers },
+          conv:  { by_event_pct: convByEvent,              by_user_pct: convByUser }
         }
       });
     } catch (err) {

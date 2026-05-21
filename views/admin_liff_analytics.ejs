@@ -23,24 +23,67 @@
       <div class="muted" style="font-size:12px;margin-bottom:12px;">以台灣時區 00:00 為起點計算。</div>
       <div class="liff-kpi-grid">
         <div class="liff-kpi-card">
-          <div class="liff-kpi-label">今日 DAU</div>
-          <div class="liff-kpi-value" id="kpi-dau">—</div>
-          <div class="liff-kpi-hint">distinct line_id（已登入 LIFF）</div>
+          <div class="liff-kpi-title">打開 LIFF</div>
+          <div class="liff-kpi-split">
+            <div class="liff-kpi-half">
+              <div class="liff-kpi-sublabel">次</div>
+              <div class="liff-kpi-value" id="kpi-open-sessions">—</div>
+            </div>
+            <div class="liff-kpi-divider"></div>
+            <div class="liff-kpi-half">
+              <div class="liff-kpi-sublabel">人</div>
+              <div class="liff-kpi-value" id="kpi-open-users">—</div>
+            </div>
+          </div>
+          <div class="liff-kpi-hint">次 = distinct session_id；人 = distinct line_id</div>
         </div>
+
         <div class="liff-kpi-card">
-          <div class="liff-kpi-label">今日總抽次</div>
-          <div class="liff-kpi-value" id="kpi-draws">—</div>
+          <div class="liff-kpi-title">抽選</div>
+          <div class="liff-kpi-split">
+            <div class="liff-kpi-half">
+              <div class="liff-kpi-sublabel">次</div>
+              <div class="liff-kpi-value" id="kpi-draw-events">—</div>
+            </div>
+            <div class="liff-kpi-divider"></div>
+            <div class="liff-kpi-half">
+              <div class="liff-kpi-sublabel">人</div>
+              <div class="liff-kpi-value" id="kpi-draw-users">—</div>
+            </div>
+          </div>
           <div class="liff-kpi-hint">submit_draw + redraw</div>
         </div>
+
         <div class="liff-kpi-card">
-          <div class="liff-kpi-label">點訂位次數</div>
-          <div class="liff-kpi-value" id="kpi-clicks">—</div>
+          <div class="liff-kpi-title">點訂位</div>
+          <div class="liff-kpi-split">
+            <div class="liff-kpi-half">
+              <div class="liff-kpi-sublabel">次</div>
+              <div class="liff-kpi-value" id="kpi-click-events">—</div>
+            </div>
+            <div class="liff-kpi-divider"></div>
+            <div class="liff-kpi-half">
+              <div class="liff-kpi-sublabel">人</div>
+              <div class="liff-kpi-value" id="kpi-click-users">—</div>
+            </div>
+          </div>
           <div class="liff-kpi-hint">restaurant_click（核心轉換）</div>
         </div>
+
         <div class="liff-kpi-card liff-kpi-card--highlight">
-          <div class="liff-kpi-label">抽 → 點訂位 轉換率</div>
-          <div class="liff-kpi-value" id="kpi-conv">—</div>
-          <div class="liff-kpi-hint">clicks / result_shown</div>
+          <div class="liff-kpi-title">抽 → 點訂位 轉換率</div>
+          <div class="liff-kpi-split">
+            <div class="liff-kpi-half">
+              <div class="liff-kpi-sublabel">次</div>
+              <div class="liff-kpi-value" id="kpi-conv-event">—</div>
+            </div>
+            <div class="liff-kpi-divider"></div>
+            <div class="liff-kpi-half">
+              <div class="liff-kpi-sublabel">人</div>
+              <div class="liff-kpi-value" id="kpi-conv-user">—</div>
+            </div>
+          </div>
+          <div class="liff-kpi-hint">次 = clicks/shown 事件數；人 = 有點過的人/有看過結果的人</div>
         </div>
       </div>
     </section>
@@ -113,22 +156,31 @@
       }
 
       // ---------------- 今日即時概覽 ----------------
+      var overviewIds = [
+        'kpi-open-sessions', 'kpi-open-users',
+        'kpi-draw-events',   'kpi-draw-users',
+        'kpi-click-events',  'kpi-click-users',
+        'kpi-conv-event',    'kpi-conv-user'
+      ];
       function loadOverview() {
         return fetch('/admin/liff/random-rice/api/overview')
           .then(function (r) { return r.json(); })
           .then(function (resp) {
             if (!resp.ok) throw new Error(resp.detail || 'overview failed');
             var d = resp.data || {};
-            $('kpi-dau').textContent = fmt(d.dau);
-            $('kpi-draws').textContent = fmt(d.total_draws);
-            $('kpi-clicks').textContent = fmt(d.restaurant_clicks);
-            $('kpi-conv').textContent = fmtPct(d.conversion_rate_pct);
+            var open = d.open || {}, draw = d.draw || {}, click = d.click || {}, conv = d.conv || {};
+            $('kpi-open-sessions').textContent = fmt(open.sessions);
+            $('kpi-open-users').textContent    = fmt(open.users);
+            $('kpi-draw-events').textContent   = fmt(draw.events);
+            $('kpi-draw-users').textContent    = fmt(draw.users);
+            $('kpi-click-events').textContent  = fmt(click.events);
+            $('kpi-click-users').textContent   = fmt(click.users);
+            $('kpi-conv-event').textContent    = fmtPct(conv.by_event_pct);
+            $('kpi-conv-user').textContent     = fmtPct(conv.by_user_pct);
           })
           .catch(function (e) {
             console.error('overview load failed:', e);
-            ['kpi-dau','kpi-draws','kpi-clicks','kpi-conv'].forEach(function (id) {
-              $(id).textContent = '錯誤';
-            });
+            overviewIds.forEach(function (id) { $(id).textContent = '錯誤'; });
           });
       }
 
@@ -339,11 +391,11 @@
 
       .liff-kpi-grid {
         display: grid;
-        grid-template-columns: repeat(auto-fill, minmax(180px, 1fr));
+        grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
         gap: 12px;
       }
       .liff-kpi-card {
-        padding: 16px;
+        padding: 14px 16px;
         border: 1px solid #e5e7eb;
         border-radius: 10px;
         background: #fff;
@@ -352,9 +404,35 @@
         background: #fffbeb;
         border-color: #FCC726;
       }
-      .liff-kpi-label { font-size: 12px; color: #6b7280; margin-bottom: 6px; }
-      .liff-kpi-value { font-size: 28px; font-weight: 700; color: #1f2937; line-height: 1.1; }
-      .liff-kpi-hint { font-size: 11px; color: #9ca3af; margin-top: 6px; }
+      .liff-kpi-title {
+        font-size: 13px;
+        font-weight: 600;
+        color: #1f2937;
+        margin-bottom: 8px;
+      }
+      .liff-kpi-split {
+        display: flex;
+        align-items: stretch;
+        gap: 12px;
+      }
+      .liff-kpi-half { flex: 1; min-width: 0; }
+      .liff-kpi-divider {
+        width: 1px;
+        background: #e5e7eb;
+        align-self: stretch;
+      }
+      .liff-kpi-sublabel {
+        font-size: 11px;
+        color: #6b7280;
+        margin-bottom: 2px;
+      }
+      .liff-kpi-value {
+        font-size: 24px;
+        font-weight: 700;
+        color: #1f2937;
+        line-height: 1.1;
+      }
+      .liff-kpi-hint { font-size: 11px; color: #9ca3af; margin-top: 8px; }
 
       .liff-section-head {
         display: flex;
