@@ -1124,7 +1124,7 @@
         height: 100%;
         object-fit: cover;
       }
-      /* 元件控制列（↑ ↓ ✕）：常駐右上角，hover 容器才顯示 */
+      /* 元件控制列（↑ ↓ ✕）：box / CTA 用右上角；圖片用正中央覆蓋 */
       .line-mock .lm-comp-ctrls {
         position: absolute;
         top: 4px;
@@ -1142,6 +1142,43 @@
       .line-mock .lm-comp-ctrls:focus-within {
         opacity: 0.92;
         pointer-events: auto;
+      }
+      /* 圖片專屬：控制鈕居中疊在圖片上，加半透明黑面板更顯眼 */
+      .line-mock .lm-inline-image > .lm-comp-ctrls {
+        top: 50%;
+        right: auto;
+        left: 50%;
+        transform: translate(-50%, -50%);
+        background: rgba(0, 0, 0, 0.55);
+        padding: 6px 8px;
+        border-radius: 8px;
+        gap: 6px;
+        box-shadow: 0 4px 12px rgba(0, 0, 0, 0.35);
+      }
+      .line-mock .lm-inline-image > .lm-comp-ctrls .lm-ctrl-btn {
+        width: 28px;
+        height: 28px;
+        background: rgba(255, 255, 255, 0.18);
+        border: 1px solid rgba(255, 255, 255, 0.35);
+        font-size: 14px;
+      }
+      .line-mock .lm-inline-image > .lm-comp-ctrls .lm-ctrl-btn:hover {
+        background: rgba(255, 255, 255, 0.32);
+      }
+      .line-mock .lm-inline-image > .lm-comp-ctrls .lm-ctrl-del {
+        background: rgba(220, 38, 38, 0.9);
+        font-size: 18px;
+      }
+      .line-mock .lm-inline-image > .lm-comp-ctrls .lm-ctrl-del:hover {
+        background: rgba(220, 38, 38, 1);
+      }
+      /* 圖片 hover 時整張圖加暗一點，讓中央控制面板更突出 */
+      .line-mock .lm-inline-image:hover img {
+        filter: brightness(0.78);
+        transition: filter 0.15s ease;
+      }
+      .line-mock .lm-inline-image img {
+        transition: filter 0.15s ease;
       }
       .line-mock .lm-ctrl-btn {
         width: 22px;
