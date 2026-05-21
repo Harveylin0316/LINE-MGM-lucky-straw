@@ -2,73 +2,128 @@
 <html lang="zh-Hant">
 <head>
   <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, viewport-fit=cover" />
+  <meta name="theme-color" content="#F5F2EC" />
   <title><%= title %></title>
   <script src="https://static.line-scdn.net/liff/edge/2/sdk.js"></script>
   <style>
-    * { box-sizing: border-box; }
+    :root {
+      --bg-warm-1: #FAF7F1;
+      --bg-warm-2: #F0EAD9;
+      --surface:   #FFFFFF;
+      --ink:       #1D1D1F;
+      --ink-2:     #86868B;
+      --ink-3:     #C7C7CC;
+      --gold-1:    #FFC83D;
+      --gold-2:    #F5A623;
+      --gold-deep: #D97706;
+      --cream:     #FFF8E7;
+      --butter:    #FFE6A0;
+      --pointer:   #2E2E33;
+      --shadow-soft: 0 10px 30px rgba(31, 26, 18, 0.08);
+      --shadow-deep: 0 24px 60px rgba(31, 26, 18, 0.18);
+    }
+    * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+    html, body { margin: 0; padding: 0; }
     body {
-      margin: 0;
-      font-family: -apple-system, BlinkMacSystemFont, "Helvetica Neue", "PingFang TC", "Microsoft JhengHei", sans-serif;
-      background: linear-gradient(180deg, #fffbeb 0%, #fef3c7 100%);
+      font-family: -apple-system, BlinkMacSystemFont, "SF Pro Display", "SF Pro Text",
+        "Helvetica Neue", "PingFang TC", "Microsoft JhengHei", sans-serif;
+      color: var(--ink);
       min-height: 100vh;
-      color: #1f2937;
-      -webkit-tap-highlight-color: transparent;
+      background:
+        radial-gradient(circle at 50% 0%, #FFFFFF 0%, var(--bg-warm-1) 40%, var(--bg-warm-2) 100%);
+      background-attachment: fixed;
+      letter-spacing: -0.01em;
+      overflow-x: hidden;
     }
+
+    /* ---------- Header ---------- */
     .w-header {
-      padding: 24px 20px 12px;
+      padding: 32px 24px 8px;
       text-align: center;
-    }
-    .w-header h1 {
-      margin: 0 0 6px;
-      font-size: 22px;
-      color: #1f2937;
-    }
-    .w-header p {
-      margin: 0;
-      color: #6b7280;
-      font-size: 13px;
-      line-height: 1.5;
+      max-width: 480px;
+      margin: 0 auto;
     }
     .w-cover {
       width: 100%;
-      max-width: 420px;
-      margin: 0 auto 12px;
+      max-width: 360px;
+      aspect-ratio: 16 / 9;
+      object-fit: cover;
       display: block;
-      border-radius: 12px;
+      margin: 0 auto 16px;
+      border-radius: 20px;
+      box-shadow: var(--shadow-soft);
+    }
+    .w-header h1 {
+      margin: 0 0 8px;
+      font-size: 30px;
+      font-weight: 700;
+      letter-spacing: -0.025em;
+      color: var(--ink);
+      line-height: 1.15;
+    }
+    .w-header p {
+      margin: 0 auto;
+      max-width: 320px;
+      color: var(--ink-2);
+      font-size: 15px;
+      line-height: 1.5;
+      font-weight: 400;
     }
 
+    /* ---------- Stage ---------- */
+    .w-stage-outer {
+      padding: 28px 16px 0;
+      display: flex;
+      justify-content: center;
+    }
     .w-stage {
       position: relative;
-      width: 92vw;
-      max-width: 360px;
+      width: min(88vw, 360px);
       aspect-ratio: 1;
-      margin: 8px auto 16px;
     }
+    /* Pointer: 細長 + 漸層金屬感 */
     .w-pointer {
       position: absolute;
-      top: -6px;
+      top: -2px;
       left: 50%;
       transform: translateX(-50%);
       width: 0;
       height: 0;
-      border-left: 14px solid transparent;
-      border-right: 14px solid transparent;
-      border-top: 24px solid #dc2626;
-      z-index: 3;
-      filter: drop-shadow(0 2px 4px rgba(0,0,0,0.3));
+      border-left: 11px solid transparent;
+      border-right: 11px solid transparent;
+      border-top: 26px solid var(--pointer);
+      z-index: 5;
+      filter: drop-shadow(0 4px 8px rgba(0,0,0,0.25));
+    }
+    .w-pointer::after {
+      content: '';
+      position: absolute;
+      top: -28px;
+      left: -8px;
+      width: 14px;
+      height: 14px;
+      background: radial-gradient(circle at 35% 30%, #FFFFFF, var(--gold-1) 60%, var(--gold-2));
+      border-radius: 50%;
+      box-shadow: 0 2px 6px rgba(0,0,0,0.25), inset 0 -2px 3px rgba(0,0,0,0.15);
     }
     .w-canvas-wrap {
       position: relative;
       width: 100%;
       height: 100%;
-      filter: drop-shadow(0 8px 24px rgba(0,0,0,0.15));
+      border-radius: 50%;
+      background: radial-gradient(circle, var(--surface) 0%, var(--bg-warm-1) 100%);
+      box-shadow:
+        var(--shadow-deep),
+        inset 0 0 0 1px rgba(255,255,255,0.6);
     }
     #wheel-canvas {
       width: 100%;
       height: 100%;
-      transition: transform 5s cubic-bezier(0.17, 0.67, 0.27, 1);
+      display: block;
+      transition: transform 5.2s cubic-bezier(0.17, 0.67, 0.27, 1);
     }
+    /* 中心按鈕：金漸層 + 立體浮起感 */
     .w-center {
       position: absolute;
       top: 50%; left: 50%;
@@ -76,131 +131,196 @@
       width: 28%;
       height: 28%;
       border-radius: 50%;
-      background: linear-gradient(135deg, #FCC726, #f5b800);
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      box-shadow: 0 4px 12px rgba(0,0,0,0.2), inset 0 -3px 6px rgba(0,0,0,0.1);
-      z-index: 2;
+      z-index: 4;
+    }
+    .w-center::before {
+      content: '';
+      position: absolute;
+      inset: -6px;
+      border-radius: 50%;
+      background: linear-gradient(180deg, rgba(255,255,255,0.9), rgba(255,255,255,0.4));
+      z-index: -1;
+      box-shadow: 0 8px 20px rgba(31,26,18,0.18);
     }
     .w-spin-btn {
       width: 100%;
       height: 100%;
       border-radius: 50%;
       border: none;
-      background: transparent;
-      color: #1f2937;
+      cursor: pointer;
+      font-family: inherit;
       font-weight: 700;
       font-size: 17px;
-      cursor: pointer;
-      letter-spacing: 0.05em;
+      letter-spacing: 0.04em;
+      color: var(--ink);
+      background:
+        radial-gradient(circle at 35% 30%, #FFE393 0%, var(--gold-1) 38%, var(--gold-2) 100%);
+      box-shadow:
+        inset 0 -3px 8px rgba(0,0,0,0.18),
+        inset 0 3px 6px rgba(255,255,255,0.7),
+        0 6px 14px rgba(217,119,6,0.35);
+      transition: transform 0.18s cubic-bezier(0.34, 1.56, 0.64, 1), filter 0.2s;
     }
-    .w-spin-btn:active { transform: scale(0.95); }
-    .w-spin-btn:disabled { opacity: 0.5; cursor: not-allowed; }
+    .w-spin-btn:active:not(:disabled) {
+      transform: scale(0.93);
+    }
+    .w-spin-btn:disabled {
+      cursor: default;
+      filter: saturate(0.5) brightness(0.95);
+      opacity: 0.85;
+    }
 
-    .w-info {
+    /* ---------- Status + Info ---------- */
+    .w-status {
+      margin: 28px auto 4px;
       text-align: center;
-      margin: 12px auto;
-      color: #6b7280;
-      font-size: 13px;
-      max-width: 360px;
+      font-size: 14px;
+      color: var(--ink-2);
+      min-height: 20px;
+      max-width: 320px;
+      padding: 0 16px;
+      transition: opacity 0.2s;
+    }
+    .w-info {
+      margin: 0 auto 32px;
+      text-align: center;
+      font-size: 12px;
+      color: var(--ink-3);
+      max-width: 320px;
       padding: 0 16px;
     }
-    .w-status {
-      text-align: center;
-      color: #92400e;
-      font-size: 13px;
-      margin: 8px auto;
-      min-height: 18px;
-    }
 
-    /* result modal */
+    /* ---------- Result Bottom Sheet ---------- */
     .w-modal {
       position: fixed;
       inset: 0;
-      background: rgba(0,0,0,0.6);
-      display: flex;
-      align-items: center;
-      justify-content: center;
       z-index: 100;
-      padding: 20px;
-      opacity: 0;
       pointer-events: none;
+      opacity: 0;
       transition: opacity 0.3s ease;
+      background: rgba(20, 20, 22, 0.4);
+      backdrop-filter: blur(8px);
+      -webkit-backdrop-filter: blur(8px);
+      display: flex;
+      align-items: flex-end;
+      justify-content: center;
     }
     .w-modal.open {
       opacity: 1;
       pointer-events: auto;
     }
-    .w-modal-inner {
-      background: #fff;
-      border-radius: 20px;
-      padding: 28px 24px;
-      text-align: center;
-      max-width: 320px;
+    .w-sheet {
       width: 100%;
-      transform: scale(0.85);
-      transition: transform 0.3s cubic-bezier(0.34, 1.56, 0.64, 1);
+      max-width: 480px;
+      background: var(--surface);
+      border-radius: 28px 28px 0 0;
+      padding: 14px 24px 32px;
+      transform: translateY(100%);
+      transition: transform 0.45s cubic-bezier(0.32, 0.72, 0, 1);
+      box-shadow: 0 -8px 32px rgba(0,0,0,0.18);
     }
-    .w-modal.open .w-modal-inner { transform: scale(1); }
+    .w-modal.open .w-sheet { transform: translateY(0); }
+    .w-handle {
+      width: 36px;
+      height: 5px;
+      border-radius: 999px;
+      background: var(--ink-3);
+      margin: 0 auto 18px;
+      opacity: 0.6;
+    }
     .w-modal-title {
-      font-size: 14px;
-      color: #6b7280;
-      margin-bottom: 6px;
+      text-align: center;
+      font-size: 13px;
+      font-weight: 500;
+      color: var(--ink-2);
+      letter-spacing: 0.03em;
+      text-transform: uppercase;
+      margin-bottom: 10px;
     }
-    .w-modal-prize {
-      font-size: 26px;
-      font-weight: 700;
-      color: #1f2937;
-      margin-bottom: 12px;
-    }
-    .w-modal.grand .w-modal-prize {
-      color: #b45309;
-      animation: shake 0.6s ease;
-    }
-    @keyframes shake {
-      0%, 100% { transform: translateX(0); }
-      25% { transform: translateX(-4px); }
-      75% { transform: translateX(4px); }
-    }
-    .w-modal-prize-img {
+    .w-prize-img-wrap {
       width: 96px;
       height: 96px;
+      margin: 0 auto 18px;
+      border-radius: 24px;
+      background: linear-gradient(135deg, var(--cream), var(--butter));
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      box-shadow: 0 8px 20px rgba(245, 166, 35, 0.25), inset 0 -3px 8px rgba(217,119,6,0.15);
+      overflow: hidden;
+    }
+    .w-prize-img-wrap img {
+      width: 100%;
+      height: 100%;
       object-fit: cover;
-      border-radius: 12px;
-      margin: 0 auto 12px;
-      display: block;
+      border-radius: inherit;
+    }
+    .w-prize-img-wrap .glyph {
+      font-size: 42px;
+      filter: drop-shadow(0 2px 4px rgba(0,0,0,0.15));
+    }
+    .w-modal-prize {
+      text-align: center;
+      font-size: 28px;
+      font-weight: 700;
+      letter-spacing: -0.02em;
+      color: var(--ink);
+      margin-bottom: 8px;
+      line-height: 1.2;
+    }
+    .w-modal.grand .w-modal-prize {
+      background: linear-gradient(135deg, #D97706, #FFC83D);
+      -webkit-background-clip: text;
+      background-clip: text;
+      color: transparent;
+      animation: shimmer 1.4s ease infinite;
+    }
+    @keyframes shimmer {
+      0%, 100% { filter: brightness(1); }
+      50% { filter: brightness(1.18); }
     }
     .w-modal-desc {
-      color: #6b7280;
-      font-size: 13px;
-      line-height: 1.5;
-      margin-bottom: 16px;
+      text-align: center;
+      color: var(--ink-2);
+      font-size: 14px;
+      line-height: 1.55;
+      margin-bottom: 24px;
     }
     .w-modal-btn {
-      padding: 12px 32px;
-      background: #FCC726;
-      color: #1f2937;
-      font-weight: 600;
+      display: block;
+      width: 100%;
+      padding: 16px;
+      background: var(--ink);
+      color: #fff;
       border: none;
-      border-radius: 8px;
-      font-size: 14px;
+      border-radius: 16px;
+      font-size: 17px;
+      font-weight: 600;
+      font-family: inherit;
+      letter-spacing: -0.01em;
       cursor: pointer;
+      transition: transform 0.15s cubic-bezier(0.34, 1.56, 0.64, 1);
     }
-    .w-modal-btn:hover { background: #f5b800; }
+    .w-modal-btn:active { transform: scale(0.97); }
 
-    /* confetti */
-    .confetti {
+    /* ---------- Gold sparkles (only for grand prize, elegant) ---------- */
+    .sparkle {
       position: fixed;
-      width: 10px;
-      height: 14px;
-      top: -20px;
-      z-index: 99;
       pointer-events: none;
-      animation: fall 3s linear forwards;
+      top: 50%;
+      left: 50%;
+      width: 6px;
+      height: 6px;
+      background: radial-gradient(circle, #FFFFFF, var(--gold-1) 60%, transparent 75%);
+      border-radius: 50%;
+      z-index: 99;
+      opacity: 0;
+      animation: spark 1.6s ease-out forwards;
     }
-    @keyframes fall {
-      to { transform: translateY(100vh) rotate(720deg); opacity: 0; }
+    @keyframes spark {
+      0%   { opacity: 0; transform: translate(-50%, -50%) scale(0); }
+      15%  { opacity: 1; transform: translate(calc(-50% + var(--dx, 0px)), calc(-50% + var(--dy, 0px))) scale(1.2); }
+      100% { opacity: 0; transform: translate(calc(-50% + var(--dx, 0px) * 1.4), calc(-50% + var(--dy, 0px) * 1.4 + 60px)) scale(0.4); }
     }
   </style>
 </head>
@@ -215,27 +335,33 @@
     <% } %>
   </header>
 
-  <div class="w-stage">
-    <div class="w-pointer"></div>
-    <div class="w-canvas-wrap">
-      <canvas id="wheel-canvas" width="600" height="600"></canvas>
-    </div>
-    <div class="w-center">
-      <button type="button" id="spin-btn" class="w-spin-btn">SPIN</button>
+  <div class="w-stage-outer">
+    <div class="w-stage">
+      <div class="w-pointer"></div>
+      <div class="w-canvas-wrap">
+        <canvas id="wheel-canvas" width="720" height="720"></canvas>
+      </div>
+      <div class="w-center">
+        <button type="button" id="spin-btn" class="w-spin-btn">SPIN</button>
+      </div>
     </div>
   </div>
 
   <div id="status" class="w-status">準備中…</div>
   <p id="info" class="w-info"></p>
 
-  <!-- result modal -->
+  <!-- Bottom sheet modal -->
   <div id="modal" class="w-modal" aria-hidden="true">
-    <div class="w-modal-inner">
-      <div class="w-modal-title" id="modal-title">恭喜抽中</div>
-      <img id="modal-img" class="w-modal-prize-img" alt="" hidden />
+    <div class="w-sheet">
+      <div class="w-handle"></div>
+      <div class="w-modal-title">恭喜抽中</div>
+      <div class="w-prize-img-wrap" id="modal-img-wrap">
+        <img id="modal-img" alt="" hidden />
+        <div class="glyph" id="modal-glyph">★</div>
+      </div>
       <div class="w-modal-prize" id="modal-prize">—</div>
       <div class="w-modal-desc" id="modal-desc"></div>
-      <button type="button" class="w-modal-btn" id="modal-close">關閉</button>
+      <button type="button" class="w-modal-btn" id="modal-close">完成</button>
     </div>
   </div>
 
@@ -244,8 +370,8 @@
       var slug = <%- JSON.stringify(activity.slug) %>;
       var liffId = <%- JSON.stringify(liffId || '') %>;
       var dailyLimit = <%- JSON.stringify(activity.daily_plays_per_user) %>;
-      // 獎品由 server render 帶進來，省一次 client API call
       var prizes = <%- JSON.stringify(prizes || []) %>;
+
       var canvas = document.getElementById('wheel-canvas');
       var ctx = canvas.getContext('2d');
       var spinBtn = document.getElementById('spin-btn');
@@ -255,19 +381,17 @@
 
       var spinning = false;
       var currentRotation = 0;
-      var profile = null;   // LIFF profile { userId, displayName }
+      var profile = null;
       var liffReady = false;
 
       // ----- LIFF init -----
       async function initLiff() {
-        // dev 旁路：?uid=Uxxx 直接用，不走 LIFF
         var qs = new URLSearchParams(location.search);
         var devUid = qs.get('uid');
         if (devUid) {
           profile = { userId: devUid, displayName: qs.get('name') || 'DEV User' };
           return;
         }
-        // 預覽模式: ?preview=1 — 桌機後台預覽用，只看 UI 不能真抽
         if (qs.get('preview') === '1') {
           profile = { userId: 'PREVIEW_MODE', displayName: '預覽模式' };
           spinBtn.disabled = true;
@@ -280,14 +404,12 @@
         try {
           await liff.init({ liffId: liffId });
         } catch (e) {
-          throw new Error('LIFF 初始化失敗 — 此頁面路徑可能不在 LIFF App Endpoint URL 範圍內。詳細：' + (e.message || e));
+          throw new Error('LIFF 初始化失敗：' + (e.message || e));
         }
-        // 桌機/外部瀏覽器：明確阻擋 login flow（會無限循環跳回 endpoint）
         if (!liff.isInClient()) {
-          throw new Error('請在 LINE App 內打開此連結。桌機要看 UI 請在網址尾加上 ?preview=1');
+          throw new Error('請在 LINE App 內打開（桌機預覽請在網址後加 ?preview=1）');
         }
         if (!liff.isLoggedIn()) {
-          // 不傳 redirectUri — 讓 LIFF SDK 自己處理（避免 LINE 校驗 redirectUri 失敗回 endpoint）
           liff.login();
           return new Promise(function () {});
         }
@@ -302,22 +424,50 @@
         }
       }
 
-      // ----- 畫輪盤 -----
+      // ----- 畫輪盤（Apple 風重寫）-----
+      // 配色策略：
+      // - 預設交替：cream / butter（極簡 2 色）
+      // - 大獎扇形：深金 gold-deep
+      // - 外圈：金色 gradient ring + LED 點
+      // - 文字：深色 ink + 適當字距 + SF Pro 風
       function drawWheel() {
         var W = canvas.width;
         var H = canvas.height;
-        var cx = W / 2, cy = H / 2, R = W / 2 - 6;
+        var cx = W / 2, cy = H / 2;
+        var ringWidth = 14;
+        var R = W / 2 - ringWidth - 8;
         var n = prizes.length;
         var anglePer = (Math.PI * 2) / n;
-        var colors = ['#FCC726', '#fff5cc', '#fde68a', '#fff', '#fcd34d', '#fef3c7', '#fbbf24', '#fffbeb'];
 
         ctx.clearRect(0, 0, W, H);
-        // outer ring
+
+        // 1) 最外圈 — 金漸層 ring
+        var ringGrad = ctx.createLinearGradient(0, 0, 0, H);
+        ringGrad.addColorStop(0, '#FFD86B');
+        ringGrad.addColorStop(0.5, '#FFC83D');
+        ringGrad.addColorStop(1, '#E89B0E');
         ctx.beginPath();
-        ctx.arc(cx, cy, R + 4, 0, Math.PI * 2);
-        ctx.fillStyle = '#facc15';
+        ctx.arc(cx, cy, R + ringWidth, 0, Math.PI * 2);
+        ctx.fillStyle = ringGrad;
         ctx.fill();
 
+        // 2) ring 上的小點 (LED 風)
+        var dotCount = n * 2;
+        for (var i = 0; i < dotCount; i++) {
+          var a = (i / dotCount) * Math.PI * 2 - Math.PI / 2;
+          var rx = cx + Math.cos(a) * (R + ringWidth / 2);
+          var ry = cy + Math.sin(a) * (R + ringWidth / 2);
+          ctx.beginPath();
+          ctx.arc(rx, ry, 3, 0, Math.PI * 2);
+          var bright = i % 2 === 0;
+          ctx.fillStyle = bright ? '#FFFFFF' : 'rgba(255,255,255,0.45)';
+          ctx.shadowColor = bright ? 'rgba(255,255,255,0.8)' : 'transparent';
+          ctx.shadowBlur = bright ? 6 : 0;
+          ctx.fill();
+        }
+        ctx.shadowBlur = 0;
+
+        // 3) 扇形 — 交替 2 色 + 大獎用深金
         prizes.forEach(function (p, i) {
           var start = i * anglePer - Math.PI / 2;
           var end = start + anglePer;
@@ -325,70 +475,97 @@
           ctx.moveTo(cx, cy);
           ctx.arc(cx, cy, R, start, end);
           ctx.closePath();
-          ctx.fillStyle = colors[i % colors.length];
+
+          var baseColor;
+          if (p.is_grand_prize) baseColor = '#F5A623'; // 深金
+          else baseColor = (i % 2 === 0) ? '#FFF8E7' : '#FFE6A0'; // 奶白 / 淡黃
+
+          // 微微的徑向漸層讓扇形更有深度
+          var midAngle = start + anglePer / 2;
+          var sectorGrad = ctx.createRadialGradient(
+            cx + Math.cos(midAngle) * R * 0.3,
+            cy + Math.sin(midAngle) * R * 0.3,
+            0,
+            cx, cy, R
+          );
+          sectorGrad.addColorStop(0, lightenColor(baseColor, 8));
+          sectorGrad.addColorStop(1, baseColor);
+          ctx.fillStyle = sectorGrad;
           ctx.fill();
-          // 邊框
+
+          // 扇形之間的細白線（Apple 風的精緻分割）
           ctx.lineWidth = 2;
-          ctx.strokeStyle = '#fff';
+          ctx.strokeStyle = 'rgba(255, 255, 255, 0.85)';
           ctx.stroke();
 
-          // 標籤文字
+          // 4) 文字 — 沿半徑方向書寫
           ctx.save();
           ctx.translate(cx, cy);
           ctx.rotate(start + anglePer / 2);
           ctx.textAlign = 'right';
-          ctx.fillStyle = '#1f2937';
-          ctx.font = 'bold 22px -apple-system, "PingFang TC", "Microsoft JhengHei", sans-serif';
+          ctx.textBaseline = 'middle';
+          ctx.fillStyle = p.is_grand_prize ? '#FFFFFF' : '#1D1D1F';
+          ctx.font = '600 22px -apple-system, "SF Pro Display", "PingFang TC", sans-serif';
           var label = p.name || '';
-          if (label.length > 8) label = label.slice(0, 8) + '…';
-          ctx.fillText(label, R - 24, 8);
+          if (label.length > 9) label = label.slice(0, 9) + '…';
+          ctx.fillText(label, R - 30, 0);
           if (p.is_grand_prize) {
-            ctx.fillStyle = '#b45309';
-            ctx.font = 'bold 14px sans-serif';
-            ctx.fillText('★ 大獎', R - 24, 28);
+            ctx.fillStyle = 'rgba(255,255,255,0.85)';
+            ctx.font = '600 11px -apple-system, "SF Pro Display", sans-serif';
+            ctx.fillText('GRAND', R - 30, 22);
           }
           ctx.restore();
         });
 
-        // 中心遮一層（中間圓會壓上去）
+        // 5) 中心圓背景襯托（讓中央按鈕浮起來）
+        var centerR = R * 0.22;
+        var coreGrad = ctx.createRadialGradient(cx, cy, 0, cx, cy, centerR);
+        coreGrad.addColorStop(0, '#FFFFFF');
+        coreGrad.addColorStop(1, '#F0EAD9');
         ctx.beginPath();
-        ctx.arc(cx, cy, 16, 0, Math.PI * 2);
-        ctx.fillStyle = '#fff';
+        ctx.arc(cx, cy, centerR, 0, Math.PI * 2);
+        ctx.fillStyle = coreGrad;
         ctx.fill();
       }
 
-      // ----- 動畫旋轉到指定位置 -----
+      // 顏色亮度微調 helper
+      function lightenColor(hex, amount) {
+        var c = hex.replace('#', '');
+        var r = parseInt(c.substr(0, 2), 16);
+        var g = parseInt(c.substr(2, 2), 16);
+        var b = parseInt(c.substr(4, 2), 16);
+        r = Math.min(255, r + amount);
+        g = Math.min(255, g + amount);
+        b = Math.min(255, b + amount);
+        return '#' + [r, g, b].map(function (x) { return x.toString(16).padStart(2, '0'); }).join('');
+      }
+
+      // ----- 動畫旋轉到指定獎品 -----
       function animateToPrize(prize) {
         var n = prizes.length;
         if (n === 0) return Promise.resolve();
-        // 找該獎品在 prizes 陣列中的 index（依 position 排序，跟畫圖一致）
         var idx = prizes.findIndex(function (p) { return p.id === prize.id; });
         if (idx < 0) idx = 0;
         var anglePer = 360 / n;
-        // 中獎扇形中央朝上 (指針位置)
-        // 扇形 i 的中央在 (i + 0.5) * anglePer 度（從 12 點順時針）
         var targetCenter = (idx + 0.5) * anglePer;
-        // 我們要的最終角度 = -targetCenter（順時針旋轉指到 12 點）
-        // 加 5 圈完整轉動讓動畫好看，並加一個小隨機 jitter 避免每次完全停同位置
-        var jitter = (Math.random() - 0.5) * (anglePer * 0.6);
-        var finalAngle = currentRotation + 360 * 5 + (360 - targetCenter) + jitter;
+        var jitter = (Math.random() - 0.5) * (anglePer * 0.5);
+        var finalAngle = currentRotation + 360 * 6 + (360 - targetCenter) + jitter;
         currentRotation = finalAngle;
         canvas.style.transform = 'rotate(' + finalAngle + 'deg)';
-        // wait CSS transition (5s)
-        return new Promise(function (resolve) { setTimeout(resolve, 5100); });
+        return new Promise(function (resolve) { setTimeout(resolve, 5300); });
       }
 
       // ----- spin -----
       async function spin() {
         if (spinning) return;
         if (!liffReady || !profile) {
-          // 還沒準備好就點 — 顯示 status 不彈 alert（不打斷）
           statusEl.textContent = 'LINE 身分準備中，稍等一下…';
           return;
         }
         spinning = true;
         spinBtn.disabled = true;
         statusEl.textContent = '抽選中…';
+        statusEl.style.opacity = '0.6';
 
         try {
           var resp = await fetch('/api/games/wheel/' + encodeURIComponent(slug) + '/spin', {
@@ -402,6 +579,7 @@
 
           if (!resp.ok) {
             statusEl.textContent = resp.detail || resp.error || '抽選失敗';
+            statusEl.style.opacity = '1';
             spinning = false;
             spinBtn.disabled = false;
             return;
@@ -411,9 +589,11 @@
           showResult(resp.prize);
         } catch (e) {
           statusEl.textContent = '錯誤：' + e.message;
+          statusEl.style.opacity = '1';
         } finally {
           spinning = false;
           spinBtn.disabled = false;
+          statusEl.style.opacity = '1';
         }
       }
 
@@ -422,51 +602,62 @@
         statusEl.textContent = '';
         document.getElementById('modal-prize').textContent = prize.name || '—';
         var imgEl = document.getElementById('modal-img');
+        var glyphEl = document.getElementById('modal-glyph');
         if (prize.image_url) {
           imgEl.src = prize.image_url;
           imgEl.hidden = false;
+          glyphEl.style.display = 'none';
         } else {
           imgEl.hidden = true;
+          glyphEl.style.display = 'block';
+          glyphEl.textContent = prize.is_grand_prize ? '★' : '◆';
         }
         var descParts = [];
         if (prize.prize_value) {
-          if (prize.prize_value.amount) descParts.push('價值 ' + prize.prize_value.amount);
-          if (prize.prize_value.code) descParts.push('優惠碼：' + prize.prize_value.code);
+          if (prize.prize_value.amount) descParts.push('價值 NT$ ' + prize.prize_value.amount);
+          if (prize.prize_value.code) descParts.push('優惠碼 ' + prize.prize_value.code);
           if (prize.prize_value.label) descParts.push(prize.prize_value.label);
           if (prize.prize_value.note) descParts.push(prize.prize_value.note);
         }
-        document.getElementById('modal-desc').textContent = descParts.join('  ／  ');
+        document.getElementById('modal-desc').textContent = descParts.join('  ·  ');
         if (prize.is_grand_prize) {
           modal.classList.add('grand');
-          confettiBurst();
+          sparkleBurst();
         } else {
           modal.classList.remove('grand');
         }
-        modal.classList.add('open');
+        // 給 transform 一點延遲讓 backdrop 先顯示，更滑順
+        requestAnimationFrame(function () { modal.classList.add('open'); });
       }
 
       document.getElementById('modal-close').addEventListener('click', function () {
         modal.classList.remove('open');
       });
+      // 點背景關閉
+      modal.addEventListener('click', function (e) {
+        if (e.target === modal) modal.classList.remove('open');
+      });
 
-      function confettiBurst() {
-        var colors = ['#FCC726', '#dc2626', '#3b82f6', '#10b981', '#f97316'];
-        for (var i = 0; i < 60; i++) {
+      // ---- gold sparkles（只給大獎、優雅版，不再彩色 confetti）----
+      function sparkleBurst() {
+        for (var i = 0; i < 24; i++) {
           var el = document.createElement('div');
-          el.className = 'confetti';
-          el.style.left = Math.random() * 100 + 'vw';
-          el.style.background = colors[Math.floor(Math.random() * colors.length)];
-          el.style.animationDelay = (Math.random() * 1.2) + 's';
-          el.style.animationDuration = (2.5 + Math.random() * 1.5) + 's';
+          el.className = 'sparkle';
+          var angle = (i / 24) * Math.PI * 2 + Math.random() * 0.5;
+          var distance = 80 + Math.random() * 120;
+          el.style.setProperty('--dx', Math.cos(angle) * distance + 'px');
+          el.style.setProperty('--dy', Math.sin(angle) * distance + 'px');
+          el.style.animationDelay = (Math.random() * 0.2) + 's';
+          el.style.width = (3 + Math.random() * 5) + 'px';
+          el.style.height = el.style.width;
           document.body.appendChild(el);
-          setTimeout(function (e) { e.remove(); }.bind(null, el), 4000);
+          setTimeout(function (e) { e.remove(); }.bind(null, el), 2000);
         }
       }
 
       spinBtn.addEventListener('click', spin);
 
       // ----- bootstrap -----
-      // 立即動作（不等 LIFF）：畫輪盤、顯示資訊、設 SPIN 為「準備中」
       if (prizes.length < 2) {
         statusEl.textContent = '獎品數量不足，無法開始遊戲（至少需 2 個）';
         spinBtn.disabled = true;
@@ -479,7 +670,6 @@
         statusEl.textContent = '載入 LINE 身分…';
       }
 
-      // 並行：LIFF init，完成後 enable SPIN
       (async function () {
         if (prizes.length < 2) return;
         try {
