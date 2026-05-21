@@ -327,6 +327,39 @@ function stripPlaceholderImages(node) {
   });
 }
 
+/**
+ * 移除 text 內容為空（或全是空白）的 text component。
+ * 避免 user 用 WYSIWYG 把 text 編成空字串後送 LINE，被 API 退「text empty」。
+ */
+function stripEmptyTexts(node) {
+  if (!node || typeof node !== 'object') return;
+  if (Array.isArray(node)) {
+    for (let i = node.length - 1; i >= 0; i--) {
+      const item = node[i];
+      if (
+        item && item.type === 'text' &&
+        (typeof item.text !== 'string' || !item.text.trim())
+      ) {
+        node.splice(i, 1);
+      } else {
+        stripEmptyTexts(item);
+      }
+    }
+    return;
+  }
+  Object.keys(node).forEach(k => {
+    const v = node[k];
+    if (
+      v && typeof v === 'object' && v.type === 'text' &&
+      (typeof v.text !== 'string' || !v.text.trim())
+    ) {
+      delete node[k];
+    } else if (v && typeof v === 'object') {
+      stripEmptyTexts(v);
+    }
+  });
+}
+
 function buildLineMessages(messageConfig, { heroImageBaseUrl, broadcastId, variant } = {}) {
   const variantSuffix = variant === 'a' || variant === 'b' ? `?v=${variant}` : '';
   if (!messageConfig || typeof messageConfig !== 'object') {
@@ -344,9 +377,10 @@ function buildLineMessages(messageConfig, { heroImageBaseUrl, broadcastId, varia
     if (!flex.contents || typeof flex.contents !== 'object') {
       return { ok: false, error: '缺少 contents（氣泡內容）。' };
     }
-    // Clone 後移除 placeholder image + bullet normalize + clipboard auto-sync
+    // Clone 後移除 placeholder image + 空 text + bullet normalize + clipboard auto-sync
     const cloned = JSON.parse(JSON.stringify(flex));
     stripPlaceholderImages(cloned.contents);
+    stripEmptyTexts(cloned.contents);
     postProcessFlexTree(cloned.contents);
     return { ok: true, messages: [cloned] };
   }

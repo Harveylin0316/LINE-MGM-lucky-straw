@@ -535,6 +535,7 @@
       if (c.aspectMode === 'fit') img.style.objectFit = 'contain';
       else img.style.objectFit = 'cover';
       imgWrap.appendChild(img);
+      attachDeleteButton(imgWrap, path, '圖片');
       parent.appendChild(imgWrap);
       return;
     }
@@ -566,6 +567,7 @@
         btn.addEventListener('input', onPreviewTextEdit);
         btn.addEventListener('keydown', preventEditorEnter);
       }
+      attachDeleteButton(btn, path, '按鈕');
       parent.appendChild(btn);
       return;
     }
@@ -590,7 +592,61 @@
       c.contents.forEach(function (cc, idx) {
         renderFlexComponent(cc, sub, path.concat(['contents', idx]));
       });
+      attachDeleteButton(sub, path, '區塊');
       parent.appendChild(sub);
+    }
+  }
+
+  // ✕ 刪除按鈕：給 image / CTA / 內嵌 box 加 hover-able 紅色刪除鈕
+  function attachDeleteButton(el, componentPath, label) {
+    if (!Array.isArray(componentPath) || componentPath.length < 1) return;
+    // ensure relative positioning so absolute ✕ 對齊容器
+    if (window.getComputedStyle(el).position === 'static') {
+      el.style.position = 'relative';
+    }
+    var del = document.createElement('button');
+    del.type = 'button';
+    del.className = 'lm-del-btn';
+    del.textContent = '×';
+    del.title = '刪除' + (label ? '此' + label : '');
+    del.setAttribute('aria-label', '刪除' + (label || '元件'));
+    // 阻止冒泡 — 不要觸發 contentEditable focus 或 toolbar drag
+    del.addEventListener('mousedown', function (e) { e.preventDefault(); e.stopPropagation(); });
+    del.addEventListener('click', function (e) {
+      e.preventDefault();
+      e.stopPropagation();
+      if (!confirm('確定刪除這個' + (label || '元件') + '？')) return;
+      deleteComponentAtPath(componentPath);
+    });
+    el.appendChild(del);
+  }
+
+  function deleteComponentAtPath(componentPath) {
+    try {
+      var textarea = $('flex-json');
+      var parsed = JSON.parse(textarea.value);
+      if (!Array.isArray(componentPath) || componentPath.length < 1) return;
+      var parentPath = componentPath.slice(0, -1);
+      var idx = componentPath[componentPath.length - 1];
+      var ref = parsed.contents;
+      for (var i = 0; i < parentPath.length; i++) ref = ref[parentPath[i]];
+      if (!Array.isArray(ref)) {
+        alert('找不到容器陣列，無法刪除。');
+        return;
+      }
+      if (ref.length <= 1) {
+        alert('這個區塊只剩一個元件，請先新增其他元件才能刪除（LINE Flex 規範：box.contents 不可為空）。');
+        return;
+      }
+      ref.splice(idx, 1);
+      textarea.value = JSON.stringify(parsed, null, 2);
+      saveDraft();
+      hideTextFormatToolbar();
+      schedulePreview();
+      try { scanJsonImagesAndUrls(); } catch (e) {}
+    } catch (e) {
+      console.warn('deleteComponentAtPath failed:', e && e.message);
+      alert('刪除失敗：' + (e && e.message));
     }
   }
 
