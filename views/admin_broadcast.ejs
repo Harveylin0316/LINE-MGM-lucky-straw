@@ -1113,10 +1113,16 @@
       }
       .line-mock .lm-hero img { display: block; width: 100%; height: auto; }
       .line-mock .lm-inline-image {
+        position: relative;
         width: 100%;
         overflow: hidden;
         border-radius: 6px;
         background: #f3f4f6;
+      }
+      /* 保險：box / CTA 也明確 position: relative，避免控制鈕跑到外層容器 */
+      .line-mock .lm-box,
+      .line-mock .lm-cta {
+        position: relative;
       }
       .line-mock .lm-inline-image img {
         display: block;
