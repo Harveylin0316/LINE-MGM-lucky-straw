@@ -10,7 +10,9 @@
 
 function registerGamesWheelRoutes(app, deps) {
   const { query, pool } = deps;
-  const liffId = process.env.LIFF_ID || '';
+  // 優先用 WHEEL_LIFF_ID（活動專屬 LIFF App），fallback 到 LIFF_ID（春日饗里那個）
+  // 春日饗里 LIFF Endpoint 路徑是 /liff/lottery，跟 /games/wheel/* 不同 → 必須獨立 LIFF App
+  const liffId = process.env.WHEEL_LIFF_ID || process.env.LIFF_ID || '';
 
   // ----------------------------------------------------------------------
   // 頁面

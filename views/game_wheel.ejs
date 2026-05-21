@@ -264,13 +264,24 @@
           profile = { userId: devUid, displayName: qs.get('name') || 'DEV User' };
           return;
         }
-        if (!liffId) {
-          throw new Error('LIFF ID 未設定');
+        // 預覽模式: ?preview=1 — 桌機後台預覽用，只看 UI 不能真抽
+        if (qs.get('preview') === '1') {
+          profile = { userId: 'PREVIEW_MODE', displayName: '預覽模式' };
+          spinBtn.disabled = true;
+          spinBtn.textContent = '預覽';
+          return;
         }
-        await liff.init({ liffId: liffId });
+        if (!liffId) {
+          throw new Error('LIFF ID 未設定（請聯絡管理員設定 WHEEL_LIFF_ID 環境變數）');
+        }
+        try {
+          await liff.init({ liffId: liffId });
+        } catch (e) {
+          // LIFF init 失敗通常是 Endpoint URL 不匹配。給更友善訊息。
+          throw new Error('LIFF 初始化失敗 — 此頁面路徑可能不在 LIFF App Endpoint URL 範圍內。詳細：' + (e.message || e));
+        }
         if (!liff.isLoggedIn()) {
           liff.login({ redirectUri: location.href });
-          // 上面 redirect 不會 return
           return new Promise(function () {});
         }
         profile = await liff.getProfile();

@@ -241,7 +241,8 @@
         var el = $('ae-liff-url');
         var prev = $('ae-preview-link');
         if (el) el.textContent = url;
-        if (prev) prev.href = url;
+        // 預覽連結加 ?preview=1，桌機可看 UI 但不能真抽（避免汙染資料）
+        if (prev) prev.href = url + '?preview=1';
       }
 
       // ---- save activity ----
