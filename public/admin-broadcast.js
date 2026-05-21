@@ -518,6 +518,26 @@
       parent.appendChild(s);
       return;
     }
+    if (c.type === 'image' && c.url) {
+      // 跳過 REPLACE_ placeholder URL（避免預覽留破圖）
+      if (/REPLACE_[A-Z0-9_]+/i.test(c.url)) return;
+      var imgWrap = document.createElement('div');
+      imgWrap.className = 'lm-inline-image';
+      if (c.margin) imgWrap.style.marginTop = mapFlexSpacing(c.margin);
+      // aspectRatio 預設 20:13；aspectMode cover 不撐爆 layout
+      var ar = (typeof c.aspectRatio === 'string' && /^\d+:\d+$/.test(c.aspectRatio))
+        ? c.aspectRatio.replace(':', '/')
+        : '20/13';
+      imgWrap.style.aspectRatio = ar;
+      var img = document.createElement('img');
+      img.src = c.url;
+      img.alt = '';
+      if (c.aspectMode === 'fit') img.style.objectFit = 'contain';
+      else img.style.objectFit = 'cover';
+      imgWrap.appendChild(img);
+      parent.appendChild(imgWrap);
+      return;
+    }
     if (c.type === 'box' && c.action && c.action.type === 'uri') {
       // CTA 模擬：黃底深字 — 改用 div 而非 a，避免 click 跳轉 + 支援 contenteditable
       var btn = document.createElement('div');
@@ -626,12 +646,17 @@
     if (!tb) return;
     // 計算位置：text 上方 + scrollY 補正
     var rect = textEl.getBoundingClientRect();
-    var previewWrap = $('msg-preview-wrap');
-    var wrapRect = previewWrap ? previewWrap.getBoundingClientRect() : { left: 0, top: 0 };
     // toolbar 用 absolute 定位（page-relative）
+    tb.hidden = false;
+    // 先顯示再量寬高（hidden 時 width=0），才能 clamp 到不超出畫面
     tb.style.top = (rect.top + window.scrollY - 44) + 'px';
     tb.style.left = (rect.left + window.scrollX) + 'px';
-    tb.hidden = false;
+    var tbWidth = tb.offsetWidth || 0;
+    var maxLeft = window.scrollX + window.innerWidth - tbWidth - 12;
+    var minLeft = window.scrollX + 12;
+    var desiredLeft = rect.left + window.scrollX;
+    var clampedLeft = Math.max(minLeft, Math.min(maxLeft, desiredLeft));
+    tb.style.left = clampedLeft + 'px';
     syncToolbarFromText(textEl);
   }
 
@@ -759,13 +784,17 @@
         handleStyleChange('align', a);
       });
     });
-    // 加上方 / 加下方 / 加區塊 / 刪除一列 / 關閉
+    // 加上方 / 加下方 / 加區塊 / 加圖片 / 上移 / 下移 / 刪除一列 / 關閉
+    var rowActions = {
+      'add-above': 1, 'add-below': 1, 'add-box': 1, 'add-image': 1,
+      'move-up': 1, 'move-down': 1, 'delete-row': 1, 'close': 1
+    };
     tb.querySelectorAll('.tft-btn[data-action]').forEach(function (btn) {
       var act = btn.getAttribute('data-action');
-      if (act !== 'add-above' && act !== 'add-below' &&
-          act !== 'add-box' && act !== 'delete-row' && act !== 'close') return;
+      if (!rowActions[act]) return;
       btn.addEventListener('click', function () {
         if (act === 'close') { hideTextFormatToolbar(); return; }
+        if (act === 'add-image') { triggerImageUpload(); return; }
         handleRowAction(act);
       });
     });
@@ -776,7 +805,79 @@
         handleBoxBgChange(e.target.value);
       });
     }
+    // ＋圖 觸發隱藏 file input
+    var imgFile = document.getElementById('tft-image-file');
+    if (imgFile) {
+      imgFile.addEventListener('change', function (e) {
+        var f = e.target.files && e.target.files[0];
+        if (f) uploadAndInsertImage(f);
+        e.target.value = ''; // 清空讓同檔可再選
+      });
+    }
   })();
+
+  function triggerImageUpload() {
+    if (!currentEditingText) return;
+    var imgFile = document.getElementById('tft-image-file');
+    if (imgFile) imgFile.click();
+  }
+
+  function uploadAndInsertImage(file) {
+    if (!currentEditingText) return;
+    if (file.size > 2 * 1024 * 1024) {
+      alert('圖片太大（>2MB），請壓縮後再上傳。');
+      return;
+    }
+    var savedTextEl = currentEditingText; // 上傳期間 toolbar 可能消失，保險快取
+    var fd = new FormData();
+    fd.append('hero', file);
+    fetch('/admin/broadcast/hero/upload', { method: 'POST', body: fd })
+      .then(function (r) { return r.json(); })
+      .then(function (data) {
+        if (!data.ok || !data.url) {
+          alert('圖片上傳失敗：' + (data.error || ''));
+          return;
+        }
+        insertImageRow(savedTextEl, data.url, data.mediaId);
+      })
+      .catch(function (e) { alert('上傳錯誤：' + (e && e.message)); });
+  }
+
+  function insertImageRow(textEl, imageUrl, mediaId) {
+    try {
+      var path = JSON.parse(textEl.dataset.editPath || '[]');
+      if (path.length < 2) return;
+      var idxPos = path.length - 2;
+      var idx = path[idxPos];
+      var parentPath = path.slice(0, idxPos);
+      var textarea = $('flex-json');
+      var parsed = JSON.parse(textarea.value);
+      var ref = parsed.contents;
+      for (var i = 0; i < parentPath.length; i++) ref = ref[parentPath[i]];
+      if (!Array.isArray(ref)) {
+        alert('無法在這裡插入圖片（非陣列容器）。');
+        return;
+      }
+      var newImage = {
+        type: 'image',
+        url: imageUrl,
+        size: 'full',
+        aspectMode: 'cover',
+        aspectRatio: '20:13',
+        margin: 'md'
+      };
+      ref.splice(idx + 1, 0, newImage);
+      textarea.value = JSON.stringify(parsed, null, 2);
+      saveDraft();
+      hideTextFormatToolbar();
+      // 重 render preview + 重 scan 圖片 helper（讓上傳的圖出現在助手列）
+      schedulePreview();
+      try { scanJsonImagesAndUrls(); } catch (e) {}
+    } catch (e) {
+      console.warn('insertImageRow failed:', e && e.message);
+      alert('插入圖片失敗：' + (e && e.message));
+    }
+  }
 
   // style 操作：JSON sync + DOM 即時 update（不 re-render preview，保留 focus / cursor）
   function handleStyleChange(prop, val) {
@@ -827,7 +928,17 @@
         alert('這個 text 不在 array 內，無法插入或刪除一列。');
         return;
       }
-      if (action === 'add-above' || action === 'add-below') {
+      if (action === 'move-up') {
+        if (idx <= 0) { alert('已經在最上面了。'); return; }
+        var tmp = ref[idx - 1];
+        ref[idx - 1] = ref[idx];
+        ref[idx] = tmp;
+      } else if (action === 'move-down') {
+        if (idx >= ref.length - 1) { alert('已經在最下面了。'); return; }
+        var tmp2 = ref[idx + 1];
+        ref[idx + 1] = ref[idx];
+        ref[idx] = tmp2;
+      } else if (action === 'add-above' || action === 'add-below') {
         var newText = { type: 'text', text: '點此編輯', size: 'md', color: '#1f2937', wrap: true };
         var insertIdx = action === 'add-above' ? idx : idx + 1;
         ref.splice(insertIdx, 0, newText);

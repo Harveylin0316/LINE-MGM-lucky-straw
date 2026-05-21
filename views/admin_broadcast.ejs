@@ -383,6 +383,11 @@
           <button type="button" class="tft-btn" data-action="add-above" title="在上方插入一列文字">＋上方</button>
           <button type="button" class="tft-btn" data-action="add-below" title="在下方插入一列文字">＋下方</button>
           <button type="button" class="tft-btn" data-action="add-box" title="在下方插入一個區塊（box，可有背景色）">＋區塊</button>
+          <button type="button" class="tft-btn" data-action="add-image" title="在下方插入一張圖片（從電腦上傳）">＋圖</button>
+          <input type="file" id="tft-image-file" accept="image/*" hidden />
+          <span class="tft-sep"></span>
+          <button type="button" class="tft-btn" data-action="move-up" title="上移一格">↑</button>
+          <button type="button" class="tft-btn" data-action="move-down" title="下移一格">↓</button>
           <span class="tft-sep"></span>
           <label class="tft-label" title="字級">
             <span>字</span>
@@ -1106,6 +1111,18 @@
         font-size: 13px;
       }
       .line-mock .lm-hero img { display: block; width: 100%; height: auto; }
+      .line-mock .lm-inline-image {
+        width: 100%;
+        overflow: hidden;
+        border-radius: 6px;
+        background: #f3f4f6;
+      }
+      .line-mock .lm-inline-image img {
+        display: block;
+        width: 100%;
+        height: 100%;
+        object-fit: cover;
+      }
       .line-mock .lm-header { padding: 14px 16px; background: #ffffff; }
       .line-mock .lm-body { padding: 16px; background: #ffffff; }
       .line-mock .lm-footer { padding: 14px 16px; background: #ffffff; }
@@ -1190,6 +1207,7 @@
         position: absolute;
         z-index: 1000;
         display: flex;
+        flex-wrap: wrap;
         align-items: center;
         gap: 4px;
         padding: 5px 8px;
@@ -1199,6 +1217,7 @@
         font-size: 12px;
         box-shadow: 0 6px 16px rgba(0,0,0,0.25);
         user-select: none;
+        max-width: min(640px, calc(100vw - 24px));
       }
       /* hidden attribute 必須贏過 display:flex（否則 hidden 失效） */
       .text-format-toolbar[hidden] { display: none !important; }
