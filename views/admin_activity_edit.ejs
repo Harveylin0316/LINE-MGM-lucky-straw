@@ -59,11 +59,12 @@
           <input type="number" id="ae-ref-max" min="0" value="0" />
         </label>
         <label class="ae-field">
-          <span>封面圖（可選 — 貼 URL 或直接上傳，最大 2MB）</span>
+          <span>封面圖（可選 — 貼 URL 或直接上傳，建議 1600×900 / 16:9，最大 2MB）</span>
           <div style="display:flex;gap:6px;align-items:stretch;">
             <input type="text" id="ae-cover" placeholder="https://..." style="flex:1;" />
             <input type="file" id="ae-cover-file" accept="image/png,image/jpeg,image/webp" style="display:none;" />
             <button type="button" id="ae-cover-upload" style="padding:8px 14px;background:#fff;border:1px solid #ECECEE;border-radius:6px;cursor:pointer;font-size:12px;font-family:inherit;">上傳</button>
+            <button type="button" id="ae-cover-clear" hidden style="padding:8px 14px;background:#fff;border:1px solid #FCA5A5;color:#DC2626;border-radius:6px;cursor:pointer;font-size:12px;font-family:inherit;">刪除</button>
           </div>
           <div id="ae-cover-status" style="font-size:11px;color:#6B6B70;min-height:14px;"></div>
           <div id="ae-cover-preview" style="margin-top:6px;"></div>
@@ -486,20 +487,33 @@
           });
       });
 
-      // ---- cover image upload + preview ----
+      // ---- cover image upload + preview + clear ----
       var coverInput = $('ae-cover');
       var coverFile = $('ae-cover-file');
       var coverUploadBtn = $('ae-cover-upload');
+      var coverClearBtn = $('ae-cover-clear');
       var coverStatus = $('ae-cover-status');
       var coverPreview = $('ae-cover-preview');
       function updateCoverPreview() {
         var url = (coverInput.value || '').trim();
-        if (!url) { coverPreview.innerHTML = ''; return; }
+        if (!url) {
+          coverPreview.innerHTML = '';
+          coverClearBtn.hidden = true;  // 沒圖就藏刪除按鈕
+          return;
+        }
         coverPreview.innerHTML = '<img src="' + url.replace(/"/g, '&quot;') +
           '" alt="cover" style="max-width:200px;max-height:120px;border:1px solid #ECECEE;border-radius:6px;object-fit:cover;" />';
+        coverClearBtn.hidden = false;
       }
       coverInput.addEventListener('input', updateCoverPreview);
       coverUploadBtn.addEventListener('click', function () { coverFile.click(); });
+      // 刪除：清空 input + preview + status（save 時 cover_image_url 會被設成 null）
+      coverClearBtn.addEventListener('click', function () {
+        if (!confirm('確定移除封面圖？儲存後就回到沒有封面的樣子。')) return;
+        coverInput.value = '';
+        coverStatus.textContent = '已移除（記得按下方更新存檔）';
+        updateCoverPreview();
+      });
       coverFile.addEventListener('change', function () {
         var f = coverFile.files && coverFile.files[0];
         if (!f) return;
