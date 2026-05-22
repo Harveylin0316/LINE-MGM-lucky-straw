@@ -179,10 +179,13 @@ function resolveAssetDir(dirName, expectedFile) {
 }
 
 /** Netlify Function 單實例建議小 pool，降低冷啟動建連成本 */
+// SSL: Supabase 強制 SSL 連線，所以一律開（不依賴 NODE_ENV）
+// Netlify Functions 不一定會設 NODE_ENV=production，導致 SSL 關閉 → 連線 timeout
+const pgSslDisabled = process.env.PG_SSL_DISABLED === '1';
 const pool = new Pool({
   connectionString: DATABASE_URL,
-  ssl: isProduction ? { rejectUnauthorized: false } : false,
-  max: Number.parseInt(process.env.PG_POOL_MAX || '', 10) || (isProduction ? 2 : 10),
+  ssl: pgSslDisabled ? false : { rejectUnauthorized: false },
+  max: Number.parseInt(process.env.PG_POOL_MAX || '', 10) || 2,
   // 縮短到 5s：cold start 失敗時 fail-fast，避免 user 等 10s 才看到錯
   connectionTimeoutMillis: Number.parseInt(process.env.PG_CONNECTION_TIMEOUT_MS || '', 10) || 5000,
   // idle 連線 10s 內回收（< Supabase 端的 idle timeout，避免拿到被 server 切斷的連線）
