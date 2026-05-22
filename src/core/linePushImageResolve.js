@@ -94,7 +94,12 @@ function httpsOriginFromRequest(req) {
     .trim()
     .toLowerCase();
   if (xfProto === 'https') return `https://${host}`;
-  if (process.env.NODE_ENV === 'production') return `https://${host}`;
+  // Netlify / AWS Lambda 一律強制 https（NODE_ENV 不可靠）
+  if (
+    process.env.NODE_ENV === 'production' ||
+    process.env.NETLIFY === 'true' ||
+    process.env.AWS_LAMBDA_FUNCTION_NAME
+  ) return `https://${host}`;
   return '';
 }
 

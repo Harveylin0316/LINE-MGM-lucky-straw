@@ -23,7 +23,12 @@ const { buildPushImageBaseCandidates } = require('./core/linePushImageResolve');
 const { createLineWebhookHandler } = require('./routes/lineWebhook');
 const { createLinePushService } = require('./core/linePush');
 
-const isProduction = process.env.NODE_ENV === 'production';
+// 多重偵測：Netlify 不會自動設 NODE_ENV，但會設 NETLIFY=true；AWS Lambda 也會設 AWS_LAMBDA_FUNCTION_NAME。
+// 任一條件成立就視為 production，避免單一 env var 沒設導致 ssl/cookie/redirect 等都跑 dev 行為。
+const isProduction =
+  process.env.NODE_ENV === 'production' ||
+  process.env.NETLIFY === 'true' ||
+  !!process.env.AWS_LAMBDA_FUNCTION_NAME;
 const ADMIN_USERNAME = process.env.ADMIN_USERNAME || 'admin';
 const ADMIN_PASSWORD = process.env.ADMIN_PASSWORD || (isProduction ? '' : 'LocalAdmin1234');
 const JWT_SECRET =
@@ -31,6 +36,23 @@ const JWT_SECRET =
   process.env.SESSION_SECRET ||
   (isProduction ? '' : 'local-dev-only-jwt-secret-change-before-production-123');
 const DATABASE_URL = process.env.DATABASE_URL;
+if (!DATABASE_URL) {
+  // Fail fast：缺 DATABASE_URL 就直接讓 module load 炸，比 runtime 每次 query 都 timeout 友善
+  console.error('FATAL: DATABASE_URL is not set. Add it to Netlify env vars.');
+  // 不 throw，讓 Express 仍能 boot 回 500（避免整個 lambda crash 重 init 浪費）
+}
+
+// Process-wide protection — Lambda function 容器內若有未捕獲的 rejection，
+// 至少 log 出來而不讓整個 process crash（影響其他 in-flight request）
+if (!global.__OR_PROCESS_HANDLERS_INSTALLED__) {
+  global.__OR_PROCESS_HANDLERS_INSTALLED__ = true;
+  process.on('unhandledRejection', (reason) => {
+    console.error('[unhandledRejection]', reason && (reason.stack || reason.message || reason));
+  });
+  process.on('uncaughtException', (err) => {
+    console.error('[uncaughtException]', err && (err.stack || err.message));
+  });
+}
 const LIFF_ID = process.env.LIFF_ID || '';
 const _liffLotteryBuilt = buildLiffPermanentUrl(LIFF_ID, '/liff/lottery', '/liff/lottery');
 const LIFF_LOTTERY_PUSH_URL = /^https:\/\/liff\.line\.me\//i.test(_liffLotteryBuilt) ? _liffLotteryBuilt : '';
@@ -399,11 +421,20 @@ registerLiffRoutes(app, {
 });
 
 app.use((err, req, res, _next) => {
-  console.error('Unhandled error:', err && (err.stack || err.message));
-  // 對 fetch API 的 endpoint 回 JSON，避免前端拿到 "Server error" plain text 無法解析
+  console.error('Unhandled error:', req && req.method, req && req.path, '→', err && (err.stack || err.message));
+  // JSON response 判斷：所有 fetch API 跟 admin/api endpoint 都回 JSON，避免前端拿到 plain text 無法解析
+  const accept = (req && req.headers && req.headers['accept']) || '';
+  const p = (req && req.path) || '';
   const wantsJson =
-    (req.headers && (req.headers['accept'] || '').includes('application/json')) ||
-    (req.path && req.path.startsWith('/admin/broadcast/'));
+    accept.includes('application/json') ||
+    p.startsWith('/admin/') && (
+      p.includes('/api/') ||
+      p.includes('/api') ||
+      p.startsWith('/admin/broadcast/') ||
+      p.startsWith('/admin/activities/api') ||
+      p.startsWith('/admin/liff/')
+    ) ||
+    p.startsWith('/api/');  // 所有 /api/* (含 /api/games/*)
   if (wantsJson) {
     return res.status(500).json({
       ok: false,
@@ -411,7 +442,19 @@ app.use((err, req, res, _next) => {
       detail: err && err.message ? String(err.message).slice(0, 500) : 'unknown'
     });
   }
-  res.status(500).send('Server error');
+  // HTML 頁面顯示更友善的訊息（含 error id 給 log 對照）
+  const reqId = (req && req.get && req.get('x-nf-request-id')) || '';
+  res.status(500).type('text/html').send(
+    `<!DOCTYPE html><html lang="zh-Hant"><head><meta charset="UTF-8"><title>Server error</title>
+    <style>body{font-family:-apple-system,sans-serif;max-width:480px;margin:40px auto;padding:24px;color:#1f2937;}
+    h1{font-size:20px;margin:0 0 8px;}p{color:#6b7280;font-size:14px;line-height:1.6;}code{font-size:11px;color:#9ca3af;}
+    a{color:#2563eb;}</style></head><body>
+    <h1>暫時無法載入</h1>
+    <p>伺服器處理時發生錯誤，請稍候再試一次。若持續發生請通知管理員。</p>
+    <p><a href="javascript:location.reload()">重新整理</a> · <a href="/">回首頁</a></p>
+    ${reqId ? `<p><code>request-id: ${reqId}</code></p>` : ''}
+    </body></html>`
+  );
 });
 
 module.exports = app;
