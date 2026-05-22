@@ -72,7 +72,7 @@ END $$;
  * skipDdl=true（推薦 production）→ 純 SELECT 1 驗連線，~50ms 完成
  * skipDdl=false（legacy）→ 跑完整 DDL，僅限本機初始化新環境
  */
-async function initDb({ query, adminUsername, adminPassword, skipDdl = false }) {
+async function initDb({ query, adminUsername, adminPassword, skipDdl = true }) {
   if (skipDdl) {
     await query('SELECT 1');
     return;
