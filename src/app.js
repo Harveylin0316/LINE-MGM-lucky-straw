@@ -300,6 +300,73 @@ app.use(
     etag: true
   })
 );
+
+// ----- /healthz：診斷 endpoint，不需 admin，不需 DB connection -----
+// 用來確認環境變數設定是否完整 + Lambda 是否能起 init
+app.get('/healthz', (req, res) => {
+  // 從 DATABASE_URL 抽出 host:port 給 user 確認（不洩密碼）
+  let dbHost = '';
+  let dbPort = '';
+  let dbProtocol = '';
+  try {
+    if (DATABASE_URL) {
+      const u = new URL(DATABASE_URL);
+      dbHost = u.hostname;
+      dbPort = u.port || '5432';
+      dbProtocol = u.protocol;
+    }
+  } catch (_e) { dbHost = 'invalid_url'; }
+  res.json({
+    ok: true,
+    runtime: {
+      node: process.version,
+      isProduction,
+      netlify: process.env.NETLIFY === 'true',
+      lambda: !!process.env.AWS_LAMBDA_FUNCTION_NAME,
+      nodeEnv: process.env.NODE_ENV || '(unset)'
+    },
+    env: {
+      DATABASE_URL_set: !!DATABASE_URL,
+      DATABASE_URL_host: dbHost,
+      DATABASE_URL_port: dbPort,
+      DATABASE_URL_protocol: dbProtocol,
+      LIFF_ID_set: !!process.env.LIFF_ID,
+      GAMES_LIFF_ID_set: !!process.env.GAMES_LIFF_ID,
+      LINE_CHANNEL_ACCESS_TOKEN_set: !!process.env.LINE_CHANNEL_ACCESS_TOKEN,
+      ADMIN_PASSWORD_set: !!process.env.ADMIN_PASSWORD,
+      JWT_SECRET_set: !!process.env.JWT_SECRET,
+      PG_SSL_DISABLED: process.env.PG_SSL_DISABLED || '(unset, ssl enabled)',
+      RUN_DB_DDL_ON_BOOT: process.env.RUN_DB_DDL_ON_BOOT || '(unset, skip DDL)'
+    },
+    pool: {
+      total: pool.totalCount,
+      idle: pool.idleCount,
+      waiting: pool.waitingCount
+    },
+    initError: initError ? String(initError.message || initError).slice(0, 200) : null
+  });
+});
+
+// ----- /healthz/db：實際打一次 DB 確認連線（5 秒 timeout）-----
+app.get('/healthz/db', async (_req, res) => {
+  const start = Date.now();
+  try {
+    const r = await query('SELECT NOW() AS now');
+    res.json({
+      ok: true,
+      duration_ms: Date.now() - start,
+      db_time: r.rows[0].now,
+      pool: { total: pool.totalCount, idle: pool.idleCount, waiting: pool.waitingCount }
+    });
+  } catch (err) {
+    res.status(500).json({
+      ok: false,
+      duration_ms: Date.now() - start,
+      error: String(err.message || err).slice(0, 500),
+      pool: { total: pool.totalCount, idle: pool.idleCount, waiting: pool.waitingCount }
+    });
+  }
+});
 app.post(
   '/webhooks/line',
   express.raw({ type: 'application/json' }),
