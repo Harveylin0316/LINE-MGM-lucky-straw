@@ -1109,7 +1109,7 @@ function registerAdminBroadcastRoutes(app, deps) {
       const totalPages = Math.max(1, Math.ceil(total / perPage));
 
       const listRs = await query(
-        `SELECT b.id, b.created_at, b.status, b.admin_username,
+        `SELECT b.id, b.created_at, b.status, b.admin_username, b.scheduled_at,
                 b.recipient_total, b.recipient_ok, b.recipient_fail, b.recipient_skip,
                 b.started_at, b.finished_at,
                 (SELECT COUNT(*) FROM admin_broadcast_clicks WHERE broadcast_id = b.id)::int AS click_count
@@ -1119,12 +1119,21 @@ function registerAdminBroadcastRoutes(app, deps) {
         [perPage, offset]
       );
 
+      // 撈所有未發出的排程（不限 page，獨立區塊顯示）
+      const scheduledRs = await query(
+        `SELECT b.id, b.created_at, b.scheduled_at, b.admin_username, b.recipient_total
+         FROM admin_broadcasts b
+         WHERE b.status = 'scheduled'
+         ORDER BY b.scheduled_at ASC NULLS LAST, b.id DESC`
+      );
+
       return res.render('admin_broadcast_history', {
         title: '群發歷史',
         bodyClass: 'admin-shell broadcast-history-shell',
         user: (req.authUser && req.authUser.un) || '',
         isAdmin: true,
         batches: listRs.rows,
+        scheduled: scheduledRs.rows,
         page: pageNum,
         totalPages,
         total

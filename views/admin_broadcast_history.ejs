@@ -4,12 +4,61 @@
     isAdmin: isAdmin,
     bodyClass: bodyClass,
     body: `
+    <section class="card" id="scheduled-section">
+      <div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:10px;">
+        <h2 style="margin:0;">排程中的訊息</h2>
+        <a href="/admin/broadcast" class="btn">回群發訊息</a>
+      </div>
+      ${
+        Array.isArray(scheduled) && scheduled.length > 0
+          ? `<p class="muted" style="margin:6px 0 14px;">共 ${scheduled.length} 筆等待發送。可隨時取消尚未送出的批次。</p>
+            <div class="table-responsive"><table class="prize-table">
+              <thead>
+                <tr>
+                  <th>ID</th>
+                  <th>預定發送時間</th>
+                  <th>距離</th>
+                  <th>建立者</th>
+                  <th>收件人</th>
+                  <th>建立時間</th>
+                  <th></th>
+                </tr>
+              </thead>
+              <tbody>
+                ${scheduled.map(r => {
+                  const sched = r.scheduled_at ? new Date(r.scheduled_at) : null;
+                  const schedStr = sched ? sched.toISOString().replace('T',' ').slice(0,16) : '—';
+                  const created = r.created_at ? new Date(r.created_at).toISOString().replace('T',' ').slice(0,16) : '';
+                  let etaStr = '—';
+                  if (sched) {
+                    const diffMs = sched.getTime() - Date.now();
+                    if (diffMs < 0) etaStr = '<span style="color:#dc2626;">逾時待跑</span>';
+                    else if (diffMs < 60000) etaStr = '< 1 分鐘';
+                    else if (diffMs < 3600000) etaStr = Math.floor(diffMs / 60000) + ' 分鐘後';
+                    else if (diffMs < 86400000) etaStr = Math.floor(diffMs / 3600000) + ' 小時後';
+                    else etaStr = Math.floor(diffMs / 86400000) + ' 天後';
+                  }
+                  return `<tr data-id="${r.id}">
+                    <td><a href="/admin/broadcast/${r.id}" style="font-weight:600;">#${r.id}</a></td>
+                    <td style="font-variant-numeric:tabular-nums;">${schedStr}</td>
+                    <td>${etaStr}</td>
+                    <td>${(r.admin_username || '').replace(/</g,'&lt;')}</td>
+                    <td style="font-variant-numeric:tabular-nums;">${r.recipient_total || 0} 人</td>
+                    <td class="muted" style="font-size:12px;">${created}</td>
+                    <td><button type="button" class="btn btn-danger sched-cancel-btn" data-id="${r.id}">取消排程</button></td>
+                  </tr>`;
+                }).join('')}
+              </tbody>
+            </table></div>`
+          : '<p class="muted" style="margin-top:8px;">目前沒有排程中的訊息。</p>'
+      }
+    </section>
+
     <section class="card">
       <div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:10px;">
         <h1 style="margin:0;">群發歷史</h1>
-        <a href="/admin/broadcast" class="btn">回群發訊息</a>
       </div>
-      <p class="muted" style="margin-top:6px;">共 ${total} 筆。點批次 ID 進入詳情頁查看收件人狀態與 CTA 點擊數據。</p>
+      <p class="muted" style="margin-top:6px;">共 ${total} 筆（含已完成、執行中、已取消、排程中）。點批次 ID 進入詳情頁查看收件人狀態與 CTA 點擊。</p>
 
       ${
         Array.isArray(batches) && batches.length > 0
@@ -20,6 +69,7 @@
                   <th>建立時間</th>
                   <th>建立者</th>
                   <th>狀態</th>
+                  <th>預定發送</th>
                   <th>總數</th>
                   <th>成功</th>
                   <th>失敗</th>
@@ -32,6 +82,7 @@
                 ${batches.map(r => {
                   const ts = r.created_at ? new Date(r.created_at).toISOString().replace('T',' ').slice(0,19) : '';
                   const fin = r.finished_at ? new Date(r.finished_at).toISOString().replace('T',' ').slice(0,19) : '';
+                  const sch = r.scheduled_at ? new Date(r.scheduled_at).toISOString().replace('T',' ').slice(0,16) : '';
                   const rate = r.recipient_total > 0
                     ? Math.round((r.click_count / r.recipient_total) * 100)
                     : 0;
@@ -40,6 +91,7 @@
                     <td>${ts}</td>
                     <td>${(r.admin_username || '').replace(/</g,'&lt;')}</td>
                     <td><span class="status-pill status-${r.status}">${r.status}</span></td>
+                    <td style="font-size:12px;color:#6b7280;font-variant-numeric:tabular-nums;">${sch || '—'}</td>
                     <td>${r.recipient_total}</td>
                     <td>${r.recipient_ok}</td>
                     <td>${r.recipient_fail}</td>
@@ -59,6 +111,42 @@
       }
     </section>
 
+    <script>
+    (function () {
+      // 取消排程
+      document.querySelectorAll('.sched-cancel-btn').forEach(function (btn) {
+        btn.addEventListener('click', function () {
+          var id = btn.getAttribute('data-id');
+          if (!id) return;
+          if (!confirm('確定取消 #' + id + ' 這個排程？取消後不能還原。')) return;
+          btn.disabled = true;
+          btn.textContent = '取消中…';
+          fetch('/admin/broadcast/' + id + '/cancel', { method: 'POST' })
+            .then(function (r) { return r.json(); })
+            .then(function (data) {
+              if (!data || !data.ok) {
+                alert('取消失敗：' + (data && (data.detail || data.error) || '未知錯誤'));
+                btn.disabled = false;
+                btn.textContent = '取消排程';
+                return;
+              }
+              // 直接從表格移除這列
+              var row = document.querySelector('tr[data-id="' + id + '"]');
+              if (row) row.remove();
+              // 如果整個 tbody 空了，reload 讓 server 重新 render「目前沒有」訊息
+              var remain = document.querySelectorAll('.sched-cancel-btn').length;
+              if (remain === 0) location.reload();
+            })
+            .catch(function (e) {
+              alert('取消失敗：' + e.message);
+              btn.disabled = false;
+              btn.textContent = '取消排程';
+            });
+        });
+      });
+    })();
+    </script>
+
     <style>
       .status-pill {
         display: inline-block;
@@ -73,6 +161,17 @@
       .status-pill.status-cancelled,
       .status-pill.status-failed { background: #fee2e2; color: #991b1b; }
       .status-pill.status-scheduled { background: #dbeafe; color: #1e40af; }
+      .btn-danger {
+        background: #fff;
+        color: #dc2626;
+        border: 1px solid #fca5a5;
+        padding: 4px 12px;
+        font-size: 12px;
+        cursor: pointer;
+        border-radius: 6px;
+      }
+      .btn-danger:hover:not(:disabled) { background: #fee2e2; }
+      .btn-danger:disabled { opacity: 0.5; cursor: not-allowed; }
     </style>
     `
   })
