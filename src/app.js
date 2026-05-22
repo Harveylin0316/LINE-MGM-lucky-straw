@@ -18,6 +18,7 @@ const { registerAdminHubRoutes } = require('./routes/adminHub');
 const { registerAdminLiffAnalyticsRoutes } = require('./routes/adminLiffAnalytics');
 const { registerAdminActivitiesRoutes } = require('./routes/adminActivities');
 const { registerGamesRoutes } = require('./routes/games');
+const { registerAdminRecipientListsRoutes } = require('./routes/adminRecipientLists');
 const { buildLiffPermanentUrl } = require('./core/liffPermalink');
 const { buildPushImageBaseCandidates } = require('./core/linePushImageResolve');
 const { createLineWebhookHandler } = require('./routes/lineWebhook');
@@ -473,6 +474,8 @@ registerAdminLiffAnalyticsRoutes(app, { query, authCore });
 registerAdminActivitiesRoutes(app, { query, authCore });
 
 registerGamesRoutes(app, { query, pool });
+
+registerAdminRecipientListsRoutes(app, { query, pool, authCore });
 
 registerLiffRoutes(app, {
   query,

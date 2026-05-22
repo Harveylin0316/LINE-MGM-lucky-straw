@@ -1,0 +1,359 @@
+<%-
+  include('layout', {
+    user: user,
+    isAdmin: isAdmin,
+    bodyClass: bodyClass,
+    body: `
+    <section class="card">
+      <div class="rld-head">
+        <a href="/admin/recipient-lists" class="rld-back">← 回名單庫</a>
+        <h1 id="rld-name">${list.name.replace(/</g,'&lt;')}</h1>
+        <button type="button" class="rld-edit-btn" id="btn-edit-meta">編輯名稱 / 描述</button>
+      </div>
+      <p class="muted" id="rld-desc" style="font-size:13px;margin-top:6px;">${(list.description || '').replace(/</g,'&lt;')}</p>
+      <div class="rld-stats">
+        <div class="rld-stat"><div class="v" id="rld-total">${list.total || 0}</div><div class="k">成員數</div></div>
+        <div class="rld-stat"><div class="v" style="font-size:13px;">${String(list.created_by || '').replace(/</g,'&lt;')}</div><div class="k">建立者</div></div>
+        <div class="rld-stat"><div class="v" style="font-size:13px;font-variant-numeric:tabular-nums;">${new Date(list.created_at).toLocaleString('sv-SE', { timeZone: 'Asia/Taipei' }).slice(0,16)}</div><div class="k">建立時間</div></div>
+      </div>
+    </section>
+
+    <section class="card">
+      <div class="rld-section-head">
+        <h2 style="margin:0;">成員清單</h2>
+        <div style="display:flex;gap:8px;">
+          <input type="search" id="rld-search" placeholder="搜尋名稱或 UID..." class="rld-search" />
+          <button type="button" class="rld-primary-btn" id="btn-add-members">＋ 加入成員</button>
+        </div>
+      </div>
+      <div class="table-wrap" style="margin-top:10px;">
+        <table class="rld-table">
+          <thead>
+            <tr>
+              <th style="width:48px;">#</th>
+              <th>用戶</th>
+              <th>加入時間</th>
+              <th></th>
+            </tr>
+          </thead>
+          <tbody id="rld-tbody">
+            <tr><td colspan="4" class="muted" style="text-align:center;padding:18px 0;">載入中…</td></tr>
+          </tbody>
+        </table>
+      </div>
+      <div id="rld-pagination" style="margin-top:14px;display:flex;align-items:center;gap:8px;font-size:12px;color:#6B6B70;"></div>
+    </section>
+
+    <!-- 加入成員 modal -->
+    <div id="add-modal" class="rl-modal" hidden>
+      <div class="rl-modal-inner">
+        <div class="rl-modal-head">
+          <h3 style="margin:0;">加入成員</h3>
+          <button type="button" class="rl-modal-close" id="add-close">×</button>
+        </div>
+        <label class="rl-field rl-field-full">
+          <span>LINE userId 清單（一行一個 / 逗號 / 空格 都行）</span>
+          <textarea id="add-uids" rows="10" placeholder="U3eca22d67d352c4db1428decf3ebcf14&#10;..." style="font-family:ui-monospace,Menlo,monospace;font-size:12px;"></textarea>
+          <div id="add-counter" class="muted" style="font-size:11px;">已輸入 0 個 UID</div>
+        </label>
+        <div class="rl-modal-actions">
+          <button type="button" class="rl-primary-btn" id="add-save">加入</button>
+          <button type="button" class="rl-secondary-btn" id="add-cancel">取消</button>
+        </div>
+        <div id="add-status" class="muted" style="font-size:12px;min-height:18px;margin-top:8px;"></div>
+      </div>
+    </div>
+
+    <!-- 編輯 name / desc modal -->
+    <div id="edit-modal" class="rl-modal" hidden>
+      <div class="rl-modal-inner" style="max-width:480px;">
+        <div class="rl-modal-head">
+          <h3 style="margin:0;">編輯名單資訊</h3>
+          <button type="button" class="rl-modal-close" id="edit-close">×</button>
+        </div>
+        <label class="rl-field rl-field-full">
+          <span>名稱 *</span>
+          <input type="text" id="edit-name" maxlength="200" />
+        </label>
+        <label class="rl-field rl-field-full">
+          <span>描述</span>
+          <input type="text" id="edit-desc" maxlength="500" />
+        </label>
+        <div class="rl-modal-actions">
+          <button type="button" class="rl-primary-btn" id="edit-save">儲存</button>
+          <button type="button" class="rl-secondary-btn" id="edit-cancel">取消</button>
+        </div>
+        <div id="edit-status" class="muted" style="font-size:12px;min-height:18px;margin-top:8px;"></div>
+      </div>
+    </div>
+
+    <script>
+    (function () {
+      var $ = function (id) { return document.getElementById(id); };
+      var listId = ${list.id};
+      var currentList = ${JSON.stringify({ id: list.id, name: list.name, description: list.description })};
+      var pageSize = 100;
+      var currentOffset = 0;
+      var totalMembers = ${list.total || 0};
+      var searchTerm = '';
+
+      function esc(s) {
+        return String(s == null ? '' : s)
+          .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
+          .replace(/"/g, '&quot;').replace(/'/g, '&#039;');
+      }
+      function fmtTime(ts) {
+        if (!ts) return '—';
+        var d = new Date(ts);
+        if (isNaN(d.getTime())) return '—';
+        return d.toLocaleString('sv-SE', { timeZone: 'Asia/Taipei' }).slice(0, 16);
+      }
+      function shortUid(uid) {
+        if (!uid) return '';
+        return uid.slice(0, 6) + '…' + uid.slice(-4);
+      }
+      function parseUids(text) {
+        if (!text) return [];
+        return text.split(/[\\s,;]+/).map(function (s) { return s.trim(); }).filter(Boolean);
+      }
+
+      function loadMembers() {
+        var url = '/admin/recipient-lists/api/' + listId + '/members?limit=' + pageSize +
+          '&offset=' + currentOffset + (searchTerm ? '&search=' + encodeURIComponent(searchTerm) : '');
+        fetch(url)
+          .then(function (r) { return r.json(); })
+          .then(function (resp) {
+            if (!resp.ok) {
+              $('rld-tbody').innerHTML = '<tr><td colspan="4" class="muted">載入失敗</td></tr>';
+              return;
+            }
+            totalMembers = resp.total;
+            $('rld-total').textContent = totalMembers;
+            renderMembers(resp.members || []);
+            renderPagination();
+          });
+      }
+
+      function renderMembers(rows) {
+        var tbody = $('rld-tbody');
+        if (!rows.length) {
+          tbody.innerHTML = '<tr><td colspan="4" class="muted" style="text-align:center;padding:24px 0;">' +
+            (searchTerm ? '沒有符合搜尋的成員' : '尚無成員，點右上「＋ 加入成員」') +
+            '</td></tr>';
+          return;
+        }
+        tbody.innerHTML = rows.map(function (m, idx) {
+          var displayName = m.line_display_name || m.username || '<span class="muted" style="font-style:italic;">未在 CRM 用戶表</span>';
+          var avatar = m.line_picture_url
+            ? '<img src="' + esc(m.line_picture_url) + '" alt="" class="rld-avatar">'
+            : '<div class="rld-avatar rld-avatar-blank">' + esc((m.line_display_name || m.username || '?').slice(0, 1)) + '</div>';
+          return '<tr data-id="' + m.id + '">' +
+            '<td class="muted" style="font-variant-numeric:tabular-nums;">' + (currentOffset + idx + 1) + '</td>' +
+            '<td>' +
+              '<div class="rld-user-row">' +
+                avatar +
+                '<div>' +
+                  '<div class="rld-user-name">' + displayName + '</div>' +
+                  '<button type="button" class="rld-uid" data-uid="' + esc(m.line_user_id) + '" title="點擊複製完整 UID">' + esc(shortUid(m.line_user_id)) + '</button>' +
+                '</div>' +
+              '</div>' +
+            '</td>' +
+            '<td style="font-size:12px;color:#6B6B70;">' + fmtTime(m.created_at) + '</td>' +
+            '<td><button type="button" class="rld-del" data-id="' + m.id + '">移除</button></td>' +
+          '</tr>';
+        }).join('');
+
+        tbody.querySelectorAll('.rld-uid').forEach(function (btn) {
+          btn.addEventListener('click', function () {
+            var uid = btn.getAttribute('data-uid');
+            if (!uid) return;
+            navigator.clipboard.writeText(uid).then(function () {
+              var orig = btn.textContent;
+              btn.textContent = '已複製';
+              setTimeout(function () { btn.textContent = orig; }, 1200);
+            }).catch(function () { alert(uid); });
+          });
+        });
+        tbody.querySelectorAll('.rld-del').forEach(function (btn) {
+          btn.addEventListener('click', function () {
+            if (!confirm('從名單移除這個成員？')) return;
+            var id = btn.getAttribute('data-id');
+            fetch('/admin/recipient-lists/api/members/' + id, { method: 'DELETE' })
+              .then(function (r) { return r.json(); })
+              .then(function (d) {
+                if (!d.ok) { alert('移除失敗'); return; }
+                loadMembers();
+              });
+          });
+        });
+      }
+
+      function renderPagination() {
+        var pag = $('rld-pagination');
+        var totalPages = Math.max(1, Math.ceil(totalMembers / pageSize));
+        var curPage = Math.floor(currentOffset / pageSize) + 1;
+        pag.innerHTML = '';
+        if (totalMembers > pageSize) {
+          var prevBtn = document.createElement('button');
+          prevBtn.className = 'rld-page-btn';
+          prevBtn.textContent = '上一頁';
+          prevBtn.disabled = currentOffset === 0;
+          prevBtn.addEventListener('click', function () {
+            currentOffset = Math.max(0, currentOffset - pageSize);
+            loadMembers();
+          });
+          var nextBtn = document.createElement('button');
+          nextBtn.className = 'rld-page-btn';
+          nextBtn.textContent = '下一頁';
+          nextBtn.disabled = currentOffset + pageSize >= totalMembers;
+          nextBtn.addEventListener('click', function () {
+            currentOffset += pageSize;
+            loadMembers();
+          });
+          var info = document.createElement('span');
+          info.textContent = '第 ' + curPage + ' / ' + totalPages + ' 頁（共 ' + totalMembers + ' 人）';
+          pag.appendChild(prevBtn);
+          pag.appendChild(info);
+          pag.appendChild(nextBtn);
+        } else {
+          var info2 = document.createElement('span');
+          info2.textContent = '共 ' + totalMembers + ' 人';
+          pag.appendChild(info2);
+        }
+      }
+
+      var searchTimer = null;
+      $('rld-search').addEventListener('input', function () {
+        clearTimeout(searchTimer);
+        searchTimer = setTimeout(function () {
+          searchTerm = $('rld-search').value.trim();
+          currentOffset = 0;
+          loadMembers();
+        }, 250);
+      });
+
+      // ---- Add members modal ----
+      var addModal = $('add-modal');
+      $('btn-add-members').addEventListener('click', function () {
+        $('add-uids').value = '';
+        $('add-counter').textContent = '已輸入 0 個 UID';
+        $('add-status').textContent = '';
+        addModal.hidden = false;
+        setTimeout(function () { $('add-uids').focus(); }, 50);
+      });
+      $('add-close').addEventListener('click', function () { addModal.hidden = true; });
+      $('add-cancel').addEventListener('click', function () { addModal.hidden = true; });
+      $('add-uids').addEventListener('input', function () {
+        $('add-counter').textContent = '已輸入 ' + parseUids($('add-uids').value).length + ' 個 UID';
+      });
+      $('add-save').addEventListener('click', function () {
+        var uids = parseUids($('add-uids').value);
+        if (uids.length === 0) { $('add-status').textContent = '請至少貼一個 UID'; return; }
+        $('add-status').textContent = '加入中⋯';
+        $('add-save').disabled = true;
+        fetch('/admin/recipient-lists/api/' + listId + '/members', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ lineUserIds: uids })
+        })
+          .then(function (r) { return r.json(); })
+          .then(function (d) {
+            $('add-save').disabled = false;
+            if (!d.ok) {
+              $('add-status').textContent = '失敗：' + (d.detail || d.error);
+              return;
+            }
+            $('add-status').textContent = '新增 ' + d.inserted + ' 人 · 已存在 ' + d.already_existed +
+              (d.invalid_count > 0 ? ' · 無效 ' + d.invalid_count : '');
+            setTimeout(function () { addModal.hidden = true; loadMembers(); }, 1000);
+          });
+      });
+
+      // ---- Edit meta modal ----
+      var editModal = $('edit-modal');
+      $('btn-edit-meta').addEventListener('click', function () {
+        $('edit-name').value = currentList.name || '';
+        $('edit-desc').value = currentList.description || '';
+        $('edit-status').textContent = '';
+        editModal.hidden = false;
+      });
+      $('edit-close').addEventListener('click', function () { editModal.hidden = true; });
+      $('edit-cancel').addEventListener('click', function () { editModal.hidden = true; });
+      $('edit-save').addEventListener('click', function () {
+        var name = $('edit-name').value.trim();
+        var desc = $('edit-desc').value.trim();
+        if (!name) { $('edit-status').textContent = '名稱必填'; return; }
+        $('edit-save').disabled = true;
+        fetch('/admin/recipient-lists/api/' + listId, {
+          method: 'PUT',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ name: name, description: desc })
+        })
+          .then(function (r) { return r.json(); })
+          .then(function (d) {
+            $('edit-save').disabled = false;
+            if (!d.ok) { $('edit-status').textContent = '失敗：' + (d.detail || d.error); return; }
+            currentList = d.list;
+            $('rld-name').textContent = d.list.name;
+            $('rld-desc').textContent = d.list.description || '';
+            editModal.hidden = true;
+          });
+      });
+
+      loadMembers();
+    })();
+    </script>
+
+    <style>
+      .rld-head { display: flex; align-items: center; justify-content: space-between; gap: 12px; flex-wrap: wrap; }
+      .rld-head h1 { margin: 0; font-size: 22px; flex: 1; min-width: 0; }
+      .rld-back { color: #6B6B70; font-size: 13px; text-decoration: none; }
+      .rld-back:hover { color: #1f2937; }
+      .rld-edit-btn { padding: 6px 12px; background: #fff; border: 1px solid #ECECEE; border-radius: 6px; font-size: 12px; cursor: pointer; color: #374151; }
+      .rld-edit-btn:hover { background: #FFFBEB; border-color: #FCC726; }
+
+      .rld-stats { display: grid; grid-template-columns: repeat(auto-fit, minmax(140px, 1fr)); gap: 10px; margin-top: 14px; }
+      .rld-stat { padding: 12px; border: 1px solid #ECECEE; border-radius: 10px; background: #FAFAFA; }
+      .rld-stat .v { font-size: 22px; font-weight: 700; letter-spacing: -0.02em; font-variant-numeric: tabular-nums; line-height: 1.1; color: #1f2937; }
+      .rld-stat .k { font-size: 11px; color: #6B6B70; margin-top: 4px; }
+
+      .rld-section-head { display: flex; justify-content: space-between; align-items: center; gap: 12px; flex-wrap: wrap; }
+      .rld-search { padding: 6px 12px; border: 1px solid #ECECEE; border-radius: 6px; font-size: 13px; width: 200px; }
+
+      .table-wrap { overflow-x: auto; }
+      .rld-table { width: 100%; border-collapse: collapse; font-size: 13px; }
+      .rld-table th, .rld-table td { padding: 10px 12px; border-bottom: 1px solid #F3F4F6; vertical-align: middle; }
+      .rld-table th { background: #FAFAFA; text-align: left; font-size: 11px; color: #6B6B70; font-weight: 600; text-transform: uppercase; letter-spacing: 0.04em; }
+
+      .rld-user-row { display: flex; align-items: center; gap: 10px; }
+      .rld-avatar { width: 32px; height: 32px; border-radius: 50%; object-fit: cover; background: #FCC726; color: #1f2937; display: flex; align-items: center; justify-content: center; font-weight: 700; font-size: 13px; flex-shrink: 0; }
+      .rld-avatar-blank { text-transform: uppercase; }
+      .rld-user-name { font-weight: 600; color: #1f2937; font-size: 13px; }
+      .rld-uid { background: none; border: none; padding: 2px 0; font-family: ui-monospace, Menlo, monospace; font-size: 11px; color: #9CA3AF; cursor: pointer; margin-top: 1px; }
+      .rld-uid:hover { color: #1f2937; text-decoration: underline; }
+
+      .rld-del { padding: 4px 10px; background: #fff; border: 1px solid #fca5a5; border-radius: 6px; font-size: 11px; cursor: pointer; color: #dc2626; font-family: inherit; }
+      .rld-del:hover { background: #fee2e2; }
+
+      .rld-page-btn { padding: 5px 10px; background: #fff; border: 1px solid #ECECEE; border-radius: 6px; font-size: 12px; cursor: pointer; color: #374151; font-family: inherit; }
+      .rld-page-btn:disabled { opacity: 0.4; cursor: not-allowed; }
+
+      .rld-primary-btn { padding: 8px 14px; background: #FCC726; color: #1f2937; font-weight: 600; border-radius: 6px; border: none; cursor: pointer; font-size: 13px; }
+      .rld-primary-btn:hover:not(:disabled) { background: #f5b800; }
+
+      /* 沿用 modal CSS */
+      .rl-modal { position: fixed; inset: 0; background: rgba(0,0,0,0.5); display: flex; align-items: center; justify-content: center; z-index: 100; padding: 16px; }
+      .rl-modal[hidden] { display: none !important; }
+      .rl-modal-inner { background: #fff; border-radius: 12px; max-width: 580px; width: 100%; max-height: 90vh; overflow-y: auto; padding: 20px; }
+      .rl-modal-head { display: flex; justify-content: space-between; align-items: center; margin-bottom: 14px; }
+      .rl-modal-close { background: none; border: none; font-size: 24px; cursor: pointer; color: #6b7280; line-height: 1; }
+      .rl-field { display: flex; flex-direction: column; gap: 4px; font-size: 13px; }
+      .rl-field span { color: #6B6B70; font-size: 12px; }
+      .rl-field input, .rl-field textarea { padding: 8px 10px; border: 1px solid #ECECEE; border-radius: 6px; font-size: 13px; font-family: inherit; width: 100%; }
+      .rl-field-full { width: 100%; }
+      .rl-modal-actions { margin-top: 14px; display: flex; gap: 8px; }
+      .rl-secondary-btn { padding: 9px 16px; background: #fff; color: #374151; border: 1px solid #e5e7eb; border-radius: 8px; cursor: pointer; font-size: 13px; }
+    </style>
+    `
+  })
+%>

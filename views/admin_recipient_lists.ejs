@@ -1,0 +1,252 @@
+<%-
+  include('layout', {
+    user: user,
+    isAdmin: isAdmin,
+    bodyClass: bodyClass,
+    body: `
+    <section class="card rl-hero">
+      <div class="rl-hero-inner">
+        <div>
+          <h1>名單庫</h1>
+          <p class="muted" style="margin-top:6px;">
+            集中管理推播 / 活動用的用戶名單。建立後在「群發訊息」可選用，未來活動 hub 也會接這裡。
+          </p>
+        </div>
+        <button type="button" class="rl-primary-btn" id="btn-new-list">＋ 新增名單</button>
+      </div>
+    </section>
+
+    <section class="card">
+      <div style="display:flex;align-items:baseline;justify-content:space-between;gap:12px;margin-bottom:10px;">
+        <h2 style="margin:0;">名單清單</h2>
+        <input type="search" id="rl-search" placeholder="搜尋名稱或描述..." class="rl-search" />
+      </div>
+      <div class="table-wrap">
+        <table class="rl-table">
+          <thead>
+            <tr>
+              <th>名稱</th>
+              <th style="text-align:right;">成員數</th>
+              <th>建立者</th>
+              <th>建立時間</th>
+              <th>更新時間</th>
+              <th></th>
+            </tr>
+          </thead>
+          <tbody id="rl-tbody">
+            <tr><td colspan="6" class="muted" style="text-align:center;padding:18px 0;">載入中…</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </section>
+
+    <!-- 新增名單 modal -->
+    <div id="new-list-modal" class="rl-modal" hidden>
+      <div class="rl-modal-inner">
+        <div class="rl-modal-head">
+          <h3 style="margin:0;">新增名單</h3>
+          <button type="button" class="rl-modal-close" id="new-list-close">×</button>
+        </div>
+        <div class="rl-grid">
+          <label class="rl-field rl-field-full">
+            <span>名稱 *</span>
+            <input type="text" id="nl-name" placeholder="例：5月中過 $100 Rice Dollar 名單" maxlength="200" />
+          </label>
+          <label class="rl-field rl-field-full">
+            <span>描述（可選）</span>
+            <input type="text" id="nl-desc" placeholder="用途備註" maxlength="500" />
+          </label>
+          <label class="rl-field rl-field-full">
+            <span>LINE userId 清單 *（一行一個 / 逗號 / 空格 都行）</span>
+            <textarea id="nl-uids" rows="8" placeholder="U3eca22d67d352c4db1428decf3ebcf14&#10;U4eca22d67d352c4db1428decf3ebcf15&#10;..." style="font-family:ui-monospace,Menlo,monospace;font-size:12px;"></textarea>
+            <div id="nl-counter" class="muted" style="font-size:11px;">已輸入 0 個 UID</div>
+          </label>
+        </div>
+        <div class="rl-modal-actions">
+          <button type="button" class="rl-primary-btn" id="nl-save">建立名單</button>
+          <button type="button" class="rl-secondary-btn" id="nl-cancel">取消</button>
+        </div>
+        <div id="nl-status" class="muted" style="font-size:12px;min-height:18px;margin-top:8px;"></div>
+      </div>
+    </div>
+
+    <script>
+    (function () {
+      var $ = function (id) { return document.getElementById(id); };
+      var allLists = [];
+
+      function esc(s) {
+        return String(s == null ? '' : s)
+          .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
+          .replace(/"/g, '&quot;').replace(/'/g, '&#039;');
+      }
+      function fmtTime(ts) {
+        if (!ts) return '—';
+        var d = new Date(ts);
+        if (isNaN(d.getTime())) return '—';
+        return d.toLocaleString('sv-SE', { timeZone: 'Asia/Taipei' }).slice(0, 16);
+      }
+
+      function parseUids(text) {
+        if (!text) return [];
+        return text.split(/[\\s,;]+/).map(function (s) { return s.trim(); }).filter(Boolean);
+      }
+
+      function load() {
+        fetch('/admin/broadcast/recipient-lists')
+          .then(function (r) { return r.json(); })
+          .then(function (resp) {
+            if (!resp.ok) {
+              $('rl-tbody').innerHTML = '<tr><td colspan="6" class="muted">載入失敗</td></tr>';
+              return;
+            }
+            allLists = resp.lists || [];
+            render(allLists);
+          })
+          .catch(function () {
+            $('rl-tbody').innerHTML = '<tr><td colspan="6" class="muted">載入失敗</td></tr>';
+          });
+      }
+
+      function render(list) {
+        var tbody = $('rl-tbody');
+        if (!list.length) {
+          tbody.innerHTML = '<tr><td colspan="6" class="muted" style="text-align:center;padding:24px 0;">尚無名單。點「＋ 新增名單」建立第一個。</td></tr>';
+          return;
+        }
+        tbody.innerHTML = list.map(function (l) {
+          return '<tr data-id="' + l.id + '">' +
+            '<td>' +
+              '<div class="rl-name">' + esc(l.name) + '</div>' +
+              (l.description ? '<div class="rl-desc">' + esc(l.description) + '</div>' : '') +
+            '</td>' +
+            '<td style="text-align:right;font-weight:600;font-variant-numeric:tabular-nums;">' +
+              (l.total || 0) + ' <span class="muted" style="font-size:11px;">人</span>' +
+            '</td>' +
+            '<td><span class="muted">' + esc(l.created_by || '') + '</span></td>' +
+            '<td style="font-size:12px;color:#6B6B70;">' + fmtTime(l.created_at) + '</td>' +
+            '<td style="font-size:12px;color:#6B6B70;">' + fmtTime(l.updated_at) + '</td>' +
+            '<td>' +
+              '<a href="/admin/recipient-lists/' + l.id + '" class="rl-link-btn">檢視 / 編輯</a>' +
+              '<button type="button" class="rl-del-btn" data-id="' + l.id + '" data-name="' + esc(l.name) + '">刪除</button>' +
+            '</td>' +
+          '</tr>';
+        }).join('');
+        // delete handler
+        tbody.querySelectorAll('.rl-del-btn').forEach(function (btn) {
+          btn.addEventListener('click', function () {
+            var id = btn.getAttribute('data-id');
+            var name = btn.getAttribute('data-name');
+            if (!confirm('刪除名單「' + name + '」？此動作無法復原。')) return;
+            fetch('/admin/broadcast/recipient-lists/' + id, { method: 'DELETE' })
+              .then(function (r) { return r.json(); })
+              .then(function (d) {
+                if (!d.ok) { alert('刪除失敗：' + (d.detail || d.error)); return; }
+                load();
+              });
+          });
+        });
+      }
+
+      // search
+      $('rl-search').addEventListener('input', function () {
+        var q = $('rl-search').value.trim().toLowerCase();
+        if (!q) { render(allLists); return; }
+        var filtered = allLists.filter(function (l) {
+          var name = (l.name || '').toLowerCase();
+          var desc = (l.description || '').toLowerCase();
+          return name.indexOf(q) >= 0 || desc.indexOf(q) >= 0;
+        });
+        render(filtered);
+      });
+
+      // ---- 新增 modal ----
+      var modal = $('new-list-modal');
+      function openModal() {
+        $('nl-name').value = '';
+        $('nl-desc').value = '';
+        $('nl-uids').value = '';
+        $('nl-counter').textContent = '已輸入 0 個 UID';
+        $('nl-status').textContent = '';
+        modal.hidden = false;
+        setTimeout(function () { $('nl-name').focus(); }, 50);
+      }
+      function closeModal() { modal.hidden = true; }
+      $('btn-new-list').addEventListener('click', openModal);
+      $('new-list-close').addEventListener('click', closeModal);
+      $('nl-cancel').addEventListener('click', closeModal);
+
+      $('nl-uids').addEventListener('input', function () {
+        var uids = parseUids($('nl-uids').value);
+        $('nl-counter').textContent = '已輸入 ' + uids.length + ' 個 UID';
+      });
+
+      $('nl-save').addEventListener('click', function () {
+        var name = $('nl-name').value.trim();
+        var desc = $('nl-desc').value.trim();
+        var uids = parseUids($('nl-uids').value);
+        if (!name) { $('nl-status').textContent = '請填寫名稱'; return; }
+        if (uids.length === 0) { $('nl-status').textContent = '請至少貼一個 UID'; return; }
+        $('nl-status').textContent = '建立中⋯';
+        $('nl-save').disabled = true;
+        fetch('/admin/broadcast/recipient-lists', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ name: name, description: desc, lineUserIds: uids })
+        })
+          .then(function (r) { return r.json(); })
+          .then(function (d) {
+            $('nl-save').disabled = false;
+            if (!d.ok) {
+              $('nl-status').textContent = '失敗：' + (d.detail || d.error || '未知');
+              return;
+            }
+            closeModal();
+            load();
+          })
+          .catch(function (e) {
+            $('nl-save').disabled = false;
+            $('nl-status').textContent = '錯誤：' + e.message;
+          });
+      });
+
+      load();
+    })();
+    </script>
+
+    <style>
+      .rl-hero { background: linear-gradient(135deg, #fffbeb 0%, #fff 100%); border: 1px solid #fde68a; }
+      .rl-hero-inner { display: flex; justify-content: space-between; align-items: center; gap: 12px; flex-wrap: wrap; }
+      .rl-primary-btn { padding: 10px 18px; background: #FCC726; color: #1f2937; font-weight: 600; border-radius: 8px; border: none; cursor: pointer; font-size: 14px; }
+      .rl-primary-btn:hover { background: #f5b800; }
+      .rl-primary-btn:disabled { opacity: 0.6; cursor: not-allowed; }
+      .rl-secondary-btn { padding: 9px 16px; background: #fff; color: #374151; border: 1px solid #e5e7eb; border-radius: 8px; cursor: pointer; font-size: 13px; }
+
+      .rl-search { padding: 6px 12px; border: 1px solid #ECECEE; border-radius: 6px; font-size: 13px; width: 240px; max-width: 100%; }
+
+      .table-wrap { overflow-x: auto; }
+      .rl-table { width: 100%; border-collapse: collapse; font-size: 13px; }
+      .rl-table th, .rl-table td { padding: 10px 12px; border-bottom: 1px solid #F3F4F6; vertical-align: middle; }
+      .rl-table th { background: #FAFAFA; text-align: left; font-size: 11px; color: #6B6B70; font-weight: 600; text-transform: uppercase; letter-spacing: 0.04em; }
+      .rl-name { font-weight: 600; color: #1f2937; font-size: 14px; }
+      .rl-desc { font-size: 11px; color: #6B6B70; margin-top: 2px; }
+      .rl-link-btn { display: inline-block; padding: 4px 10px; background: #fff; border: 1px solid #e5e7eb; border-radius: 6px; font-size: 12px; cursor: pointer; color: #374151; margin-right: 4px; text-decoration: none; }
+      .rl-link-btn:hover { background: #fffbeb; border-color: #FCC726; }
+      .rl-del-btn { padding: 4px 10px; background: #fff; border: 1px solid #fca5a5; border-radius: 6px; font-size: 12px; cursor: pointer; color: #dc2626; font-family: inherit; }
+      .rl-del-btn:hover { background: #fee2e2; }
+
+      .rl-modal { position: fixed; inset: 0; background: rgba(0,0,0,0.5); display: flex; align-items: center; justify-content: center; z-index: 100; padding: 16px; }
+      .rl-modal[hidden] { display: none !important; }
+      .rl-modal-inner { background: #fff; border-radius: 12px; max-width: 580px; width: 100%; max-height: 90vh; overflow-y: auto; padding: 20px; }
+      .rl-modal-head { display: flex; justify-content: space-between; align-items: center; margin-bottom: 14px; }
+      .rl-modal-close { background: none; border: none; font-size: 24px; cursor: pointer; color: #6b7280; line-height: 1; }
+      .rl-grid { display: flex; flex-direction: column; gap: 12px; }
+      .rl-field { display: flex; flex-direction: column; gap: 4px; font-size: 13px; }
+      .rl-field span { color: #6B6B70; font-size: 12px; }
+      .rl-field input, .rl-field textarea { padding: 8px 10px; border: 1px solid #ECECEE; border-radius: 6px; font-size: 13px; font-family: inherit; }
+      .rl-field-full { width: 100%; }
+      .rl-modal-actions { margin-top: 14px; display: flex; gap: 8px; }
+    </style>
+    `
+  })
+%>
