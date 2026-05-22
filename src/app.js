@@ -471,7 +471,7 @@ registerAdminHubRoutes(app, { authCore });
 
 registerAdminLiffAnalyticsRoutes(app, { query, authCore });
 
-registerAdminActivitiesRoutes(app, { query, authCore });
+registerAdminActivitiesRoutes(app, { query, pool, authCore });
 
 registerGamesRoutes(app, { query, pool });
 

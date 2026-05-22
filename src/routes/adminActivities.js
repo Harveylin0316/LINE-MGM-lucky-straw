@@ -29,7 +29,7 @@ const STATUSES = ['draft', 'active', 'paused', 'ended'];
 const PRIZE_TYPES = ['rice_dollar', 'coupon_code', 'badge', 'physical', 'none'];
 
 function registerAdminActivitiesRoutes(app, deps) {
-  const { query, authCore } = deps;
+  const { query, pool, authCore } = deps;
   const { requireAdmin } = authCore;
 
   // ------------------------------------------------------------------
