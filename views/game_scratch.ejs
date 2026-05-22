@@ -294,46 +294,53 @@
 
       function paintCover() {
         var rect = card.getBoundingClientRect();
-        canvas.width = Math.floor(rect.width * (window.devicePixelRatio || 1));
-        canvas.height = Math.floor(rect.height * (window.devicePixelRatio || 1));
-        canvas.style.width = rect.width + 'px';
-        canvas.style.height = rect.height + 'px';
-        ctx.setTransform(1, 0, 0, 1, 0, 0);
-        ctx.scale(window.devicePixelRatio || 1, 1);
-        ctx.scale(1, window.devicePixelRatio || 1);
-        // 灰色金屬箔感漸層
-        var g = ctx.createLinearGradient(0, 0, canvas.width, canvas.height);
-        g.addColorStop(0, '#C9CDD4');
+        var dpr = window.devicePixelRatio || 1;
+        var w = Math.floor(rect.width);
+        var h = Math.floor(rect.height);
+        // physical canvas size = CSS size * dpr → 高解析度
+        canvas.width = Math.floor(w * dpr);
+        canvas.height = Math.floor(h * dpr);
+        canvas.style.width = w + 'px';
+        canvas.style.height = h + 'px';
+        // 只 setTransform 一次，scale(dpr, dpr) 之後所有座標都用「邏輯像素」(w, h)
+        ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+        ctx.globalCompositeOperation = 'source-over';
+        // 灰色金屬箔感漸層（用邏輯尺寸 w/h，配合 ctx 的 scale）
+        var g = ctx.createLinearGradient(0, 0, w, h);
+        g.addColorStop(0, '#D5D9E0');
         g.addColorStop(0.5, '#9CA3AD');
         g.addColorStop(1, '#7B8290');
         ctx.fillStyle = g;
-        ctx.fillRect(0, 0, canvas.width, canvas.height);
-        // 細點 pattern
-        ctx.globalCompositeOperation = 'source-over';
-        for (var i = 0; i < 200; i++) {
-          ctx.fillStyle = 'rgba(255,255,255,' + (Math.random() * 0.15) + ')';
+        ctx.fillRect(0, 0, w, h);
+        // 細白點 pattern
+        for (var i = 0; i < 140; i++) {
+          ctx.fillStyle = 'rgba(255,255,255,' + (Math.random() * 0.18 + 0.04) + ')';
           ctx.beginPath();
-          ctx.arc(Math.random() * canvas.width, Math.random() * canvas.height, Math.random() * 2 + 0.5, 0, Math.PI * 2);
+          ctx.arc(Math.random() * w, Math.random() * h, Math.random() * 1.5 + 0.4, 0, Math.PI * 2);
           ctx.fill();
         }
+        // 中央文字提示
+        ctx.fillStyle = 'rgba(255,255,255,0.4)';
+        ctx.font = 'bold 14px -apple-system, "PingFang TC", sans-serif';
+        ctx.textAlign = 'center';
+        ctx.textBaseline = 'middle';
+        ctx.fillText('刮開查看獎品', w / 2, h / 2);
+        // 切換 composite mode 為 destination-out（用來「擦除」）
         ctx.globalCompositeOperation = 'destination-out';
       }
 
       function setupScratch() {
         var isDrawing = false;
         var lastX = 0, lastY = 0;
-        var scratchedPixels = 0;
-        var totalPixels = canvas.width * canvas.height;
-        var revealThreshold = 0.4;  // 刮開 40% 自動 reveal
+        var revealThreshold = 0.35;  // 刮開 35% 自動 reveal（更有成就感）
 
+        // 回邏輯像素座標（ctx 已 scale dpr，邏輯座標跟 CSS 像素一致）
         function getPos(e) {
           var rect = canvas.getBoundingClientRect();
           var x, y;
           if (e.touches) { x = e.touches[0].clientX; y = e.touches[0].clientY; }
           else { x = e.clientX; y = e.clientY; }
-          var scaleX = canvas.width / rect.width;
-          var scaleY = canvas.height / rect.height;
-          return { x: (x - rect.left) * scaleX, y: (y - rect.top) * scaleY };
+          return { x: x - rect.left, y: y - rect.top };
         }
         function startDraw(e) {
           if (!canPlay || revealed) return;
@@ -341,12 +348,19 @@
           isDrawing = true;
           var p = getPos(e);
           lastX = p.x; lastY = p.y;
+          // 第一觸點：畫一個小圓圈讓刮跡更明顯
+          ctx.lineWidth = 36;
+          ctx.lineCap = 'round';
+          ctx.beginPath();
+          ctx.arc(p.x, p.y, 18, 0, Math.PI * 2);
+          ctx.fill();
+          card.classList.add('scratched');
         }
         function moveDraw(e) {
           if (!isDrawing || !canPlay || revealed) return;
           e.preventDefault();
           var p = getPos(e);
-          ctx.lineWidth = 50;
+          ctx.lineWidth = 36;
           ctx.lineCap = 'round';
           ctx.lineJoin = 'round';
           ctx.beginPath();
@@ -357,18 +371,19 @@
           card.classList.add('scratched');
           checkProgress();
         }
-        function endDraw() { isDrawing = false; }
+        function endDraw() { isDrawing = false; checkProgress(); }
 
-        // 估算刮開比例（不每次都精算，避免效能）
+        // 估算刮開比例（每 250ms 抽樣一次避免效能 hit）
         var lastCheck = 0;
         function checkProgress() {
           var now = Date.now();
-          if (now - lastCheck < 200) return;
+          if (now - lastCheck < 250) return;
           lastCheck = now;
           try {
+            // 注意：getImageData 回的是物理像素，不受 ctx scale 影響
             var data = ctx.getImageData(0, 0, canvas.width, canvas.height).data;
             var transparent = 0;
-            var sampleStep = 16; // 抽樣
+            var sampleStep = 24;  // 抽樣間隔
             var sampled = 0;
             for (var i = 3; i < data.length; i += 4 * sampleStep) {
               if (data[i] === 0) transparent++;
@@ -376,7 +391,7 @@
             }
             var pct = transparent / sampled;
             if (pct >= revealThreshold) doReveal();
-          } catch (e) { /* ignore */ }
+          } catch (e) { /* CORS / size 0 等 ignore */ }
         }
 
         canvas.addEventListener('mousedown', startDraw);
@@ -386,6 +401,7 @@
         canvas.addEventListener('touchstart', startDraw, { passive: false });
         canvas.addEventListener('touchmove', moveDraw, { passive: false });
         canvas.addEventListener('touchend', endDraw);
+        canvas.addEventListener('touchcancel', endDraw);
       }
 
       function doReveal() {
@@ -459,9 +475,19 @@
           }
         }
 
+        // 次數用完：藏掉「直接揭曉」+「再來一張」+ 提示 + 禁止刮
         if (q.remaining <= 0) {
+          var canMore = q.referral_bonus_per > 0 && q.referral_bonus < q.referral_bonus_max;
           stageHint.textContent = '次數已用完';
+          statusEl.textContent = canMore
+            ? '次數用完，邀請朋友 +' + q.referral_bonus_per + ' 次'
+            : '次數已用完';
           canPlay = false;
+          revealBtn.hidden = true;
+          newCardBtn.hidden = true;
+        } else if (!revealed && !inProgress && canPlay) {
+          // 還有剩 且 不在 reveal/inProgress 狀態 → 顯示揭曉鈕
+          revealBtn.hidden = false;
         }
       }
 
@@ -473,20 +499,26 @@
         canPlay = true;
         newCardBtn.hidden = true;
         revealBtn.hidden = false;
-        statusEl.textContent = '刮一下試試⋯';
+        statusEl.textContent = '刮一下試試';
         stageHint.textContent = '進行中';
 
         try {
-          // 後端決定獎品
+          // 後端決定獎品（同時驗 quota）
           var resp = await fetch('/api/games/scratch/' + encodeURIComponent(slug) + '/play', {
             method: 'POST', headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ line_user_id: profile.userId, line_display_name: profile.displayName || null })
           }).then(function (r) { return r.json(); });
 
           if (!resp.ok) {
+            // quota 用完或其他錯誤 → 不顯示 reveal/new 按鈕
             statusEl.textContent = resp.detail || resp.error || '抽獎失敗';
+            stageHint.textContent = resp.error === 'quota_exhausted' ? '次數已用完' : '無法抽獎';
+            revealBtn.hidden = true;
+            newCardBtn.hidden = true;
             inProgress = false;
             canPlay = false;
+            // 若是 quota error，refresh stat 顯示剩餘 0
+            if (resp.quota) renderQuota(resp.quota);
             return;
           }
           currentPrize = resp.prize;
@@ -498,6 +530,9 @@
           paintCover();
         } catch (e) {
           statusEl.textContent = '錯誤';
+          revealBtn.hidden = true;
+          newCardBtn.hidden = true;
+          canPlay = false;
         } finally {
           inProgress = false;
         }
@@ -566,14 +601,28 @@
           await initLiff();
           liffReady = true;
           await maybeRegisterReferral();
-          await refreshQuota();
+          // 拉 quota；如果還有次數才自動發第一張
+          var metaResp;
+          try {
+            metaResp = await fetch('/api/games/scratch/' + encodeURIComponent(slug) +
+              '/meta?line_user_id=' + encodeURIComponent(profile.userId)).then(function (r) { return r.json(); });
+          } catch (_e) {}
+          if (metaResp && metaResp.ok && metaResp.quota) {
+            renderQuota(metaResp.quota);
+            if (metaResp.quota.remaining <= 0) {
+              // 用完了：不發新卡、隱藏揭曉鈕（renderQuota 已處理）
+              return;
+            }
+          }
           statusEl.innerHTML = '哈囉，<span class="name">' + (profile.displayName || '') + '</span>';
-          stageHint.textContent = '點開始抽';
-          // 自動開始第一張
+          stageHint.textContent = '進行中';
+          // 還有剩 → 自動開始第一張
           startNewCard();
         } catch (e) {
           statusEl.textContent = e.message || '初始化失敗';
           stageHint.textContent = '—';
+          revealBtn.hidden = true;
+          newCardBtn.hidden = true;
         }
       })();
     })();
