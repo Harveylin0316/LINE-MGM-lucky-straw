@@ -84,7 +84,8 @@
       position: relative;
       width: 84px;
       height: 130px;
-      transition: transform 0.4s cubic-bezier(0.34, 1.56, 0.64, 1);
+      transition: transform 0.4s cubic-bezier(0.34, 1.56, 0.64, 1),
+                  opacity 0.35s ease;
       cursor: pointer;
       z-index: 2;
     }
@@ -95,6 +96,7 @@
       75% { transform: rotate(8deg); }
     }
     .fortune-jar.tilt { transform: rotate(-30deg) translateY(-10px); }
+    .fortune-jar.hidden { opacity: 0; pointer-events: none; }
 
     /* 籤紙散在頂部準備飛出 */
     .fortune-paper-stack {
@@ -131,7 +133,10 @@
       flex-direction: column;
       align-items: center;
       text-align: center;
+      z-index: 10;
+      pointer-events: none;
     }
+    .fortune-result.show { pointer-events: auto; }
     .fortune-result.show {
       opacity: 1;
       transform: translate(-50%, -50%) rotateY(0) scale(1);
@@ -436,9 +441,10 @@
         drawBtn.disabled = true;
         statusEl.textContent = '抽籤中⋯';
 
-        // 籤紙先隱藏（如果上次有 reveal）
+        // 重置 reveal 狀態：先隱藏籤紙、籤筒顯示
         resultEl.classList.remove('show');
-        resultEl.hidden = false;
+        resultEl.hidden = true;
+        jarEl.classList.remove('hidden', 'tilt');
 
         // 搖籤動畫
         jarEl.classList.add('shake');
@@ -460,16 +466,16 @@
           // 等搖完
           await new Promise(function (r) { setTimeout(r, 1800); });
           jarEl.classList.remove('shake');
-          // 籤筒傾斜
+          // 籤筒傾斜倒出
           jarEl.classList.add('tilt');
-          await new Promise(function (r) { setTimeout(r, 400); });
+          await new Promise(function (r) { setTimeout(r, 350); });
 
-          // 顯示籤紙
+          // 籤筒淡出 + 籤紙出現
+          jarEl.classList.add('hidden');
           showResult(resp.prize);
 
-          // 1.5 秒後籤筒回正
-          setTimeout(function () { jarEl.classList.remove('tilt'); }, 1500);
-
+          // 改按鈕為「再抽一支」
+          drawBtn.textContent = '再 抽 一 支';
           statusEl.textContent = '';
           setTimeout(refreshQuota, 800);
         } catch (e) {
