@@ -106,14 +106,47 @@
     .slot-symbol {
       height: 110px;
       display: flex;
+      flex-direction: column;
       align-items: center;
       justify-content: center;
+      gap: 2px;
       flex-shrink: 0;
-      font-size: 36px;
       font-weight: 800;
       color: var(--ink);
+      padding: 6px;
+      text-align: center;
+      line-height: 1.1;
+      letter-spacing: -0.01em;
     }
     .slot-symbol.grand { color: var(--or-red); }
+    .slot-symbol img {
+      width: 56px;
+      height: 56px;
+      object-fit: cover;
+      border-radius: 8px;
+      flex-shrink: 0;
+    }
+    .slot-symbol .num {
+      font-size: 11px;
+      font-weight: 700;
+      color: rgba(15,15,16,0.45);
+      font-variant-numeric: tabular-nums;
+      letter-spacing: 0.05em;
+    }
+    .slot-symbol.grand .num { color: rgba(225,29,39,0.6); }
+    .slot-symbol .label {
+      display: block;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      max-width: 100%;
+    }
+    /* 動態字級依名稱長度（JS 加 data-len） */
+    .slot-symbol[data-len="1"] .label { font-size: 38px; }
+    .slot-symbol[data-len="2"] .label { font-size: 28px; }
+    .slot-symbol[data-len="3"] .label { font-size: 22px; }
+    .slot-symbol[data-len="4"] .label { font-size: 17px; }
+    .slot-symbol[data-len="5"] .label { font-size: 14px; }
     /* 中央高亮線 */
     .slot-machine::after { display: none; } /* override; we'll use a different highlight method */
 
@@ -300,12 +333,19 @@
       var liffReady = false;
       var spinning = false;
 
-      // 用每個獎品的第一個字當 symbol（如「Rice Dollar $100」用「R」）
-      function symbolOf(p, i) {
-        if (!p) return '?';
-        if (p.is_grand_prize) return '★';
-        var name = String(p.name || '');
-        return name.charAt(0) || String(i + 1);
+      function escapeHtml(s) {
+        return String(s == null ? '' : s)
+          .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
+          .replace(/"/g, '&quot;').replace(/'/g, '&#039;');
+      }
+      // 截斷顯示名稱（保留中英文易讀性）
+      function symbolLabel(p, i) {
+        if (!p) return { text: '?', len: 1 };
+        var name = String(p.name || '').trim();
+        if (!name) return { text: String(i + 1), len: 1 };
+        // 5 字以上 truncate（保前 4 字 + …）
+        if (name.length > 5) return { text: name.slice(0, 4) + '…', len: 5 };
+        return { text: name, len: name.length };
       }
 
       // 建立三個軸的 strip — 每軸有 prizes.length * 6 個 symbol 重複（足夠滾動）
@@ -319,7 +359,30 @@
             prizes.forEach(function (p, i) {
               var s = document.createElement('div');
               s.className = 'slot-symbol' + (p.is_grand_prize ? ' grand' : '');
-              s.textContent = symbolOf(p, i);
+              if (p.image_url) {
+                // 有圖：直接放圖（最高優先級，最直觀）
+                var img = document.createElement('img');
+                img.src = p.image_url;
+                img.alt = p.name || '';
+                s.appendChild(img);
+                // 圖下面附小編號
+                var num = document.createElement('div');
+                num.className = 'num';
+                num.textContent = String(i + 1).padStart(2, '0');
+                s.appendChild(num);
+              } else {
+                // 沒圖：顯示獎品全名 + 編號（編號用來識別「第幾個獎品」對應 prize-list 編號）
+                var info = symbolLabel(p, i);
+                s.setAttribute('data-len', String(info.len));
+                var label = document.createElement('div');
+                label.className = 'label';
+                label.textContent = info.text;
+                s.appendChild(label);
+                var num2 = document.createElement('div');
+                num2.className = 'num';
+                num2.textContent = (p.is_grand_prize ? '★ ' : '') + String(i + 1).padStart(2, '0');
+                s.appendChild(num2);
+              }
               strip.appendChild(s);
             });
           }
