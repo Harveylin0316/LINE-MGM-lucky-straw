@@ -277,10 +277,11 @@
 
       function updateLiffLink() {
         if (!currentActivity) return;
-        var directUrl = location.origin + '/games/wheel/' + encodeURIComponent(currentActivity.slug);
+        var gt = currentActivity.game_type || 'wheel';
+        var directUrl = location.origin + '/games/' + gt + '/' + encodeURIComponent(currentActivity.slug);
         // LIFF 短網址：用 effective LIFF ID + 子路徑（LIFF SDK 會 append 到 Endpoint URL）
         var liffShareUrl = effectiveLiffId
-          ? 'https://liff.line.me/' + effectiveLiffId + '/wheel/' + encodeURIComponent(currentActivity.slug)
+          ? 'https://liff.line.me/' + effectiveLiffId + '/' + gt + '/' + encodeURIComponent(currentActivity.slug)
           : '（尚未設定 GAMES_LIFF_ID 環境變數，或活動未設 liff_id_override）';
         var liffEl = $('ae-liff-share-url');
         var directEl = $('ae-direct-url');

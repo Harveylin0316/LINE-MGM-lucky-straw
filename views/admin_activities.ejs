@@ -87,9 +87,10 @@
             }
             tbody.innerHTML = list.map(function (a) {
               // 給用戶用的 LIFF 短網址（讓 LINE login redirect 後能保留 path）
+              var gt = a.game_type || 'wheel';
               var shareUrl = a.effective_liff_id
-                ? 'https://liff.line.me/' + a.effective_liff_id + '/wheel/' + encodeURIComponent(a.slug)
-                : (location.origin + '/games/wheel/' + encodeURIComponent(a.slug));
+                ? 'https://liff.line.me/' + a.effective_liff_id + '/' + gt + '/' + encodeURIComponent(a.slug)
+                : (location.origin + '/games/' + gt + '/' + encodeURIComponent(a.slug));
               return '<tr>' +
                 '<td>' +
                   '<div class="act-name">' + escapeHtml(a.name) + '</div>' +
