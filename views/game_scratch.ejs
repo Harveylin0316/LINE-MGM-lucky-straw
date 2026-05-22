@@ -116,28 +116,37 @@
       cursor: crosshair;
       touch-action: none;
     }
-    .scratch-hint {
+    /* 載入遮罩 — 蓋住整張卡，paintCover 完才移除 */
+    .scratch-loading {
       position: absolute;
-      top: 50%; left: 50%;
-      transform: translate(-50%, -50%);
-      color: rgba(15, 15, 16, 0.5);
-      font-weight: 700;
+      inset: 0;
+      background: linear-gradient(135deg, #D5D9E0, #9CA3AD 50%, #7B8290);
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      gap: 10px;
+      z-index: 4;
+      color: rgba(255,255,255,0.85);
+      font-weight: 600;
       font-size: 13px;
-      letter-spacing: 0.18em;
-      pointer-events: none;
-      text-align: center;
+      letter-spacing: 0.2em;
     }
-    .scratch-hint .h-icon {
-      display: block;
-      font-size: 28px;
-      margin-bottom: 8px;
-      animation: hint-wiggle 1.6s ease-in-out infinite;
+    .scratch-loading .spinner {
+      width: 22px; height: 22px;
+      border: 2.5px solid rgba(255,255,255,0.3);
+      border-top-color: rgba(255,255,255,0.85);
+      border-radius: 50%;
+      animation: scratch-spin 0.8s linear infinite;
     }
-    @keyframes hint-wiggle {
-      0%, 100% { transform: translateX(0); }
-      50% { transform: translateX(8px); }
+    @keyframes scratch-spin { to { transform: rotate(360deg); } }
+    .scratch-card.ready .scratch-loading { display: none; }
+    /* 沒次數時遮罩變成「已用完」提示 */
+    .scratch-card.exhausted .scratch-loading {
+      background: linear-gradient(135deg, #FAFAFA, #ECECEE);
+      color: #6B6B70;
     }
-    .scratch-card.scratched .scratch-hint { display: none; }
+    .scratch-card.exhausted .scratch-loading .spinner { display: none; }
 
     /* 領取按鈕 */
     .draw-btn-wrap { margin-top: 18px; display: flex; justify-content: center; gap: 10px; }
@@ -226,9 +235,10 @@
             <div class="scratch-desc" id="prize-desc"></div>
           </div>
           <canvas id="scratch-canvas"></canvas>
-          <div class="scratch-hint">
-            <span class="h-icon">☞</span>
-            <span>用手指刮開</span>
+          <!-- 載入遮罩：LIFF init + paintCover 完成才移除（避免底層獎品先閃現） -->
+          <div class="scratch-loading" id="card-loading">
+            <div class="spinner"></div>
+            <div id="card-loading-text">準 備 中</div>
           </div>
         </div>
       </div>
@@ -476,7 +486,7 @@
           }
         }
 
-        // 次數用完：藏掉「直接揭曉」+「再來一張」+ 提示 + 禁止刮
+        // 次數用完：遮罩切換成「已用完」+ 隱藏按鈕 + 禁止刮
         if (q.remaining <= 0) {
           var canMore = q.referral_bonus_per > 0 && q.referral_bonus < q.referral_bonus_max;
           stageHint.textContent = '次數已用完';
@@ -486,6 +496,11 @@
           canPlay = false;
           revealBtn.hidden = true;
           newCardBtn.hidden = true;
+          // 卡片遮罩切換成「已用完」狀態（灰底）+ 移除 ready（避免之前的卡顯示出來）
+          card.classList.remove('ready', 'scratched');
+          card.classList.add('exhausted');
+          var loadingText = document.getElementById('card-loading-text');
+          if (loadingText) loadingText.textContent = '次 數 已 用 完';
         } else if (!revealed && !inProgress && canPlay) {
           // 還有剩 且 不在 reveal/inProgress 狀態 → 顯示揭曉鈕
           revealBtn.hidden = false;
@@ -525,10 +540,12 @@
           currentPrize = resp.prize;
           renderPrize(currentPrize);
           // 重設 canvas（蓋上灰膜）
-          card.classList.remove('scratched');
+          card.classList.remove('scratched', 'exhausted');
           canvas.style.transition = 'none';
           canvas.style.opacity = '1';
           paintCover();
+          // 灰膜已畫好 → 移除載入遮罩
+          card.classList.add('ready');
         } catch (e) {
           statusEl.textContent = '錯誤';
           revealBtn.hidden = true;
