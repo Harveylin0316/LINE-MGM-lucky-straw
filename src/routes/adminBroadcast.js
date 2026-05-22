@@ -179,7 +179,16 @@ function registerAdminBroadcastRoutes(app, deps) {
   // ---------- 1. main page ----------
   app.get('/admin/broadcast', requireAdmin, async (req, res, next) => {
     try {
-      const [prizes, recent] = await Promise.all([loadPrizes(), loadRecentBroadcasts(10)]);
+      const [prizes, recent, scheduledRs] = await Promise.all([
+        loadPrizes(),
+        loadRecentBroadcasts(10),
+        query(
+          `SELECT id, scheduled_at, admin_username, recipient_total, created_at
+           FROM admin_broadcasts
+           WHERE status = 'scheduled'
+           ORDER BY scheduled_at ASC NULLS LAST, id DESC`
+        )
+      ]);
       return res.render('admin_broadcast', {
         title: '群發訊息',
         bodyClass: 'admin-shell broadcast-shell',
@@ -187,6 +196,7 @@ function registerAdminBroadcastRoutes(app, deps) {
         isAdmin: true,
         prizes,
         recent,
+        scheduled: scheduledRs.rows,
         hasLineToken: Boolean(lineChannelAccessToken),
         maxRecipients: MAX_RECIPIENTS_PER_BROADCAST,
         chunkSize: CHUNK_SIZE_DEFAULT,
