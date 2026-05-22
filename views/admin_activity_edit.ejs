@@ -59,8 +59,14 @@
           <input type="number" id="ae-ref-max" min="0" value="0" />
         </label>
         <label class="ae-field">
-          <span>封面圖 URL（可選）</span>
-          <input type="text" id="ae-cover" placeholder="https://..." />
+          <span>封面圖（可選 — 貼 URL 或直接上傳，最大 2MB）</span>
+          <div style="display:flex;gap:6px;align-items:stretch;">
+            <input type="text" id="ae-cover" placeholder="https://..." style="flex:1;" />
+            <input type="file" id="ae-cover-file" accept="image/png,image/jpeg,image/webp" style="display:none;" />
+            <button type="button" id="ae-cover-upload" style="padding:8px 14px;background:#fff;border:1px solid #ECECEE;border-radius:6px;cursor:pointer;font-size:12px;font-family:inherit;">上傳</button>
+          </div>
+          <div id="ae-cover-status" style="font-size:11px;color:#6B6B70;min-height:14px;"></div>
+          <div id="ae-cover-preview" style="margin-top:6px;"></div>
         </label>
         <label class="ae-field ae-field-full">
           <span>活動說明</span>
@@ -480,8 +486,51 @@
           });
       });
 
+      // ---- cover image upload + preview ----
+      var coverInput = $('ae-cover');
+      var coverFile = $('ae-cover-file');
+      var coverUploadBtn = $('ae-cover-upload');
+      var coverStatus = $('ae-cover-status');
+      var coverPreview = $('ae-cover-preview');
+      function updateCoverPreview() {
+        var url = (coverInput.value || '').trim();
+        if (!url) { coverPreview.innerHTML = ''; return; }
+        coverPreview.innerHTML = '<img src="' + url.replace(/"/g, '&quot;') +
+          '" alt="cover" style="max-width:200px;max-height:120px;border:1px solid #ECECEE;border-radius:6px;object-fit:cover;" />';
+      }
+      coverInput.addEventListener('input', updateCoverPreview);
+      coverUploadBtn.addEventListener('click', function () { coverFile.click(); });
+      coverFile.addEventListener('change', function () {
+        var f = coverFile.files && coverFile.files[0];
+        if (!f) return;
+        if (f.size > 2 * 1024 * 1024) { coverStatus.textContent = '檔案 > 2MB'; return; }
+        coverStatus.textContent = '上傳中⋯';
+        coverUploadBtn.disabled = true;
+        var fd = new FormData();
+        fd.append('hero', f);
+        // 沿用既有的 broadcast hero upload endpoint（內部存 line_push_media，回公開 URL）
+        fetch('/admin/broadcast/hero/upload', { method: 'POST', body: fd })
+          .then(function (r) { return r.json(); })
+          .then(function (data) {
+            if (!data || !data.ok || !data.url) {
+              coverStatus.textContent = '失敗：' + (data && (data.error || '上傳錯誤') || '未知');
+            } else {
+              coverInput.value = data.url;
+              coverStatus.textContent = '已上傳';
+              updateCoverPreview();
+            }
+          })
+          .catch(function (e) { coverStatus.textContent = '錯誤：' + e.message; })
+          .finally(function () {
+            coverUploadBtn.disabled = false;
+            coverFile.value = '';  // 讓同檔可再上傳
+          });
+      });
+
       // bootstrap
       loadActivity();
+      // 載入時也 render 預覽
+      setTimeout(updateCoverPreview, 100);
     })();
     </script>
 
