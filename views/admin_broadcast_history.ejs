@@ -25,10 +25,17 @@
                 </tr>
               </thead>
               <tbody>
-                ${scheduled.map(r => {
+                ${(() => {
+                  const fmtTW = (ts, len = 16) => {
+                    if (!ts) return '—';
+                    const d = new Date(ts);
+                    if (isNaN(d.getTime())) return '—';
+                    return d.toLocaleString('sv-SE', { timeZone: 'Asia/Taipei' }).slice(0, len);
+                  };
+                  return scheduled.map(r => {
                   const sched = r.scheduled_at ? new Date(r.scheduled_at) : null;
-                  const schedStr = sched ? sched.toISOString().replace('T',' ').slice(0,16) : '—';
-                  const created = r.created_at ? new Date(r.created_at).toISOString().replace('T',' ').slice(0,16) : '';
+                  const schedStr = fmtTW(r.scheduled_at);
+                  const created = fmtTW(r.created_at);
                   let etaStr = '—';
                   if (sched) {
                     const diffMs = sched.getTime() - Date.now();
@@ -47,7 +54,8 @@
                     <td class="muted" style="font-size:12px;">${created}</td>
                     <td><button type="button" class="btn btn-danger sched-cancel-btn" data-id="${r.id}">取消排程</button></td>
                   </tr>`;
-                }).join('')}
+                }).join('');
+                })()}
               </tbody>
             </table></div>`
           : '<p class="muted" style="margin-top:8px;">目前沒有排程中的訊息。</p>'
@@ -79,10 +87,17 @@
                 </tr>
               </thead>
               <tbody>
-                ${batches.map(r => {
-                  const ts = r.created_at ? new Date(r.created_at).toISOString().replace('T',' ').slice(0,19) : '';
-                  const fin = r.finished_at ? new Date(r.finished_at).toISOString().replace('T',' ').slice(0,19) : '';
-                  const sch = r.scheduled_at ? new Date(r.scheduled_at).toISOString().replace('T',' ').slice(0,16) : '';
+                ${(() => {
+                  const fmtTW = (ts, len = 19) => {
+                    if (!ts) return '';
+                    const d = new Date(ts);
+                    if (isNaN(d.getTime())) return '';
+                    return d.toLocaleString('sv-SE', { timeZone: 'Asia/Taipei' }).slice(0, len);
+                  };
+                  return batches.map(r => {
+                  const ts = fmtTW(r.created_at, 19);
+                  const fin = fmtTW(r.finished_at, 19);
+                  const sch = fmtTW(r.scheduled_at, 16);
                   const rate = r.recipient_total > 0
                     ? Math.round((r.click_count / r.recipient_total) * 100)
                     : 0;
@@ -99,7 +114,8 @@
                     <td>${r.click_count}${r.recipient_total > 0 ? ` <span class="muted" style="font-size:11px;">(${rate}%)</span>` : ''}</td>
                     <td class="muted" style="font-size:12px;">${fin}</td>
                   </tr>`;
-                }).join('')}
+                }).join('');
+                })()}
               </tbody>
             </table></div>
             ${totalPages > 1 ? `<div class="pagination" style="margin-top:14px;display:flex;gap:6px;align-items:center;font-size:13px;">

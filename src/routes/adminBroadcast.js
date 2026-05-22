@@ -179,7 +179,7 @@ function registerAdminBroadcastRoutes(app, deps) {
   // ---------- 1. main page ----------
   app.get('/admin/broadcast', requireAdmin, async (req, res, next) => {
     try {
-      const [prizes, recent, scheduledRs] = await Promise.all([
+      const [prizes, recent, scheduledRs, runningRs] = await Promise.all([
         loadPrizes(),
         loadRecentBroadcasts(10),
         query(
@@ -187,6 +187,16 @@ function registerAdminBroadcastRoutes(app, deps) {
            FROM admin_broadcasts
            WHERE status = 'scheduled'
            ORDER BY scheduled_at ASC NULLS LAST, id DESC`
+        ),
+        query(
+          `SELECT id, scheduled_at, admin_username, recipient_total,
+                  recipient_ok, recipient_fail, recipient_skip,
+                  started_at, created_at,
+                  (SELECT COUNT(*)::int FROM admin_broadcast_recipients
+                   WHERE broadcast_id = b.id AND status IN ('pending','sending')) AS pending_count
+           FROM admin_broadcasts b
+           WHERE status = 'running'
+           ORDER BY started_at ASC NULLS LAST, id ASC`
         )
       ]);
       return res.render('admin_broadcast', {
@@ -197,6 +207,7 @@ function registerAdminBroadcastRoutes(app, deps) {
         prizes,
         recent,
         scheduled: scheduledRs.rows,
+        running: runningRs.rows,
         hasLineToken: Boolean(lineChannelAccessToken),
         maxRecipients: MAX_RECIPIENTS_PER_BROADCAST,
         chunkSize: CHUNK_SIZE_DEFAULT,

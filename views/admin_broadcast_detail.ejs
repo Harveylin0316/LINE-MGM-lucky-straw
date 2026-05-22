@@ -104,7 +104,9 @@
             </thead>
             <tbody>
               ${recentSample.map(r => {
-                const pushed = r.pushed_at ? new Date(r.pushed_at).toISOString().replace('T',' ').slice(11,19) : '';
+                const pushed = r.pushed_at
+                  ? new Date(r.pushed_at).toLocaleString('sv-SE', { timeZone: 'Asia/Taipei' }).slice(11, 19)
+                  : '';
                 return `<tr>
                   <td>${r.id}</td>
                   <td>${String(r.line_display_name || r.username || '').replace(/</g,'&lt;')}</td>

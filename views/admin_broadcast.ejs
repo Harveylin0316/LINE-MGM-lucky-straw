@@ -5,19 +5,61 @@
     bodyClass: bodyClass,
     body: `
     ${
-      Array.isArray(scheduled) && scheduled.length > 0
-        ? `<section class="card sched-banner">
+      (() => {
+        // 統一台灣時區格式化（sv-SE locale 給 ISO-like + 加 Asia/Taipei 時區）
+        const fmtTW = (ts, len = 16) => {
+          if (!ts) return '—';
+          const d = new Date(ts);
+          if (isNaN(d.getTime())) return '—';
+          return d.toLocaleString('sv-SE', { timeZone: 'Asia/Taipei' }).slice(0, len);
+        };
+        const blocks = [];
+        if (Array.isArray(running) && running.length > 0) {
+          blocks.push(`<section class="card run-banner">
+            <div class="sched-head">
+              <div>
+                <h2 style="margin:0;font-size:18px;">執行中的批次（${running.length}）</h2>
+                <p class="muted" style="margin:4px 0 0;font-size:12px;">cron 每 5 分鐘推進一輪；卡住時可手動「立即推進」一波（每次處理最多 50 個）。</p>
+              </div>
+              <a href="/admin/broadcast/history" class="btn" style="font-size:12px;">完整歷史 ›</a>
+            </div>
+            <div class="sched-list">
+              ${running.slice(0, 5).map(r => {
+                const startStr = fmtTW(r.started_at);
+                const pending = Number(r.pending_count || 0);
+                const total = Number(r.recipient_total || 0);
+                const sent = Number(r.recipient_ok || 0);
+                const failed = Number(r.recipient_fail || 0);
+                const skipped = Number(r.recipient_skip || 0);
+                const progress = total > 0 ? Math.round(((sent + failed + skipped) / total) * 100) : 0;
+                return `<div class="sched-row run-row" data-id="${r.id}">
+                  <div class="sched-info">
+                    <div class="sched-id">#${r.id} · 進度 ${sent + failed + skipped} / ${total} <span class="sched-eta run-eta">${progress}%</span></div>
+                    <div class="sched-time">啟動 ${startStr} · 剩 ${pending} 待發 · 失敗 ${failed}</div>
+                  </div>
+                  <div class="sched-actions">
+                    <a href="/admin/broadcast/${r.id}" class="sched-detail-link">查看</a>
+                    <button type="button" class="sched-advance-btn" data-id="${r.id}">立即推進</button>
+                    <button type="button" class="sched-cancel-btn" data-id="${r.id}">取消</button>
+                  </div>
+                </div>`;
+              }).join('')}
+            </div>
+          </section>`);
+        }
+        if (Array.isArray(scheduled) && scheduled.length > 0) {
+          blocks.push(`<section class="card sched-banner">
             <div class="sched-head">
               <div>
                 <h2 style="margin:0;font-size:18px;">排程中的訊息（${scheduled.length}）</h2>
-                <p class="muted" style="margin:4px 0 0;font-size:12px;">尚未發出，可隨時取消。完成後 cron 每 5 分鐘檢查一次自動發送。</p>
+                <p class="muted" style="margin:4px 0 0;font-size:12px;">尚未發出，可隨時取消。時間到後 cron 每 5 分鐘檢查一次自動發送。</p>
               </div>
               <a href="/admin/broadcast/history" class="btn" style="font-size:12px;">完整歷史 ›</a>
             </div>
             <div class="sched-list">
               ${scheduled.slice(0, 5).map(r => {
                 const sched = r.scheduled_at ? new Date(r.scheduled_at) : null;
-                const schedStr = sched ? sched.toISOString().replace('T',' ').slice(0,16) : '—';
+                const schedStr = fmtTW(r.scheduled_at);
                 let etaStr = '—';
                 if (sched) {
                   const diffMs = sched.getTime() - Date.now();
@@ -40,8 +82,10 @@
               }).join('')}
               ${scheduled.length > 5 ? `<a href="/admin/broadcast/history" class="sched-more">還有 ${scheduled.length - 5} 筆 →</a>` : ''}
             </div>
-          </section>`
-        : ''
+          </section>`);
+        }
+        return blocks.join('');
+      })()
     }
 
     <section class="card broadcast-card">
@@ -523,7 +567,7 @@
                   .map(
                     r => `<tr>
                       <td><a href="/admin/broadcast/${r.id}" style="font-weight:600;">#${r.id}</a></td>
-                      <td>${(r.created_at ? new Date(r.created_at).toISOString().replace('T', ' ').slice(0, 19) : '')}</td>
+                      <td>${(r.created_at ? new Date(r.created_at).toLocaleString('sv-SE', { timeZone: 'Asia/Taipei' }).slice(0, 19) : '')}</td>
                       <td>${(r.admin_username || '').replace(/</g, '&lt;')}</td>
                       <td><span class="status-pill status-${r.status}">${r.status}</span></td>
                       <td>${r.recipient_total}</td>
@@ -1444,6 +1488,26 @@
       .status-pill.status-cancelled,
       .status-pill.status-failed { background: #fee2e2; color: #991b1b; }
 
+      /* 執行中 banner（藍綠色，跟排程黃色區隔） */
+      .run-banner {
+        background: linear-gradient(135deg, #ECFDF5, #D1FAE5);
+        border: 1px solid #6EE7B7;
+      }
+      .run-row { border-color: #A7F3D0 !important; }
+      .run-eta { background: #D1FAE5 !important; color: #065F46 !important; }
+      .sched-advance-btn {
+        font-size: 12px;
+        color: #065F46;
+        background: #fff;
+        border: 1px solid #6EE7B7;
+        padding: 5px 12px;
+        border-radius: 6px;
+        cursor: pointer;
+        font-family: inherit;
+      }
+      .sched-advance-btn:hover:not(:disabled) { background: #ECFDF5; }
+      .sched-advance-btn:disabled { opacity: 0.5; cursor: not-allowed; }
+
       /* 排程中 banner */
       .sched-banner {
         background: linear-gradient(135deg, #FFFBEB, #FFF8E1);
@@ -1541,13 +1605,14 @@
     }).replace(/</g, '\\u003c')}</script>
 
     <script>
-    // 排程取消（main page banner 用，獨立於 admin-broadcast.js）
+    // 排程取消 + 立即推進 + 自動 polling running batches
     document.addEventListener('DOMContentLoaded', function () {
+      // ----- 取消 -----
       document.querySelectorAll('.sched-cancel-btn').forEach(function (btn) {
         btn.addEventListener('click', function () {
           var id = btn.getAttribute('data-id');
           if (!id) return;
-          if (!confirm('確定取消 #' + id + ' 這個排程？取消後不能還原。')) return;
+          if (!confirm('確定取消 #' + id + ' 這個批次？取消後不能還原。')) return;
           btn.disabled = true;
           var orig = btn.textContent;
           btn.textContent = '取消中…';
@@ -1561,15 +1626,54 @@
               }
               var row = document.querySelector('.sched-row[data-id="' + id + '"]');
               if (row) row.remove();
-              // 若全部取消完畢，整個 banner 隱藏
-              var remain = document.querySelectorAll('.sched-cancel-btn').length;
-              if (remain === 0) {
-                var banner = document.querySelector('.sched-banner');
-                if (banner) banner.remove();
-              }
+              // 若 banner 內沒元素了，移除
+              ['.sched-banner', '.run-banner'].forEach(function (sel) {
+                var banner = document.querySelector(sel);
+                if (banner && banner.querySelectorAll('.sched-row').length === 0) banner.remove();
+              });
             })
             .catch(function (e) {
               alert('取消失敗：' + e.message);
+              btn.disabled = false; btn.textContent = orig;
+            });
+        });
+      });
+
+      // ----- 立即推進（手動觸發 process-chunk） -----
+      document.querySelectorAll('.sched-advance-btn').forEach(function (btn) {
+        btn.addEventListener('click', function () {
+          var id = btn.getAttribute('data-id');
+          if (!id) return;
+          btn.disabled = true;
+          var orig = btn.textContent;
+          btn.textContent = '處理中…';
+          fetch('/admin/broadcast/' + id + '/process-chunk', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ chunkSize: 50 })
+          })
+            .then(function (r) { return r.json(); })
+            .then(function (data) {
+              if (!data || !data.ok) {
+                alert('推進失敗：' + (data && (data.detail || data.error) || '未知錯誤'));
+                btn.disabled = false; btn.textContent = orig;
+                return;
+              }
+              var msg = '推進完成：成功 ' + (data.ok || 0) + ' / 失敗 ' + (data.fail || 0) +
+                ' / 跳過 ' + (data.skip || 0) + ' / 剩 ' + (data.remaining || 0) + ' 筆';
+              if (data.remaining === 0) {
+                msg += '\\n\\n整批完成！';
+                location.reload();
+                return;
+              }
+              btn.textContent = orig;
+              btn.disabled = false;
+              alert(msg + '\\n\\n可繼續按「立即推進」處理下一批。');
+              // 軟刷新 banner 顯示新進度
+              location.reload();
+            })
+            .catch(function (e) {
+              alert('推進失敗：' + e.message);
               btn.disabled = false; btn.textContent = orig;
             });
         });
