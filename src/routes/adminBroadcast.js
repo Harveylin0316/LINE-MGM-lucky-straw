@@ -98,7 +98,38 @@ function registerAdminBroadcastRoutes(app, deps) {
     return rs.rowCount === 0 ? null : rs.rows[0];
   }
 
-  // ---------- 0a. public view tracking: /v/b/:broadcastId/:mediaId（Hero 被看到 proxy） ----------
+  // ---------- 0a-new. /v/b/:broadcastId/:recipientId/:mediaId（含 recipient 追蹤）----------
+  // 新版含 recipient_id；JOIN admin_broadcast_recipients 取 line_user_id 寫入 views
+  app.get('/v/b/:broadcastId(\\d+)/:recipientId(\\d+)/:mediaId([0-9a-fA-F-]{36})', async (req, res) => {
+    const broadcastId = Number(req.params.broadcastId);
+    const recipientId = Number(req.params.recipientId);
+    const mediaId = String(req.params.mediaId).trim();
+    const variant = req.query.v === 'a' || req.query.v === 'b' ? req.query.v : null;
+    try {
+      const rs = await query('SELECT mime_type, body FROM line_push_media WHERE id = $1', [mediaId]);
+      if (rs.rowCount === 0) return res.status(404).type('text/plain').send('Not found');
+      // 寫 view log + 帶 recipient_id / line_user_id（不阻塞回 image）
+      query(
+        `INSERT INTO admin_broadcast_views (broadcast_id, recipient_id, line_user_id, user_agent, variant)
+         SELECT $1, $2, m.line_user_id, $3, $4
+         FROM admin_broadcast_recipients m
+         WHERE m.id = $2 AND m.broadcast_id = $1`,
+        [broadcastId, recipientId, (req.get('user-agent') || '').slice(0, 500), variant]
+      ).catch(err => console.error('view log (rid) failed:', err.message));
+      const row = rs.rows[0];
+      const buf = Buffer.isBuffer(row.body) ? row.body : Buffer.from(row.body);
+      res.setHeader('Content-Type', row.mime_type);
+      res.setHeader('Cross-Origin-Resource-Policy', 'cross-origin');
+      res.setHeader('Cache-Control', 'public, max-age=300');
+      res.setHeader('Content-Length', String(buf.length));
+      return res.send(buf);
+    } catch (err) {
+      console.error('view tracker (rid) error:', err.message);
+      return res.status(500).type('text/plain').send('Server error');
+    }
+  });
+
+  // ---------- 0a. public view tracking: /v/b/:broadcastId/:mediaId（舊版 backward compat）----------
   // LINE app render hero 圖時會 fetch 這個 URL，server 寫一筆 view log + 回 image bytes。
   // 注意：開信率 proxy，非精確的「已讀」— LINE app cache 可能少報、prefetch 可能多報。
   app.get('/v/b/:broadcastId/:mediaId', async (req, res) => {
@@ -134,7 +165,46 @@ function registerAdminBroadcastRoutes(app, deps) {
     }
   });
 
-  // ---------- 0. public redirect: /r/b/:broadcastId（CTA 點擊追蹤） ----------
+  // ---------- 0-new. /r/b/:broadcastId/:recipientId（含 recipient 追蹤）----------
+  app.get('/r/b/:broadcastId(\\d+)/:recipientId(\\d+)', async (req, res) => {
+    const broadcastId = Number(req.params.broadcastId);
+    const recipientId = Number(req.params.recipientId);
+    const variant = req.query.v === 'a' || req.query.v === 'b' ? req.query.v : null;
+    try {
+      const rs = await query(
+        `SELECT message_config, variant_b_message_config FROM admin_broadcasts WHERE id = $1`,
+        [broadcastId]
+      );
+      if (rs.rowCount === 0) return res.status(404).type('text/plain').send('Not found');
+      const cfg = (variant === 'b' ? rs.rows[0].variant_b_message_config : rs.rows[0].message_config) || {};
+      let targetUrl = '';
+      if (cfg.mode === 'template' && cfg.template && typeof cfg.template.ctaUrl === 'string') {
+        targetUrl = cfg.template.ctaUrl.trim();
+      }
+      if (!/^https?:\/\//i.test(targetUrl)) {
+        return res.status(404).type('text/plain').send('Not found');
+      }
+      // 寫 click log + 帶 recipient_id / line_user_id
+      query(
+        `INSERT INTO admin_broadcast_clicks (broadcast_id, recipient_id, line_user_id, target_url, user_agent, referer, variant)
+         SELECT $1, $2, m.line_user_id, $3, $4, $5, $6
+         FROM admin_broadcast_recipients m
+         WHERE m.id = $2 AND m.broadcast_id = $1`,
+        [
+          broadcastId, recipientId, targetUrl,
+          (req.get('user-agent') || '').slice(0, 500),
+          (req.get('referer') || '').slice(0, 500),
+          variant
+        ]
+      ).catch(err => console.error('click log (rid) failed:', err.message));
+      return res.redirect(302, targetUrl);
+    } catch (err) {
+      console.error('redirect (rid) error:', err.message);
+      return res.status(500).type('text/plain').send('Server error');
+    }
+  });
+
+  // ---------- 0. public redirect: /r/b/:broadcastId（舊版 backward compat）----------
   // 從 DB 撈該批次的 template.ctaUrl，寫一筆 click log，302 redirect。
   // 用 broadcast_id 作為授權邊界（不允許 query string 傳目標 URL，避免 open redirect）。
   app.get('/r/b/:broadcastId', async (req, res) => {
@@ -860,25 +930,26 @@ function registerAdminBroadcastRoutes(app, deps) {
       }
       client.release();
 
-      // 構造 messages（每個 chunk 重新建一次，避免長時間運行訊息設定變動）
-      // 傳 broadcastId → CTA 會包成 /r/b/<id> 中介 redirect 做點擊追蹤
-      // A/B test：依 recipient.variant 選 message_config 並帶 variant 標記到 URL
+      // 構造 messages：每個 recipient 各自 build 一次，URL 內嵌 recipient_id
+      // → track endpoint (/r/b/:bid/:rid, /v/b/:bid/:rid/:mediaId) 能識別「誰開了/誰點了」
+      // 傳 broadcastId → CTA 包成 /r/b/<id>/<rid> 中介 redirect 做點擊追蹤
+      // A/B test：依 recipient.variant 選 message_config 並帶 variant 標記
       const origin = publicOriginOrEmpty(req);
       const isAbTest = Boolean(b.is_ab_test);
 
-      function buildMsgForVariant(variant) {
+      // 預先驗證一下訊息設定（不帶 recipientId，用來檢查能否 build）
+      function buildMsgForVariant(variant, recipientId) {
         const cfg = (isAbTest && variant === 'b') ? b.variant_b_message_config : b.message_config;
         return buildLineMessages(cfg, {
           heroImageBaseUrl: origin,
           broadcastId,
-          variant: isAbTest ? variant : undefined
+          variant: isAbTest ? variant : undefined,
+          recipientId
         });
       }
-
-      // 預先 build 兩個 variant（一次 chunk 內訊息設定不變）
-      const builtA = buildMsgForVariant('a');
-      const builtB = isAbTest ? buildMsgForVariant('b') : null;
-      if (!builtA.ok || (isAbTest && !builtB.ok)) {
+      const sanityA = buildMsgForVariant('a');
+      const sanityB = isAbTest ? buildMsgForVariant('b') : null;
+      if (!sanityA.ok || (isAbTest && !sanityB.ok)) {
         // 訊息無效：把 claimed 退回 pending
         if (claimed.length > 0) {
           await query(
@@ -887,7 +958,7 @@ function registerAdminBroadcastRoutes(app, deps) {
             [claimed.map(r => r.id)]
           );
         }
-        const err = !builtA.ok ? builtA.error : builtB.error;
+        const err = !sanityA.ok ? sanityA.error : sanityB.error;
         return safeJsonError(res, 400, 'message_invalid:' + err);
       }
 
@@ -907,7 +978,17 @@ function registerAdminBroadcastRoutes(app, deps) {
           skipCount += 1;
           continue;
         }
-        const useBuilt = (isAbTest && r.variant === 'b') ? builtB : builtA;
+        // 為這個 recipient build messages（URL 嵌入 r.id）
+        const useVariant = (isAbTest && r.variant === 'b') ? 'b' : 'a';
+        const useBuilt = buildMsgForVariant(useVariant, r.id);
+        if (!useBuilt.ok) {
+          await query(
+            `UPDATE admin_broadcast_recipients SET status = 'failed', pushed_at = NOW(), error = 'build_failed' WHERE id = $1`,
+            [r.id]
+          );
+          failCount += 1;
+          continue;
+        }
         const pushed = await linePush.pushLineMessages(lineUid, useBuilt.messages, {
           userId: r.user_id,
           pushType: 'admin_broadcast'
@@ -1008,20 +1089,21 @@ function registerAdminBroadcastRoutes(app, deps) {
       for (const row of runningRs.rows) {
         const bId = row.id;
         const isAbTest = Boolean(row.is_ab_test);
-        const builtA = buildLineMessages(row.message_config, {
-          heroImageBaseUrl: cleanOrigin,
-          broadcastId: bId,
-          variant: isAbTest ? 'a' : undefined
-        });
-        const builtB = isAbTest
-          ? buildLineMessages(row.variant_b_message_config, {
-              heroImageBaseUrl: cleanOrigin,
-              broadcastId: bId,
-              variant: 'b'
-            })
-          : null;
-        if (!builtA.ok || (isAbTest && !builtB.ok)) {
-          const err = !builtA.ok ? builtA.error : builtB.error;
+        // helper：per-recipient build（URL 嵌入 recipientId 做 track）
+        function buildForRecipient(variant, recipientId) {
+          const cfg = (isAbTest && variant === 'b') ? row.variant_b_message_config : row.message_config;
+          return buildLineMessages(cfg, {
+            heroImageBaseUrl: cleanOrigin,
+            broadcastId: bId,
+            variant: isAbTest ? variant : undefined,
+            recipientId
+          });
+        }
+        // sanity check 一次（不帶 recipientId）
+        const sanityA = buildForRecipient('a');
+        const sanityB = isAbTest ? buildForRecipient('b') : null;
+        if (!sanityA.ok || (isAbTest && !sanityB.ok)) {
+          const err = !sanityA.ok ? sanityA.error : sanityB.error;
           results.push({ broadcastId: bId, skipped: 'message_invalid', detail: err });
           continue;
         }
@@ -1064,7 +1146,17 @@ function registerAdminBroadcastRoutes(app, deps) {
             skipCount++;
             continue;
           }
-          const useBuilt = (isAbTest && r.variant === 'b') ? builtB : builtA;
+          // per-recipient build → URL 嵌入 r.id
+          const useVariant = (isAbTest && r.variant === 'b') ? 'b' : 'a';
+          const useBuilt = buildForRecipient(useVariant, r.id);
+          if (!useBuilt.ok) {
+            await query(
+              `UPDATE admin_broadcast_recipients SET status = 'failed', pushed_at = NOW(), error = 'build_failed' WHERE id = $1`,
+              [r.id]
+            );
+            failCount++;
+            continue;
+          }
           const pushed = await linePush.pushLineMessages(lineUid, useBuilt.messages, {
             userId: r.user_id,
             pushType: 'admin_broadcast'
@@ -1359,6 +1451,100 @@ function registerAdminBroadcastRoutes(app, deps) {
     } catch (err) {
       console.error('broadcast cancel error:', err.message);
       return safeJsonError(res, 500, 'cancel_failed');
+    }
+  });
+
+  // ---------- 8. 匯出收件人成名單庫（5 種 filter）----------
+  app.post('/admin/broadcast/:id(\\d+)/export-recipients-to-list', requireAdmin, async (req, res) => {
+    try {
+      const broadcastId = Number(req.params.id);
+      const body = req.body || {};
+      const name = String(body.name || '').trim().slice(0, 200);
+      const description = String(body.description || '').trim().slice(0, 500);
+      const filter = String(body.filter || 'all').trim();
+      if (!name) return safeJsonError(res, 400, 'name_required');
+      const ALLOWED = ['all', 'sent', 'failed', 'clicked', 'viewed'];
+      if (!ALLOWED.includes(filter)) {
+        return safeJsonError(res, 400, 'invalid_filter', { detail: '必須是 ' + ALLOWED.join(' / ') });
+      }
+      let sql;
+      if (filter === 'all') {
+        sql = `SELECT DISTINCT line_user_id FROM admin_broadcast_recipients
+               WHERE broadcast_id = $1 AND line_user_id IS NOT NULL`;
+      } else if (filter === 'sent') {
+        sql = `SELECT DISTINCT line_user_id FROM admin_broadcast_recipients
+               WHERE broadcast_id = $1 AND status = 'sent' AND line_user_id IS NOT NULL`;
+      } else if (filter === 'failed') {
+        sql = `SELECT DISTINCT line_user_id FROM admin_broadcast_recipients
+               WHERE broadcast_id = $1 AND status = 'failed' AND line_user_id IS NOT NULL`;
+      } else if (filter === 'clicked') {
+        sql = `SELECT DISTINCT line_user_id FROM admin_broadcast_clicks
+               WHERE broadcast_id = $1 AND line_user_id IS NOT NULL`;
+      } else {
+        // viewed
+        sql = `SELECT DISTINCT line_user_id FROM admin_broadcast_views
+               WHERE broadcast_id = $1 AND line_user_id IS NOT NULL`;
+      }
+      const { rows } = await query(sql, [broadcastId]);
+      const uids = rows.map(r => r.line_user_id).filter(Boolean);
+      if (uids.length === 0) {
+        return safeJsonError(res, 400, 'no_matching_recipients', {
+          detail: filter === 'clicked' || filter === 'viewed'
+            ? '找不到符合條件的人。注意：點擊/開信追蹤只記錄在新版（含 recipient_id）的推播之後，舊批次沒有 line_user_id 對應。'
+            : '找不到符合條件的人'
+        });
+      }
+      if (uids.length > 5000) {
+        return safeJsonError(res, 400, 'too_many_recipients', {
+          detail: '單一名單上限 5000 人（找到 ' + uids.length + '）'
+        });
+      }
+      const createdBy = (req.authUser && (req.authUser.un || req.authUser.username)) || 'admin';
+      const client = await pool.connect();
+      try {
+        await client.query('BEGIN');
+        const insListRs = await client.query(
+          `INSERT INTO admin_recipient_lists (name, description, total, created_by)
+           VALUES ($1, $2, $3, $4)
+           RETURNING id, name, total, created_at`,
+          [name, description || null, uids.length, createdBy]
+        );
+        const listId = insListRs.rows[0].id;
+        const BATCH = 500;
+        for (let i = 0; i < uids.length; i += BATCH) {
+          const slice = uids.slice(i, i + BATCH);
+          const values = [];
+          const params = [];
+          slice.forEach((uid, idx) => {
+            const base = idx * 2;
+            values.push(`($${base + 1}, $${base + 2})`);
+            params.push(listId, uid);
+          });
+          await client.query(
+            `INSERT INTO admin_recipient_list_members (list_id, line_user_id)
+             VALUES ${values.join(', ')}
+             ON CONFLICT (list_id, line_user_id) DO NOTHING`,
+            params
+          );
+        }
+        // 更新 total（在有 dedupe 後可能略低）
+        await client.query(
+          `UPDATE admin_recipient_lists
+           SET total = (SELECT COUNT(*) FROM admin_recipient_list_members WHERE list_id = $1)
+           WHERE id = $1`,
+          [listId]
+        );
+        await client.query('COMMIT');
+        res.json({ ok: true, list: insListRs.rows[0], total: uids.length });
+      } catch (e) {
+        try { await client.query('ROLLBACK'); } catch (_e) {}
+        throw e;
+      } finally {
+        client.release();
+      }
+    } catch (err) {
+      console.error('export recipients error:', err && err.message);
+      return safeJsonError(res, 500, 'export_failed', { detail: err && err.message });
     }
   });
 }

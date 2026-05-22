@@ -360,8 +360,10 @@ function stripEmptyTexts(node) {
   });
 }
 
-function buildLineMessages(messageConfig, { heroImageBaseUrl, broadcastId, variant } = {}) {
+function buildLineMessages(messageConfig, { heroImageBaseUrl, broadcastId, variant, recipientId } = {}) {
   const variantSuffix = variant === 'a' || variant === 'b' ? `?v=${variant}` : '';
+  // recipient id segment：有提供就嵌入 URL，後續 track endpoint 可寫入 line_user_id 對應
+  const rSeg = (recipientId != null && Number.isFinite(Number(recipientId))) ? `/${Number(recipientId)}` : '';
   if (!messageConfig || typeof messageConfig !== 'object') {
     return { ok: false, error: '訊息設定缺失' };
   }
@@ -398,10 +400,11 @@ function buildLineMessages(messageConfig, { heroImageBaseUrl, broadcastId, varia
   if (effectiveHeroMediaId && heroImageBaseUrl && /^https:\/\//i.test(heroImageBaseUrl)) {
     const origin = heroImageBaseUrl.replace(/\/+$/, '');
     if (!t.heroMediaId) heroIsBrandBar = true;
-    // 有 broadcastId → 用 /v/b/<id>/<mediaId> 中介 endpoint，server 寫 view log（開信率 proxy）
+    // 有 broadcastId → 用 /v/b/<id>[/<rid>]/<mediaId> 中介 endpoint，server 寫 view log
+    // recipientId 在 path 內，track endpoint 就能寫入 line_user_id 對應「誰開了」
     // 無 broadcastId（譬如 test-push、後台預覽）→ 原本 /p/line-media/<id>，不追蹤
     heroImageUrl = broadcastId
-      ? `${origin}/v/b/${broadcastId}/${effectiveHeroMediaId}${variantSuffix}`
+      ? `${origin}/v/b/${broadcastId}${rSeg}/${effectiveHeroMediaId}${variantSuffix}`
       : `${origin}/p/line-media/${effectiveHeroMediaId}`;
   }
 
@@ -416,7 +419,7 @@ function buildLineMessages(messageConfig, { heroImageBaseUrl, broadcastId, varia
     tForBuild.ctaLabel
   ) {
     const origin = heroImageBaseUrl.replace(/\/+$/, '');
-    tForBuild.ctaUrl = `${origin}/r/b/${broadcastId}${variantSuffix}`;
+    tForBuild.ctaUrl = `${origin}/r/b/${broadcastId}${rSeg}${variantSuffix}`;
   }
 
   const flex = buildYellowFlexFromTemplate(tForBuild, { heroImageUrl, heroIsBrandBar });
