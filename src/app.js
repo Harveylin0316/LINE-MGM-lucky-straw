@@ -427,8 +427,12 @@ app.use(authCore.authMiddleware);
 app.use(async (_req, _res, next) => {
   try {
     await initPromise;
+    // 不再因為 boot init 失敗就擋掉每個 request。
+    // 場景：cold start 第一次 SELECT 1 撞 connection timeout → initError 被設
+    // → 之後 lambda 容器即使 pool 已恢復也每個 request 都回 500
+    // 改成：只 log，讓 request 自己嘗試 query；若真的連不上各自 timeout 失敗
     if (initError) {
-      throw initError;
+      console.warn('initError present but allowing request to proceed:', String(initError.message || initError));
     }
     next();
   } catch (err) {

@@ -74,7 +74,14 @@ END $$;
  */
 async function initDb({ query, adminUsername, adminPassword, skipDdl = true }) {
   if (skipDdl) {
-    await query('SELECT 1');
+    // Cold start 第一次連 DB 偶爾撞 timeout，retry 一次再放棄
+    try {
+      await query('SELECT 1');
+    } catch (firstErr) {
+      console.warn('initDb SELECT 1 failed, retrying once:', firstErr && firstErr.message);
+      await new Promise(r => setTimeout(r, 500));
+      await query('SELECT 1');
+    }
     return;
   }
 
