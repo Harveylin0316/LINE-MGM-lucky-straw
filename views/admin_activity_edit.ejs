@@ -8,6 +8,7 @@
       <div class="ae-head">
         <a href="/admin/activities" class="ae-back">← 回列表</a>
         <h1 id="ae-title">${activityId ? '編輯活動' : '新增活動'}</h1>
+        ${activityId ? `<a href="/admin/activities/${activityId}/players" class="ae-secondary-btn" style="margin-left:auto;">玩家數據 ›</a>` : ''}
         <div id="ae-status" class="muted" style="font-size:12px;"></div>
       </div>
 

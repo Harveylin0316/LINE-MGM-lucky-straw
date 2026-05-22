@@ -46,7 +46,13 @@ async function selectPrizeAndRecord(opts) {
       return { error: { status: 403, code: 'activity_ended', detail: '活動已結束' } };
     }
 
-    // 2) Quota 檢查（base + referral bonus）
+    // 2) Quota 檢查（含 per-user override + base + referral bonus）
+    const { rows: overrideRow } = await client.query(
+      `SELECT max_plays_override FROM activity_user_quotas
+       WHERE activity_id = $1 AND line_user_id = $2 LIMIT 1`,
+      [a.id, lineUserId]
+    );
+    const override = overrideRow[0] || null;
     const { rows: playedRow } = await client.query(
       'SELECT COUNT(*) AS c FROM activity_plays WHERE activity_id = $1 AND line_user_id = $2',
       [a.id, lineUserId]
@@ -62,21 +68,25 @@ async function selectPrizeAndRecord(opts) {
     const refPer = Number(a.referral_bonus_per || 0);
     const refMax = Number(a.referral_bonus_max || 0);
     const referralBonus = Math.min(refMax, referralCount * refPer);
-    const totalQuota = basePlays + referralBonus;
+    // override 直接決定 total；否則用標準算法
+    const totalQuota = override
+      ? Number(override.max_plays_override)
+      : basePlays + referralBonus;
     if (played >= totalQuota) {
       await client.query('ROLLBACK');
-      const canEarnMore = refPer > 0 && referralBonus < refMax;
+      const canEarnMore = !override && refPer > 0 && referralBonus < refMax;
       return {
         error: {
           status: 429,
           code: 'quota_exhausted',
           detail: canEarnMore
             ? '次數已用完！邀請朋友來玩可以再加 ' + refPer + ' 次。'
-            : '次數已用完。',
+            : (override ? '此用戶配額已用完（後台設定上限 ' + totalQuota + ' 次）。' : '次數已用完。'),
           quota: {
             total: totalQuota, played, remaining: 0, referrals: referralCount,
             base: basePlays, referral_bonus: referralBonus,
-            referral_bonus_max: refMax, referral_bonus_per: refPer
+            referral_bonus_max: refMax, referral_bonus_per: refPer,
+            override: override ? { max_plays: Number(override.max_plays_override) } : null
           }
         }
       };
@@ -197,11 +207,20 @@ async function computeUserQuota(query, activity, lineUserId) {
   const basePlays = Number(activity.base_plays_per_user || 1);
   const refPer = Number(activity.referral_bonus_per || 0);
   const refMax = Number(activity.referral_bonus_max || 0);
+  // 1) 個別用戶配額 override（admin 後台設的）
+  const { rows: overrideRows } = await query(
+    `SELECT max_plays_override, note FROM activity_user_quotas
+     WHERE activity_id = $1 AND line_user_id = $2 LIMIT 1`,
+    [activity.id, lineUserId]
+  );
+  const override = overrideRows[0] || null;
+  // 2) 已玩次數
   const { rows: playedRows } = await query(
     'SELECT COUNT(*) AS c FROM activity_plays WHERE activity_id = $1 AND line_user_id = $2',
     [activity.id, lineUserId]
   );
   const played = Number(playedRows[0].c);
+  // 3) 邀請成功數
   const { rows: refRows } = await query(
     `SELECT COUNT(*) AS c FROM activity_referrals
      WHERE activity_id = $1 AND inviter_line_user_id = $2`,
@@ -209,7 +228,10 @@ async function computeUserQuota(query, activity, lineUserId) {
   );
   const referrals = Number(refRows[0].c);
   const referralBonus = Math.min(refMax, referrals * refPer);
-  const total = basePlays + referralBonus;
+  // override 直接覆寫 total（取代 base + referral）；否則用標準計算
+  const total = override
+    ? Number(override.max_plays_override)
+    : basePlays + referralBonus;
   return {
     total,
     played,
@@ -218,7 +240,11 @@ async function computeUserQuota(query, activity, lineUserId) {
     base: basePlays,
     referral_bonus: referralBonus,
     referral_bonus_max: refMax,
-    referral_bonus_per: refPer
+    referral_bonus_per: refPer,
+    override: override ? {
+      max_plays: Number(override.max_plays_override),
+      note: override.note || null
+    } : null
   };
 }
 

@@ -104,6 +104,7 @@
                 '<td style="text-align:right;">' + a.play_count + '</td>' +
                 '<td><button type="button" class="act-link-btn" data-url="' + escapeHtml(shareUrl) + '" title="LIFF 短網址：給用戶分享用">複製連結</button></td>' +
                 '<td>' +
+                  '<a href="/admin/activities/' + a.id + '/players" class="act-edit-btn">玩家</a>' +
                   '<a href="/admin/activities/' + a.id + '" class="act-edit-btn">編輯</a>' +
                   '<button type="button" class="act-del-btn" data-id="' + a.id + '" data-name="' + escapeHtml(a.name) + '">刪除</button>' +
                 '</td>' +
