@@ -28,8 +28,9 @@
     <section class="card">
       <div class="players-section-head">
         <h2 style="margin:0;">玩家清單</h2>
-        <div style="display:flex;gap:8px;align-items:center;">
+        <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;">
           <input type="text" id="player-search" placeholder="搜尋名稱或 UID..." class="player-search" />
+          <button type="button" class="ae-secondary-btn" id="btn-export-list">匯出到名單庫</button>
           <button type="button" class="ae-secondary-btn" id="btn-add-quota">＋ 新增個別配額</button>
         </div>
       </div>
@@ -55,6 +56,44 @@
         </table>
       </div>
     </section>
+
+    <!-- Export to recipient list Modal -->
+    <div id="export-modal" class="ae-modal" hidden>
+      <div class="ae-modal-inner" style="max-width:520px;">
+        <div class="ae-modal-head">
+          <h3>匯出玩家成名單庫</h3>
+          <button type="button" class="ae-modal-close" id="export-modal-close">×</button>
+        </div>
+        <p class="muted" style="font-size:12px;margin:0 0 12px;">
+          會在「名單庫」建立一個新名單，內含符合條件的玩家 LINE userId。建立後可在群發訊息時選用。
+        </p>
+        <div class="ae-grid">
+          <label class="ae-field ae-field-full">
+            <span>名單名稱 *</span>
+            <input type="text" id="ex-name" placeholder="例：${activity.name} 中獎名單" maxlength="200" />
+          </label>
+          <label class="ae-field ae-field-full">
+            <span>描述（可選）</span>
+            <input type="text" id="ex-desc" placeholder="用途備註" maxlength="500" />
+          </label>
+          <label class="ae-field ae-field-full">
+            <span>包含哪些玩家 *</span>
+            <select id="ex-filter" style="padding:8px 10px;border:1px solid #ECECEE;border-radius:6px;font-size:13px;font-family:inherit;">
+              <option value="all">全部玩過的人</option>
+              <option value="winners">中過獎的人（含一般獎 + 頭獎）</option>
+              <option value="grand_winners">只取中過頭獎的人</option>
+              <option value="losers">玩過但沒中過獎的人</option>
+            </select>
+            <div id="ex-preview" class="muted" style="font-size:11px;min-height:14px;margin-top:4px;"></div>
+          </label>
+        </div>
+        <div class="ae-actions">
+          <button type="button" class="ae-primary-btn" id="ex-save">建立名單</button>
+          <button type="button" class="ae-secondary-btn" id="ex-cancel">取消</button>
+        </div>
+        <div id="ex-status" class="muted" style="font-size:12px;min-height:18px;margin-top:8px;"></div>
+      </div>
+    </div>
 
     <!-- Quota Modal -->
     <div id="quota-modal" class="ae-modal" hidden>
@@ -238,6 +277,65 @@
       }
       function closeQuotaModal() { modal.hidden = true; editingUid = null; }
       document.getElementById('btn-add-quota').addEventListener('click', function () { openQuotaModal(null); });
+
+      // ---- 匯出到名單庫 ----
+      var exportModal = document.getElementById('export-modal');
+      function updateExportPreview() {
+        var filter = document.getElementById('ex-filter').value;
+        var count = 0;
+        if (filter === 'all') {
+          count = allPlayers.filter(function (p) { return p.plays > 0; }).length;
+        } else if (filter === 'winners') {
+          count = allPlayers.filter(function (p) { return p.wins > 0; }).length;
+        } else if (filter === 'grand_winners') {
+          count = allPlayers.filter(function (p) { return p.grand_wins > 0; }).length;
+        } else if (filter === 'losers') {
+          count = allPlayers.filter(function (p) { return p.plays > 0 && p.wins === 0; }).length;
+        }
+        document.getElementById('ex-preview').textContent = '預估包含 ' + count + ' 人（建立後以後端實算為準）';
+      }
+      document.getElementById('btn-export-list').addEventListener('click', function () {
+        document.getElementById('ex-name').value = '';
+        document.getElementById('ex-desc').value = '';
+        document.getElementById('ex-filter').value = 'all';
+        document.getElementById('ex-status').textContent = '';
+        updateExportPreview();
+        exportModal.hidden = false;
+        setTimeout(function () { document.getElementById('ex-name').focus(); }, 50);
+      });
+      document.getElementById('export-modal-close').addEventListener('click', function () { exportModal.hidden = true; });
+      document.getElementById('ex-cancel').addEventListener('click', function () { exportModal.hidden = true; });
+      document.getElementById('ex-filter').addEventListener('change', updateExportPreview);
+
+      document.getElementById('ex-save').addEventListener('click', function () {
+        var name = document.getElementById('ex-name').value.trim();
+        var desc = document.getElementById('ex-desc').value.trim();
+        var filter = document.getElementById('ex-filter').value;
+        if (!name) { document.getElementById('ex-status').textContent = '請填名單名稱'; return; }
+        document.getElementById('ex-save').disabled = true;
+        document.getElementById('ex-status').textContent = '建立中⋯';
+        fetch('/admin/activities/api/' + activityId + '/export-players-to-list', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ name: name, description: desc, filter: filter })
+        })
+          .then(function (r) { return r.json(); })
+          .then(function (d) {
+            document.getElementById('ex-save').disabled = false;
+            if (!d.ok) {
+              document.getElementById('ex-status').textContent = '失敗：' + (d.detail || d.error || '未知');
+              return;
+            }
+            document.getElementById('ex-status').innerHTML =
+              '成功！已建立名單「' + (d.list.name || '').replace(/</g, '&lt;') + '」（' + d.total + ' 人）<br>' +
+              '<a href="/admin/recipient-lists/' + d.list.id + '" style="color:#2563eb;">→ 前往名單庫查看</a>';
+            setTimeout(function () { exportModal.hidden = true; }, 3500);
+          })
+          .catch(function (e) {
+            document.getElementById('ex-save').disabled = false;
+            document.getElementById('ex-status').textContent = '錯誤：' + e.message;
+          });
+      });
       document.getElementById('quota-modal-close').addEventListener('click', closeQuotaModal);
       document.getElementById('qm-cancel').addEventListener('click', closeQuotaModal);
       document.getElementById('qm-save').addEventListener('click', function () {

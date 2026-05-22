@@ -420,6 +420,92 @@ function registerAdminActivitiesRoutes(app, deps) {
   });
 
   // ------------------------------------------------------------------
+  // 匯出玩家成名單庫（篩選 all / winners / grand_winners / losers）
+  // ------------------------------------------------------------------
+  app.post('/admin/activities/api/:id(\\d+)/export-players-to-list', requireAdmin, async (req, res) => {
+    try {
+      const id = Number(req.params.id);
+      const body = req.body || {};
+      const name = String(body.name || '').trim().slice(0, 200);
+      const description = String(body.description || '').trim().slice(0, 500);
+      const filter = String(body.filter || 'all').trim();
+      if (!name) return res.status(400).json({ ok: false, error: 'name_required' });
+      const ALLOWED = ['all', 'winners', 'grand_winners', 'losers'];
+      if (!ALLOWED.includes(filter)) {
+        return res.status(400).json({ ok: false, error: 'invalid_filter', detail: 'filter 必須是 ' + ALLOWED.join(' / ') });
+      }
+
+      // 撈 distinct line_user_id（依 filter）
+      let sql;
+      if (filter === 'all') {
+        sql = `SELECT DISTINCT line_user_id FROM activity_plays
+               WHERE activity_id = $1 AND line_user_id IS NOT NULL`;
+      } else if (filter === 'winners') {
+        sql = `SELECT DISTINCT line_user_id FROM activity_plays
+               WHERE activity_id = $1 AND line_user_id IS NOT NULL AND prize_id IS NOT NULL`;
+      } else if (filter === 'grand_winners') {
+        sql = `SELECT DISTINCT pl.line_user_id FROM activity_plays pl
+               JOIN activity_prizes pr ON pr.id = pl.prize_id
+               WHERE pl.activity_id = $1 AND pl.line_user_id IS NOT NULL AND pr.is_grand_prize = TRUE`;
+      } else {
+        // losers: 玩過但完全沒中過獎
+        sql = `SELECT line_user_id FROM activity_plays
+               WHERE activity_id = $1 AND line_user_id IS NOT NULL
+               GROUP BY line_user_id
+               HAVING bool_and(prize_id IS NULL)`;
+      }
+      const { rows } = await query(sql, [id]);
+      const uids = rows.map(r => r.line_user_id).filter(Boolean);
+      if (uids.length === 0) {
+        return res.status(400).json({ ok: false, error: 'no_matching_players', detail: '找不到符合條件的玩家' });
+      }
+
+      const createdBy = (req.authUser && (req.authUser.un || req.authUser.username)) || 'admin';
+      // 建立 list + 灌 members（沿用 broadcast 的 5000 上限）
+      if (uids.length > 5000) {
+        return res.status(400).json({ ok: false, error: 'too_many_recipients', detail: '單一名單上限 5000 人（找到 ' + uids.length + '）' });
+      }
+      const client = await pool.connect();
+      try {
+        await client.query('BEGIN');
+        const insListRs = await client.query(
+          `INSERT INTO admin_recipient_lists (name, description, total, created_by)
+           VALUES ($1, $2, $3, $4)
+           RETURNING id, name, total, created_at`,
+          [name, description || null, uids.length, createdBy]
+        );
+        const listId = insListRs.rows[0].id;
+        const BATCH = 500;
+        for (let i = 0; i < uids.length; i += BATCH) {
+          const slice = uids.slice(i, i + BATCH);
+          const values = [];
+          const params = [];
+          slice.forEach((uid, idx) => {
+            const base = idx * 2;
+            values.push(`($${base + 1}, $${base + 2})`);
+            params.push(listId, uid);
+          });
+          await client.query(
+            `INSERT INTO admin_recipient_list_members (list_id, line_user_id)
+             VALUES ${values.join(', ')}`,
+            params
+          );
+        }
+        await client.query('COMMIT');
+        res.json({ ok: true, list: insListRs.rows[0], total: uids.length });
+      } catch (e) {
+        try { await client.query('ROLLBACK'); } catch (_e) {}
+        throw e;
+      } finally {
+        client.release();
+      }
+    } catch (err) {
+      console.error('export players error:', err && err.message);
+      res.status(500).json({ ok: false, error: 'export_failed', detail: String(err.message || '').slice(0, 300) });
+    }
+  });
+
+  // ------------------------------------------------------------------
   // 統計
   // ------------------------------------------------------------------
   app.get('/admin/activities/api/:id(\\d+)/stats', requireAdmin, async (req, res) => {
