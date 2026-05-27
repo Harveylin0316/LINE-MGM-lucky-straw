@@ -23,6 +23,12 @@ const {
   FIELD_LIMITS
 } = require('../core/broadcastTemplates');
 const {
+  buildEmailMessage,
+  validateEmailTemplateInput,
+  buildEmailHtml,
+  normalizeEmailTemplateInput
+} = require('../core/emailTemplates');
+const {
   normalizeConditions,
   hasAnyCondition,
   previewAudience,
@@ -47,6 +53,7 @@ function registerAdminBroadcastRoutes(app, deps) {
     pool,
     authCore,
     linePush,
+    emailProvider,
     lineChannelAccessToken,
     resolvePublicSiteOrigin = () => ''
   } = deps;
@@ -96,6 +103,70 @@ function registerAdminBroadcastRoutes(app, deps) {
   async function loadBroadcast(id) {
     const rs = await query(`SELECT * FROM admin_broadcasts WHERE id = $1`, [id]);
     return rs.rowCount === 0 ? null : rs.rows[0];
+  }
+
+  /**
+   * 對單一收件人發送（dispatch by channel）
+   * @returns {Promise<{ result: 'sent'|'failed'|'skipped', error?: string, providerMessageId?: string }>}
+   */
+  async function sendOneRecipient(broadcast, recipient, { origin } = {}) {
+    const isAbTest = Boolean(broadcast.is_ab_test);
+    const useVariant = (isAbTest && recipient.variant === 'b') ? 'b' : 'a';
+    const cfg = (isAbTest && useVariant === 'b')
+      ? broadcast.variant_b_message_config
+      : broadcast.message_config;
+    const channel = broadcast.channel === 'email' ? 'email' : 'line';
+
+    if (channel === 'email') {
+      if (!emailProvider || !emailProvider.isConfigured()) {
+        return { result: 'failed', error: 'email_provider_not_configured' };
+      }
+      const target = String(recipient.email || '').trim();
+      if (!target) return { result: 'skipped', error: 'missing_email' };
+      const built = buildEmailMessage(cfg, broadcast.email_subject, {
+        heroImageBaseUrl: origin,
+        broadcastId: broadcast.id,
+        recipientId: recipient.id,
+        variant: isAbTest ? useVariant : undefined,
+        origin
+      });
+      if (!built.ok) return { result: 'failed', error: 'build_failed:' + (built.error || 'unknown') };
+      const sent = await emailProvider.sendEmail({
+        to: target,
+        toName: recipient.display_name || undefined,
+        subject: built.subject,
+        html: built.html,
+        text: built.text,
+        senderEmail: broadcast.email_from_address || undefined,
+        senderName: broadcast.email_from_name || undefined,
+        customMetadata: {
+          broadcast_id: Number(broadcast.id),
+          recipient_id: Number(recipient.id),
+          variant: isAbTest ? useVariant : null
+        }
+      });
+      return sent.ok
+        ? { result: 'sent', providerMessageId: sent.messageId || null }
+        : { result: 'failed', error: 'send_failed:' + (sent.error || 'unknown') };
+    }
+
+    // line channel
+    const target = String(recipient.line_user_id || '').trim();
+    if (!target) return { result: 'skipped', error: 'missing_line_user_id' };
+    const built = buildLineMessages(cfg, {
+      heroImageBaseUrl: origin,
+      broadcastId: broadcast.id,
+      variant: isAbTest ? useVariant : undefined,
+      recipientId: recipient.id
+    });
+    if (!built.ok) return { result: 'failed', error: 'build_failed' };
+    const pushed = await linePush.pushLineMessages(target, built.messages, {
+      userId: recipient.user_id,
+      pushType: 'admin_broadcast'
+    });
+    return pushed
+      ? { result: 'sent' }
+      : { result: 'failed', error: 'push_failed' };
   }
 
   // ---------- 0a-new. /v/b/:broadcastId/:recipientId/:mediaId（含 recipient 追蹤）----------
@@ -292,12 +363,14 @@ function registerAdminBroadcastRoutes(app, deps) {
   app.post('/admin/broadcast/audience/preview', requireAdmin, async (req, res) => {
     try {
       const conditions = req.body && req.body.conditions;
-      const result = await previewAudience(query, conditions);
+      const channel = (req.body && req.body.channel === 'email') ? 'email' : 'line';
+      const result = await previewAudience(query, conditions, { channel });
       return res.json({
         ok: true,
         total: result.total,
         sample: result.sample,
         conditions: result.conditions,
+        channel,
         error: result.error || null
       });
     } catch (err) {
@@ -632,13 +705,51 @@ function registerAdminBroadcastRoutes(app, deps) {
     }
   });
 
-  // ---------- 3b. test push（單筆，真的打 LINE API） ----------
+  // ---------- 3b. test push（單筆，真的打 LINE API 或 Email） ----------
   app.post('/admin/broadcast/test-push', requireAdmin, async (req, res) => {
     try {
+      const body = req.body || {};
+      const channel = body.channel === 'email' ? 'email' : 'line';
+
+      // ===== Email test =====
+      if (channel === 'email') {
+        if (!(emailProvider && emailProvider.isConfigured && emailProvider.isConfigured())) {
+          return safeJsonError(res, 400, 'email_provider_not_configured');
+        }
+        const targetEmail = String(body.test_email || '').trim();
+        if (!targetEmail || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(targetEmail)) {
+          return safeJsonError(res, 400, 'invalid_email');
+        }
+        const subject = String(body.email_subject || '').trim();
+        if (!subject) return safeJsonError(res, 400, 'email_subject_required');
+        const cfg = body.message_config || {};
+        const tplCheck = validateEmailTemplateInput({ ...(cfg.template || {}), subject });
+        if (!tplCheck.ok) return safeJsonError(res, 400, tplCheck.error);
+
+        const origin = publicOriginOrEmpty(req);
+        const built = buildEmailMessage(cfg, subject, { heroImageBaseUrl: origin, origin });
+        if (!built.ok) return safeJsonError(res, 400, built.error);
+
+        const senderName = String(body.email_from_name || '').trim() || undefined;
+        const senderEmail = String(body.email_from_address || '').trim() || undefined;
+        const sent = await emailProvider.sendEmail({
+          to: targetEmail,
+          subject: built.subject,
+          html: built.html,
+          text: built.text,
+          senderEmail,
+          senderName,
+          customMetadata: { test: true, admin: (req.authUser && req.authUser.un) || 'admin' },
+          tags: ['admin_broadcast_test']
+        });
+        if (!sent.ok) return safeJsonError(res, 500, 'send_failed', { detail: sent.error });
+        return res.json({ ok: true, sentTo: targetEmail, messageId: sent.messageId || null });
+      }
+
+      // ===== LINE test (原邏輯) =====
       if (!lineChannelAccessToken) {
         return safeJsonError(res, 400, 'no_line_channel_access_token');
       }
-      const body = req.body || {};
       const rawTestId = String(body.test_line_user_id || '').trim();
       const rawMember = String(body.test_member_name || '').trim().slice(0, 200);
       const messageConfig = body.message_config;
@@ -697,13 +808,24 @@ function registerAdminBroadcastRoutes(app, deps) {
   // ---------- 4. message preview ----------
   app.post('/admin/broadcast/preview-message', requireAdmin, async (req, res) => {
     try {
-      const messageConfig = req.body && req.body.message_config;
+      const body = req.body || {};
+      const channel = body.channel === 'email' ? 'email' : 'line';
+      const messageConfig = body.message_config;
       const origin = publicOriginOrEmpty(req);
+
+      if (channel === 'email') {
+        const subject = String(body.email_subject || '').trim();
+        if (!subject) return res.json({ ok: false, error: 'email_subject_required' });
+        const built = buildEmailMessage(messageConfig, subject, { heroImageBaseUrl: origin, origin });
+        if (!built.ok) return res.json({ ok: false, error: built.error });
+        return res.json({ ok: true, channel: 'email', subject: built.subject, html: built.html, text: built.text });
+      }
+
       const built = buildLineMessages(messageConfig, { heroImageBaseUrl: origin });
       if (!built.ok) {
         return res.json({ ok: false, error: built.error });
       }
-      return res.json({ ok: true, messages: built.messages });
+      return res.json({ ok: true, channel: 'line', messages: built.messages });
     } catch (err) {
       console.error('preview-message error:', err.message);
       return safeJsonError(res, 500, 'preview_failed');
@@ -712,14 +834,23 @@ function registerAdminBroadcastRoutes(app, deps) {
 
   // ---------- 5. create batch ----------
   app.post('/admin/broadcast/create', requireAdmin, async (req, res) => {
-    if (!lineChannelAccessToken) {
+    const body = req.body || {};
+    const channel = body.channel === 'email' ? 'email' : 'line';
+    if (channel === 'line' && !lineChannelAccessToken) {
       return safeJsonError(res, 400, 'no_line_channel_access_token');
     }
+    if (channel === 'email' && !(emailProvider && emailProvider.isConfigured && emailProvider.isConfigured())) {
+      return safeJsonError(res, 400, 'email_provider_not_configured');
+    }
     try {
-      const body = req.body || {};
       const rawConditions = body.conditions;
       const messageConfig = body.message_config;
       const sendMode = body.send_mode === 'scheduled' ? 'scheduled' : 'immediate';
+
+      // Email 專屬欄位
+      const emailSubject = String(body.email_subject || '').trim().slice(0, 200);
+      const emailFromName = String(body.email_from_name || '').trim().slice(0, 100) || null;
+      const emailFromAddress = String(body.email_from_address || '').trim().slice(0, 200) || null;
 
       let scheduledAt = null;
       if (sendMode === 'scheduled') {
@@ -741,9 +872,21 @@ function registerAdminBroadcastRoutes(app, deps) {
       }
 
       const origin = publicOriginOrEmpty(req);
-      const builtMsg = buildLineMessages(messageConfig, { heroImageBaseUrl: origin });
-      if (!builtMsg.ok) {
-        return safeJsonError(res, 400, builtMsg.error);
+
+      // 驗證訊息 config（兩個 channel 各自驗）
+      if (channel === 'line') {
+        const builtMsg = buildLineMessages(messageConfig, { heroImageBaseUrl: origin });
+        if (!builtMsg.ok) {
+          return safeJsonError(res, 400, builtMsg.error);
+        }
+      } else {
+        // email：驗證 template + subject 必填
+        if (!emailSubject) return safeJsonError(res, 400, 'email_subject_required');
+        const tplCheck = validateEmailTemplateInput({
+          ...(messageConfig && messageConfig.template ? messageConfig.template : {}),
+          subject: emailSubject
+        });
+        if (!tplCheck.ok) return safeJsonError(res, 400, tplCheck.error);
       }
 
       // A/B test：可選的 variant B
@@ -753,20 +896,30 @@ function registerAdminBroadcastRoutes(app, deps) {
         if (!variantBConfig || typeof variantBConfig !== 'object') {
           return safeJsonError(res, 400, 'variant_b_message_config_required');
         }
-        const builtB = buildLineMessages(variantBConfig, { heroImageBaseUrl: origin });
-        if (!builtB.ok) {
-          return safeJsonError(res, 400, 'variant_b_invalid:' + builtB.error);
+        if (channel === 'line') {
+          const builtB = buildLineMessages(variantBConfig, { heroImageBaseUrl: origin });
+          if (!builtB.ok) return safeJsonError(res, 400, 'variant_b_invalid:' + builtB.error);
+        } else {
+          const tplCheckB = validateEmailTemplateInput({
+            ...(variantBConfig.template || {}),
+            subject: emailSubject
+          });
+          if (!tplCheckB.ok) return safeJsonError(res, 400, 'variant_b_invalid:' + tplCheckB.error);
         }
       }
 
       const conditions = normalizeConditions(rawConditions);
-      if (!hasAnyCondition(conditions)) {
+      // channel=email 時只允許 savedListId
+      if (channel === 'email' && !conditions.savedListId) {
+        return safeJsonError(res, 400, 'email_requires_saved_list');
+      }
+      if (channel === 'line' && !hasAnyCondition(conditions)) {
         return safeJsonError(res, 400, 'no_conditions_selected');
       }
 
-      const { rows: recipients } = await fetchAudienceRecipients(query, conditions);
+      const { rows: recipients } = await fetchAudienceRecipients(query, conditions, { channel });
       if (recipients.length === 0) {
-        return safeJsonError(res, 400, 'no_matching_recipients');
+        return safeJsonError(res, 400, channel === 'email' ? 'no_email_recipients' : 'no_matching_recipients');
       }
       if (isAbTest && recipients.length < 2) {
         return safeJsonError(res, 400, 'ab_test_needs_min_2_recipients');
@@ -797,8 +950,9 @@ function registerAdminBroadcastRoutes(app, deps) {
           ? await client.query(
               `INSERT INTO admin_broadcasts
                 (status, scheduled_at, admin_username, audience_config, message_config,
-                 variant_b_message_config, is_ab_test, recipient_total)
-               VALUES ('scheduled', $1, $2, $3::jsonb, $4::jsonb, $5::jsonb, $6, $7)
+                 variant_b_message_config, is_ab_test, recipient_total,
+                 channel, email_subject, email_from_name, email_from_address)
+               VALUES ('scheduled', $1, $2, $3::jsonb, $4::jsonb, $5::jsonb, $6, $7, $8, $9, $10, $11)
                RETURNING id`,
               [
                 scheduledAt.toISOString(),
@@ -807,14 +961,19 @@ function registerAdminBroadcastRoutes(app, deps) {
                 JSON.stringify(messageConfig || {}),
                 isAbTest ? JSON.stringify(variantBConfig) : null,
                 isAbTest,
-                recipients.length
+                recipients.length,
+                channel,
+                channel === 'email' ? emailSubject : null,
+                channel === 'email' ? emailFromName : null,
+                channel === 'email' ? emailFromAddress : null
               ]
             )
           : await client.query(
               `INSERT INTO admin_broadcasts
                 (status, started_at, admin_username, audience_config, message_config,
-                 variant_b_message_config, is_ab_test, recipient_total)
-               VALUES ('running', NOW(), $1, $2::jsonb, $3::jsonb, $4::jsonb, $5, $6)
+                 variant_b_message_config, is_ab_test, recipient_total,
+                 channel, email_subject, email_from_name, email_from_address)
+               VALUES ('running', NOW(), $1, $2::jsonb, $3::jsonb, $4::jsonb, $5, $6, $7, $8, $9, $10)
                RETURNING id`,
               [
                 adminUsername,
@@ -822,7 +981,11 @@ function registerAdminBroadcastRoutes(app, deps) {
                 JSON.stringify(messageConfig || {}),
                 isAbTest ? JSON.stringify(variantBConfig) : null,
                 isAbTest,
-                recipients.length
+                recipients.length,
+                channel,
+                channel === 'email' ? emailSubject : null,
+                channel === 'email' ? emailFromName : null,
+                channel === 'email' ? emailFromAddress : null
               ]
             );
         const broadcastId = insRs.rows[0].id;
@@ -835,17 +998,18 @@ function registerAdminBroadcastRoutes(app, deps) {
           const params = [];
           slice.forEach((r, idx) => {
             const globalIdx = i + idx;
-            const base = idx * 4;
-            values.push(`($${base + 1}, $${base + 2}, $${base + 3}, $${base + 4})`);
+            const base = idx * 5;
+            values.push(`($${base + 1}, $${base + 2}, $${base + 3}, $${base + 4}, $${base + 5})`);
             params.push(
               broadcastId,
               r.user_id,
-              r.line_user_id,
+              r.line_user_id || null,
+              r.email || null,
               isAbTest ? assignedVariants[globalIdx] : 'a'
             );
           });
           await client.query(
-            `INSERT INTO admin_broadcast_recipients (broadcast_id, user_id, line_user_id, variant)
+            `INSERT INTO admin_broadcast_recipients (broadcast_id, user_id, line_user_id, email, variant)
              VALUES ${values.join(', ')}`,
             params
           );
@@ -877,9 +1041,6 @@ function registerAdminBroadcastRoutes(app, deps) {
 
   // ---------- 6. process chunk ----------
   app.post('/admin/broadcast/:id/process-chunk', requireAdmin, async (req, res) => {
-    if (!lineChannelAccessToken) {
-      return safeJsonError(res, 400, 'no_line_channel_access_token');
-    }
     const idStr = String(req.params.id || '').trim();
     if (!isPositiveIntegerString(idStr)) {
       return safeJsonError(res, 400, 'invalid_broadcast_id');
@@ -889,6 +1050,13 @@ function registerAdminBroadcastRoutes(app, deps) {
     try {
       const b = await loadBroadcast(broadcastId);
       if (!b) return safeJsonError(res, 404, 'broadcast_not_found');
+      const channel = b.channel === 'email' ? 'email' : 'line';
+      if (channel === 'line' && !lineChannelAccessToken) {
+        return safeJsonError(res, 400, 'no_line_channel_access_token');
+      }
+      if (channel === 'email' && !(emailProvider && emailProvider.isConfigured && emailProvider.isConfigured())) {
+        return safeJsonError(res, 400, 'email_provider_not_configured');
+      }
       if (b.status === 'cancelled' || b.status === 'done') {
         return res.json({ ok: true, processed: 0, ok_count: 0, fail: 0, skip: 0, remaining: 0, done: true, status: b.status });
       }
@@ -917,7 +1085,7 @@ function registerAdminBroadcastRoutes(app, deps) {
              LIMIT $2
              FOR UPDATE SKIP LOCKED
            )
-           RETURNING id, user_id, line_user_id, variant`,
+           RETURNING id, user_id, line_user_id, email, variant`,
           [broadcastId, chunkSize]
         );
         await client.query('COMMIT');
@@ -930,27 +1098,21 @@ function registerAdminBroadcastRoutes(app, deps) {
       }
       client.release();
 
-      // 構造 messages：每個 recipient 各自 build 一次，URL 內嵌 recipient_id
-      // → track endpoint (/r/b/:bid/:rid, /v/b/:bid/:rid/:mediaId) 能識別「誰開了/誰點了」
-      // 傳 broadcastId → CTA 包成 /r/b/<id>/<rid> 中介 redirect 做點擊追蹤
-      // A/B test：依 recipient.variant 選 message_config 並帶 variant 標記
       const origin = publicOriginOrEmpty(req);
       const isAbTest = Boolean(b.is_ab_test);
 
-      // 預先驗證一下訊息設定（不帶 recipientId，用來檢查能否 build）
-      function buildMsgForVariant(variant, recipientId) {
-        const cfg = (isAbTest && variant === 'b') ? b.variant_b_message_config : b.message_config;
-        return buildLineMessages(cfg, {
-          heroImageBaseUrl: origin,
-          broadcastId,
-          variant: isAbTest ? variant : undefined,
-          recipientId
-        });
+      // 預先驗證訊息設定（不帶 recipientId，用來檢查能否 build）
+      let sanityErr = null;
+      if (channel === 'line') {
+        const sa = buildLineMessages(b.message_config, { heroImageBaseUrl: origin, broadcastId, variant: isAbTest ? 'a' : undefined });
+        const sb = isAbTest ? buildLineMessages(b.variant_b_message_config, { heroImageBaseUrl: origin, broadcastId, variant: 'b' }) : null;
+        if (!sa.ok || (isAbTest && !sb.ok)) sanityErr = !sa.ok ? sa.error : sb.error;
+      } else {
+        const sa = validateEmailTemplateInput({ ...(b.message_config && b.message_config.template ? b.message_config.template : {}), subject: b.email_subject });
+        const sb = isAbTest ? validateEmailTemplateInput({ ...(b.variant_b_message_config && b.variant_b_message_config.template ? b.variant_b_message_config.template : {}), subject: b.email_subject }) : { ok: true };
+        if (!sa.ok || (isAbTest && !sb.ok)) sanityErr = !sa.ok ? sa.error : sb.error;
       }
-      const sanityA = buildMsgForVariant('a');
-      const sanityB = isAbTest ? buildMsgForVariant('b') : null;
-      if (!sanityA.ok || (isAbTest && !sanityB.ok)) {
-        // 訊息無效：把 claimed 退回 pending
+      if (sanityErr) {
         if (claimed.length > 0) {
           await query(
             `UPDATE admin_broadcast_recipients SET status = 'pending'
@@ -958,8 +1120,7 @@ function registerAdminBroadcastRoutes(app, deps) {
             [claimed.map(r => r.id)]
           );
         }
-        const err = !sanityA.ok ? sanityA.error : sanityB.error;
-        return safeJsonError(res, 400, 'message_invalid:' + err);
+        return safeJsonError(res, 400, 'message_invalid:' + sanityErr);
       }
 
       let okCount = 0;
@@ -967,42 +1128,30 @@ function registerAdminBroadcastRoutes(app, deps) {
       let skipCount = 0;
 
       for (const r of claimed) {
-        const lineUid = String(r.line_user_id || '').trim();
-        if (!lineUid) {
+        const out = await sendOneRecipient(b, r, { origin });
+        if (out.result === 'sent') {
           await query(
             `UPDATE admin_broadcast_recipients
-             SET status = 'skipped', pushed_at = NOW(), error = 'missing_line_user_id'
+             SET status = 'sent', pushed_at = NOW(), error = NULL,
+                 provider_message_id = COALESCE($2, provider_message_id)
              WHERE id = $1`,
-            [r.id]
-          );
-          skipCount += 1;
-          continue;
-        }
-        // 為這個 recipient build messages（URL 嵌入 r.id）
-        const useVariant = (isAbTest && r.variant === 'b') ? 'b' : 'a';
-        const useBuilt = buildMsgForVariant(useVariant, r.id);
-        if (!useBuilt.ok) {
-          await query(
-            `UPDATE admin_broadcast_recipients SET status = 'failed', pushed_at = NOW(), error = 'build_failed' WHERE id = $1`,
-            [r.id]
-          );
-          failCount += 1;
-          continue;
-        }
-        const pushed = await linePush.pushLineMessages(lineUid, useBuilt.messages, {
-          userId: r.user_id,
-          pushType: 'admin_broadcast'
-        });
-        if (pushed) {
-          await query(
-            `UPDATE admin_broadcast_recipients SET status = 'sent', pushed_at = NOW(), error = NULL WHERE id = $1`,
-            [r.id]
+            [r.id, out.providerMessageId || null]
           );
           okCount += 1;
+        } else if (out.result === 'skipped') {
+          await query(
+            `UPDATE admin_broadcast_recipients
+             SET status = 'skipped', pushed_at = NOW(), error = $2
+             WHERE id = $1`,
+            [r.id, String(out.error || 'skipped').slice(0, 200)]
+          );
+          skipCount += 1;
         } else {
           await query(
-            `UPDATE admin_broadcast_recipients SET status = 'failed', pushed_at = NOW(), error = 'push_failed' WHERE id = $1`,
-            [r.id]
+            `UPDATE admin_broadcast_recipients
+             SET status = 'failed', pushed_at = NOW(), error = $2
+             WHERE id = $1`,
+            [r.id, String(out.error || 'failed').slice(0, 200)]
           );
           failCount += 1;
         }
@@ -1062,9 +1211,6 @@ function registerAdminBroadcastRoutes(app, deps) {
     if (!expectedSecret || providedSecret !== expectedSecret) {
       return res.status(403).json({ ok: false, error: 'forbidden' });
     }
-    if (!lineChannelAccessToken) {
-      return res.status(200).json({ ok: true, skipped: 'no_line_token' });
-    }
     try {
       // Step 1: 把到期的 scheduled 改 running
       const dueRs = await query(
@@ -1077,7 +1223,9 @@ function registerAdminBroadcastRoutes(app, deps) {
 
       // Step 2: 撈所有 running broadcasts（含剛剛 start 的）
       const runningRs = await query(
-        `SELECT id, message_config, variant_b_message_config, is_ab_test FROM admin_broadcasts
+        `SELECT id, message_config, variant_b_message_config, is_ab_test,
+                channel, email_subject, email_from_name, email_from_address
+         FROM admin_broadcasts
          WHERE status = 'running'
          ORDER BY id ASC
          LIMIT 10`
@@ -1089,22 +1237,30 @@ function registerAdminBroadcastRoutes(app, deps) {
       for (const row of runningRs.rows) {
         const bId = row.id;
         const isAbTest = Boolean(row.is_ab_test);
-        // helper：per-recipient build（URL 嵌入 recipientId 做 track）
-        function buildForRecipient(variant, recipientId) {
-          const cfg = (isAbTest && variant === 'b') ? row.variant_b_message_config : row.message_config;
-          return buildLineMessages(cfg, {
-            heroImageBaseUrl: cleanOrigin,
-            broadcastId: bId,
-            variant: isAbTest ? variant : undefined,
-            recipientId
-          });
+        const channel = row.channel === 'email' ? 'email' : 'line';
+
+        if (channel === 'line' && !lineChannelAccessToken) {
+          results.push({ broadcastId: bId, skipped: 'no_line_token' });
+          continue;
         }
+        if (channel === 'email' && !(emailProvider && emailProvider.isConfigured && emailProvider.isConfigured())) {
+          results.push({ broadcastId: bId, skipped: 'email_provider_not_configured' });
+          continue;
+        }
+
         // sanity check 一次（不帶 recipientId）
-        const sanityA = buildForRecipient('a');
-        const sanityB = isAbTest ? buildForRecipient('b') : null;
-        if (!sanityA.ok || (isAbTest && !sanityB.ok)) {
-          const err = !sanityA.ok ? sanityA.error : sanityB.error;
-          results.push({ broadcastId: bId, skipped: 'message_invalid', detail: err });
+        let sanityErr = null;
+        if (channel === 'line') {
+          const sa = buildLineMessages(row.message_config, { heroImageBaseUrl: cleanOrigin, broadcastId: bId, variant: isAbTest ? 'a' : undefined });
+          const sb = isAbTest ? buildLineMessages(row.variant_b_message_config, { heroImageBaseUrl: cleanOrigin, broadcastId: bId, variant: 'b' }) : null;
+          if (!sa.ok || (isAbTest && !sb.ok)) sanityErr = !sa.ok ? sa.error : sb.error;
+        } else {
+          const sa = validateEmailTemplateInput({ ...(row.message_config && row.message_config.template ? row.message_config.template : {}), subject: row.email_subject });
+          const sb = isAbTest ? validateEmailTemplateInput({ ...(row.variant_b_message_config && row.variant_b_message_config.template ? row.variant_b_message_config.template : {}), subject: row.email_subject }) : { ok: true };
+          if (!sa.ok || (isAbTest && !sb.ok)) sanityErr = !sa.ok ? sa.error : sb.error;
+        }
+        if (sanityErr) {
+          results.push({ broadcastId: bId, skipped: 'message_invalid', detail: sanityErr });
           continue;
         }
 
@@ -1121,7 +1277,7 @@ function registerAdminBroadcastRoutes(app, deps) {
                WHERE broadcast_id = $1 AND status = 'pending'
                ORDER BY id ASC LIMIT $2 FOR UPDATE SKIP LOCKED
              )
-             RETURNING id, user_id, line_user_id, variant`,
+             RETURNING id, user_id, line_user_id, email, variant`,
             [bId, 50]
           );
           await client.query('COMMIT');
@@ -1136,41 +1292,26 @@ function registerAdminBroadcastRoutes(app, deps) {
 
         let okCount = 0, failCount = 0, skipCount = 0;
         for (const r of claimed) {
-          const lineUid = String(r.line_user_id || '').trim();
-          if (!lineUid) {
+          const out = await sendOneRecipient(row, r, { origin: cleanOrigin });
+          if (out.result === 'sent') {
             await query(
               `UPDATE admin_broadcast_recipients
-               SET status = 'skipped', pushed_at = NOW(), error = 'missing_line_user_id' WHERE id = $1`,
-              [r.id]
-            );
-            skipCount++;
-            continue;
-          }
-          // per-recipient build → URL 嵌入 r.id
-          const useVariant = (isAbTest && r.variant === 'b') ? 'b' : 'a';
-          const useBuilt = buildForRecipient(useVariant, r.id);
-          if (!useBuilt.ok) {
-            await query(
-              `UPDATE admin_broadcast_recipients SET status = 'failed', pushed_at = NOW(), error = 'build_failed' WHERE id = $1`,
-              [r.id]
-            );
-            failCount++;
-            continue;
-          }
-          const pushed = await linePush.pushLineMessages(lineUid, useBuilt.messages, {
-            userId: r.user_id,
-            pushType: 'admin_broadcast'
-          });
-          if (pushed) {
-            await query(
-              `UPDATE admin_broadcast_recipients SET status = 'sent', pushed_at = NOW(), error = NULL WHERE id = $1`,
-              [r.id]
+               SET status = 'sent', pushed_at = NOW(), error = NULL,
+                   provider_message_id = COALESCE($2, provider_message_id)
+               WHERE id = $1`,
+              [r.id, out.providerMessageId || null]
             );
             okCount++;
+          } else if (out.result === 'skipped') {
+            await query(
+              `UPDATE admin_broadcast_recipients SET status = 'skipped', pushed_at = NOW(), error = $2 WHERE id = $1`,
+              [r.id, String(out.error || 'skipped').slice(0, 200)]
+            );
+            skipCount++;
           } else {
             await query(
-              `UPDATE admin_broadcast_recipients SET status = 'failed', pushed_at = NOW(), error = 'push_failed' WHERE id = $1`,
-              [r.id]
+              `UPDATE admin_broadcast_recipients SET status = 'failed', pushed_at = NOW(), error = $2 WHERE id = $1`,
+              [r.id, String(out.error || 'failed').slice(0, 200)]
             );
             failCount++;
           }
@@ -1546,6 +1687,237 @@ function registerAdminBroadcastRoutes(app, deps) {
       console.error('export recipients error:', err && err.message);
       return safeJsonError(res, 500, 'export_failed', { detail: err && err.message });
     }
+  });
+
+  // ============================================================
+  // Email 專屬：open tracking pixel / unsubscribe / Brevo webhook
+  // ============================================================
+
+  /**
+   * 1x1 透明 GIF 開信追蹤 pixel
+   * URL: /v/b/:bid/:rid/pixel.gif?v=a
+   * （Brevo 自帶開信追蹤，這個是雙保險，也方便自家報表）
+   */
+  app.get('/v/b/:bid(\\d+)/:rid(\\d+)/pixel.gif', async (req, res) => {
+    const bid = Number(req.params.bid);
+    const rid = Number(req.params.rid);
+    const variant = req.query.v === 'a' || req.query.v === 'b' ? req.query.v : null;
+    try {
+      const rcp = await query(
+        `SELECT email, line_user_id FROM admin_broadcast_recipients
+         WHERE id = $1 AND broadcast_id = $2`,
+        [rid, bid]
+      );
+      const emailVal = rcp.rows[0]?.email || null;
+      const luid = rcp.rows[0]?.line_user_id || null;
+      // 寫 view log（去重在 SQL：以 recipient_id 為 key，每筆 broadcast 最多一筆 open）
+      await query(
+        `INSERT INTO admin_broadcast_views (broadcast_id, recipient_id, line_user_id, email, user_agent, variant)
+         VALUES ($1, $2, $3, $4, $5, $6)`,
+        [bid, rid, luid, emailVal, (req.get('user-agent') || '').slice(0, 500), variant]
+      );
+      // 更新 recipient.opened_at（保留最早開信時間）
+      await query(
+        `UPDATE admin_broadcast_recipients
+         SET opened_at = COALESCE(opened_at, NOW())
+         WHERE id = $1`,
+        [rid]
+      );
+    } catch (err) {
+      console.error('pixel track failed:', err.message);
+    }
+    // 一律回 1x1 透明 GIF（GIF89a 標頭）
+    const gif = Buffer.from(
+      'R0lGODlhAQABAIAAAP///wAAACH5BAEAAAAALAAAAAABAAEAAAICRAEAOw==',
+      'base64'
+    );
+    res.setHeader('Content-Type', 'image/gif');
+    res.setHeader('Cache-Control', 'no-cache, no-store, must-revalidate');
+    res.setHeader('Content-Length', String(gif.length));
+    return res.status(200).end(gif);
+  });
+
+  /**
+   * 退訂頁面 (GET) + 確認退訂 (POST)
+   * URL: /email/unsubscribe?bid=1&rid=2
+   */
+  app.get('/email/unsubscribe', async (req, res) => {
+    const bid = Number(req.query.bid);
+    const rid = Number(req.query.rid);
+    let email = '';
+    if (Number.isFinite(bid) && Number.isFinite(rid)) {
+      try {
+        const rs = await query(
+          `SELECT email FROM admin_broadcast_recipients WHERE id = $1 AND broadcast_id = $2`,
+          [rid, bid]
+        );
+        email = rs.rows[0]?.email || '';
+      } catch (_) { /* ignore */ }
+    }
+    // 簡單 HTML 確認頁
+    res.type('text/html').send(`<!doctype html>
+<html lang="zh-Hant"><head><meta charset="utf-8"><title>取消訂閱</title>
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<style>body{font-family:-apple-system,BlinkMacSystemFont,'PingFang TC',sans-serif;margin:0;padding:40px 20px;background:#F9FAFB;color:#1F2937}
+.card{max-width:480px;margin:0 auto;background:#fff;border-radius:16px;padding:32px;box-shadow:0 1px 3px rgba(0,0,0,.04)}
+h1{font-size:22px;margin:0 0 16px}p{line-height:1.7;color:#4B5563}
+input[type=email]{width:100%;padding:12px;border:1px solid #E5E7EB;border-radius:8px;font-size:14px;box-sizing:border-box}
+button{width:100%;margin-top:16px;padding:14px;background:#FCC726;color:#1F2937;border:0;border-radius:10px;font-size:15px;font-weight:700;cursor:pointer}
+.muted{font-size:12px;color:#9CA3AF;margin-top:24px;text-align:center}</style></head>
+<body><div class="card">
+<h1>取消訂閱 OpenRice 推播</h1>
+<p>確認後將不再收到 OpenRice 的推廣 Email。</p>
+<form method="POST" action="/email/unsubscribe">
+<input type="hidden" name="bid" value="${Number.isFinite(bid) ? bid : ''}">
+<input type="hidden" name="rid" value="${Number.isFinite(rid) ? rid : ''}">
+<input type="email" name="email" placeholder="你的 email" required value="${email.replace(/[<>"']/g, '')}">
+<button type="submit">確認取消訂閱</button>
+</form>
+<p class="muted">© OpenRice 開飯喇 · 台灣</p>
+</div></body></html>`);
+  });
+
+  app.post('/email/unsubscribe', async (req, res) => {
+    const body = req.body || {};
+    const email = String(body.email || '').trim().toLowerCase();
+    const bid = Number(body.bid);
+    if (!email || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
+      return res.status(400).type('text/plain').send('Invalid email');
+    }
+    try {
+      await query(
+        `INSERT INTO admin_email_unsubscribes (email, broadcast_id, reason)
+         VALUES ($1, $2, 'user_request')
+         ON CONFLICT (email) DO UPDATE SET broadcast_id = EXCLUDED.broadcast_id`,
+        [email, Number.isFinite(bid) ? bid : null]
+      );
+      // 標記同 email 的 recipients
+      await query(
+        `UPDATE admin_broadcast_recipients
+         SET unsubscribed_at = COALESCE(unsubscribed_at, NOW())
+         WHERE LOWER(email) = $1`,
+        [email]
+      );
+    } catch (err) {
+      console.error('unsubscribe failed:', err.message);
+    }
+    res.type('text/html').send(`<!doctype html>
+<html lang="zh-Hant"><head><meta charset="utf-8"><title>已取消訂閱</title>
+<style>body{font-family:-apple-system,BlinkMacSystemFont,'PingFang TC',sans-serif;margin:0;padding:40px 20px;background:#F9FAFB;color:#1F2937;text-align:center}
+.card{max-width:480px;margin:0 auto;background:#fff;border-radius:16px;padding:48px 32px;box-shadow:0 1px 3px rgba(0,0,0,.04)}</style></head>
+<body><div class="card">
+<h2 style="margin:0 0 12px">已取消訂閱</h2>
+<p style="color:#4B5563">${email} 將不再收到 OpenRice 的推廣 Email。</p>
+</div></body></html>`);
+  });
+
+  /**
+   * Brevo Webhook：接收 delivered / opened / click / bounce / unsubscribe 等事件
+   * URL: /webhooks/brevo
+   * 設定處：Brevo Settings → Webhooks
+   *
+   * 安全：可選 BREVO_WEBHOOK_SECRET 驗證（在 URL 帶 ?s=xxx 或 header）
+   */
+  app.post('/webhooks/brevo', async (req, res) => {
+    const secret = process.env.BREVO_WEBHOOK_SECRET || '';
+    if (secret) {
+      const provided = req.query.s || req.get('x-brevo-secret') || '';
+      if (String(provided) !== secret) {
+        return res.status(403).json({ ok: false, error: 'forbidden' });
+      }
+    }
+
+    // Brevo 通常一次一個 event（也有 batch settings）—兩種都支援
+    const events = Array.isArray(req.body) ? req.body : [req.body];
+    const processed = [];
+    for (const ev of events) {
+      if (!ev || typeof ev !== 'object') continue;
+      try {
+        const evType = String(ev.event || '').toLowerCase();
+        const email = String(ev.email || '').trim().toLowerCase();
+        const messageId = String(ev['message-id'] || ev.messageId || '').trim();
+
+        // 解析 customMetadata（從 X-Mailin-custom header）
+        let metadata = null;
+        const customRaw = ev['X-Mailin-custom'] || ev['x-mailin-custom'] || null;
+        if (customRaw) {
+          try { metadata = typeof customRaw === 'string' ? JSON.parse(customRaw) : customRaw; }
+          catch (_) { metadata = null; }
+        }
+        const broadcastId = metadata && Number.isFinite(Number(metadata.broadcast_id)) ? Number(metadata.broadcast_id) : null;
+        const recipientId = metadata && Number.isFinite(Number(metadata.recipient_id)) ? Number(metadata.recipient_id) : null;
+        const variant = metadata && (metadata.variant === 'a' || metadata.variant === 'b') ? metadata.variant : null;
+
+        // 處理事件
+        if (evType === 'delivered' || evType === 'request') {
+          if (recipientId) {
+            await query(
+              `UPDATE admin_broadcast_recipients
+               SET status = CASE WHEN status IN ('sent','pending','sending') THEN 'sent' ELSE status END,
+                   provider_message_id = COALESCE(provider_message_id, $2)
+               WHERE id = $1`,
+              [recipientId, messageId || null]
+            );
+          }
+        } else if (evType === 'opened' || evType === 'unique_opened') {
+          if (broadcastId && recipientId) {
+            await query(
+              `INSERT INTO admin_broadcast_views (broadcast_id, recipient_id, email, variant, user_agent)
+               VALUES ($1, $2, $3, $4, $5)`,
+              [broadcastId, recipientId, email || null, variant, 'brevo-webhook']
+            );
+            await query(
+              `UPDATE admin_broadcast_recipients SET opened_at = COALESCE(opened_at, NOW()) WHERE id = $1`,
+              [recipientId]
+            );
+          }
+        } else if (evType === 'click') {
+          const link = String(ev.link || ev.url || '').slice(0, 1000);
+          if (broadcastId && recipientId) {
+            await query(
+              `INSERT INTO admin_broadcast_clicks (broadcast_id, recipient_id, email, target_url, variant, user_agent)
+               VALUES ($1, $2, $3, $4, $5, $6)`,
+              [broadcastId, recipientId, email || null, link, variant, 'brevo-webhook']
+            );
+            await query(
+              `UPDATE admin_broadcast_recipients SET first_clicked_at = COALESCE(first_clicked_at, NOW()) WHERE id = $1`,
+              [recipientId]
+            );
+          }
+        } else if (evType === 'hard_bounce' || evType === 'soft_bounce' || evType === 'bounce' || evType === 'blocked' || evType === 'invalid_email' || evType === 'deferred') {
+          if (recipientId) {
+            await query(
+              `UPDATE admin_broadcast_recipients
+               SET status = CASE WHEN $2 IN ('hard_bounce','blocked','invalid_email') THEN 'failed' ELSE status END,
+                   bounced_at = COALESCE(bounced_at, NOW()),
+                   error = LEFT($3, 200)
+               WHERE id = $1`,
+              [recipientId, evType, `${evType}:${ev.reason || ''}`]
+            );
+          }
+        } else if (evType === 'unsubscribed' || evType === 'unsubscribe' || evType === 'spam' || evType === 'complaint') {
+          if (email) {
+            await query(
+              `INSERT INTO admin_email_unsubscribes (email, broadcast_id, reason)
+               VALUES ($1, $2, $3)
+               ON CONFLICT (email) DO UPDATE SET broadcast_id = EXCLUDED.broadcast_id, reason = EXCLUDED.reason`,
+              [email, broadcastId, evType]
+            );
+            await query(
+              `UPDATE admin_broadcast_recipients
+               SET unsubscribed_at = COALESCE(unsubscribed_at, NOW())
+               WHERE LOWER(email) = $1`,
+              [email]
+            );
+          }
+        }
+        processed.push({ event: evType, recipientId, ok: true });
+      } catch (err) {
+        console.error('brevo webhook handle err:', err.message);
+        processed.push({ ok: false, error: err.message });
+      }
+    }
+    return res.json({ ok: true, processed: processed.length });
   });
 }
 

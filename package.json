@@ -5,7 +5,8 @@
   "main": "server.js",
   "scripts": {
     "start": "node server.js",
-    "dev": "nodemon server.js",
+    "dev": "node --env-file=.env --watch server.js",
+    "dev:nodemon": "nodemon server.js",
     "migrate:pg": "node scripts/migrate-sqlite-to-postgres.js",
     "push:invite-bonus-demo": "node scripts/send-invite-bonus-demo-push.js",
     "backfill:invite-rewards": "node scripts/backfill-invite-rewards.js"

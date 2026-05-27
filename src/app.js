@@ -23,6 +23,7 @@ const { buildLiffPermanentUrl } = require('./core/liffPermalink');
 const { buildPushImageBaseCandidates } = require('./core/linePushImageResolve');
 const { createLineWebhookHandler } = require('./routes/lineWebhook');
 const { createLinePushService } = require('./core/linePush');
+const { createEmailProvider } = require('./core/emailProvider');
 
 // 多重偵測：Netlify 不會自動設 NODE_ENV，但會設 NETLIFY=true；AWS Lambda 也會設 AWS_LAMBDA_FUNCTION_NAME。
 // 任一條件成立就視為 production，避免單一 env var 沒設導致 ssl/cookie/redirect 等都跑 dev 行為。
@@ -260,6 +261,8 @@ const linePush = createLinePushService({
   lineChannelAccessToken: LINE_CHANNEL_ACCESS_TOKEN
 });
 
+const emailProvider = createEmailProvider({ query });
+
 let initError = null;
 const initPromise = initDb({
   query,
@@ -463,6 +466,7 @@ registerAdminBroadcastRoutes(app, {
   pool,
   authCore,
   linePush,
+  emailProvider,
   lineChannelAccessToken: LINE_CHANNEL_ACCESS_TOKEN,
   resolvePublicSiteOrigin
 });

@@ -108,8 +108,33 @@ function buildWhere(conds) {
   return { whereSql: where.join(' AND '), params };
 }
 
-async function previewAudience(query, rawConditions) {
+async function previewAudience(query, rawConditions, { channel = 'line' } = {}) {
   const conds = normalizeConditions(rawConditions);
+  // channel=email 時：條件式 audience 不適用（users 表沒 email），只能用 savedListId
+  if (channel === 'email') {
+    if (!conds.savedListId) {
+      return { total: 0, sample: [], conditions: conds, error: 'Email 通道請選一份名單（需含 email 欄位）。' };
+    }
+    const total = await query(
+      `SELECT COUNT(*)::int AS n FROM admin_recipient_list_members
+       WHERE list_id = $1 AND email IS NOT NULL AND BTRIM(email) <> ''`,
+      [conds.savedListId]
+    );
+    const sampleRs = await query(
+      `SELECT m.id, m.email, m.display_name
+       FROM admin_recipient_list_members m
+       WHERE m.list_id = $1 AND m.email IS NOT NULL AND BTRIM(m.email) <> ''
+       ORDER BY m.id ASC
+       LIMIT $2`,
+      [conds.savedListId, PREVIEW_SAMPLE_LIMIT]
+    );
+    return {
+      total: Number(total.rows[0]?.n || 0),
+      sample: sampleRs.rows,
+      conditions: conds,
+      error: null
+    };
+  }
   if (!hasAnyCondition(conds)) {
     return { total: 0, sample: [], conditions: conds, error: '請至少選一個條件或選擇一份名單。' };
   }
@@ -156,10 +181,24 @@ async function previewAudience(query, rawConditions) {
   };
 }
 
-async function fetchAudienceRecipients(query, rawConditions, { limit = MAX_RECIPIENTS_PER_BROADCAST } = {}) {
+async function fetchAudienceRecipients(query, rawConditions, { limit = MAX_RECIPIENTS_PER_BROADCAST, channel = 'line' } = {}) {
   const conds = normalizeConditions(rawConditions);
-  if (!hasAnyCondition(conds)) return { conditions: conds, rows: [] };
   const cappedLimit = Math.min(Math.max(1, Number(limit) || MAX_RECIPIENTS_PER_BROADCAST), MAX_RECIPIENTS_PER_BROADCAST);
+  // channel=email：只能從 list 拿 email
+  if (channel === 'email') {
+    if (!conds.savedListId) return { conditions: conds, rows: [] };
+    const rs = await query(
+      `SELECT u.id AS user_id, m.line_user_id, m.email, m.display_name
+       FROM admin_recipient_list_members m
+       LEFT JOIN users u ON u.line_user_id = m.line_user_id
+       WHERE m.list_id = $1 AND m.email IS NOT NULL AND BTRIM(m.email) <> ''
+       ORDER BY m.id ASC
+       LIMIT $2`,
+      [conds.savedListId, cappedLimit]
+    );
+    return { conditions: conds, rows: rs.rows };
+  }
+  if (!hasAnyCondition(conds)) return { conditions: conds, rows: [] };
   // 來源：已儲存名單
   if (conds.savedListId) {
     const rs = await query(

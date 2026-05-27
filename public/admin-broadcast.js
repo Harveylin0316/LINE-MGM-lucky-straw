@@ -65,6 +65,52 @@
   });
 
   // ------------------------------------------------------------------
+  // 1a. channel tabs (LINE / Email) — task #7
+  // ------------------------------------------------------------------
+  function getActiveChannel() {
+    var active = document.querySelector('.tab-btn[data-channel].active');
+    return (active && active.getAttribute('data-channel') === 'email') ? 'email' : 'line';
+  }
+  function applyChannelUI(channel) {
+    // 切 email 時隱藏 conditions / upload tabs，強制走 saved_list
+    var emailMode = channel === 'email';
+    document.querySelectorAll('.email-only-fields').forEach(function (el) { el.hidden = !emailMode; });
+    document.querySelectorAll('.tab-btn[data-audience]').forEach(function (b) {
+      var aud = b.getAttribute('data-audience');
+      if (aud === 'conditions' || aud === 'upload') {
+        b.style.display = emailMode ? 'none' : '';
+      }
+    });
+    // 切換 hint 文字
+    var hintLine = document.querySelector('.channel-hint-line');
+    var hintEmail = document.querySelector('.channel-hint-email');
+    if (hintLine) hintLine.hidden = emailMode;
+    if (hintEmail) hintEmail.hidden = !emailMode;
+    // 進 email mode：自動切到 saved_list tab
+    if (emailMode && state.audienceSource !== 'saved_list') {
+      var savedTab = document.querySelector('.tab-btn[data-audience="saved_list"]');
+      if (savedTab) savedTab.click();
+    }
+    // 測試人員區：email 時改顯示 email 輸入框
+    var testEmailWrap = document.getElementById('test-email-wrap');
+    if (testEmailWrap) testEmailWrap.hidden = !emailMode;
+    var testLineWrap = document.getElementById('test-line-wrap');
+    if (testLineWrap) testLineWrap.hidden = emailMode;
+  }
+  $$('.tab-btn[data-channel]').forEach(function (btn) {
+    btn.addEventListener('click', function () {
+      var ch = btn.getAttribute('data-channel');
+      $$('.tab-btn[data-channel]').forEach(function (b) {
+        b.classList.toggle('active', b === btn);
+      });
+      applyChannelUI(ch);
+      state.messagePreviewed = false;
+      updateSendButton();
+      schedulePreview();
+    });
+  });
+
+  // ------------------------------------------------------------------
   // 1b. audience tabs（條件 / 已儲存名單 / 上傳）
   // ------------------------------------------------------------------
   $$('.tab-btn[data-audience]').forEach(function (btn) {
@@ -128,7 +174,7 @@
     fetch('/admin/broadcast/audience/preview', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ conditions: collectConditions() })
+      body: JSON.stringify({ conditions: collectConditions(), channel: getActiveChannel() })
     })
       .then(function (r) { return r.json(); })
       .then(function (data) {
@@ -310,17 +356,22 @@
       return;
     }
 
+    var channel = getActiveChannel();
+    var emailSubject = '';
+    if (channel === 'email') {
+      emailSubject = ($('email-subject') && $('email-subject').value || '').trim();
+    }
     var fetches = [
       fetch('/admin/broadcast/preview-message', {
         method: 'POST', headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ message_config: cfg })
+        body: JSON.stringify({ message_config: cfg, channel: channel, email_subject: emailSubject })
       }).then(function (r) { return r.json(); })
     ];
     if (state.abTestEnabled) {
       fetches.push(
         fetch('/admin/broadcast/preview-message', {
           method: 'POST', headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ message_config: cfgB })
+          body: JSON.stringify({ message_config: cfgB, channel: channel, email_subject: emailSubject })
         }).then(function (r) { return r.json(); })
       );
     }
@@ -344,7 +395,24 @@
           updateSendButton();
           return;
         }
-        if (state.abTestEnabled) {
+        if (dataA.channel === 'email') {
+          // Email preview：用 iframe 顯示 HTML
+          previewEl.classList.remove('empty');
+          if (state.abTestEnabled) {
+            previewEl.innerHTML =
+              '<div style="margin-bottom:6px;font-size:12px;font-weight:600;color:#1d4ed8;">版本 A · 主旨：' + escapeHtml(dataA.subject || '') + '</div>' +
+              '<iframe id="email-preview-a" style="width:100%;height:520px;border:1px solid #e5e7eb;border-radius:10px;background:#F9FAFB;"></iframe>' +
+              '<div style="margin:14px 0 6px;font-size:12px;font-weight:600;color:#1d4ed8;">版本 B · 主旨：' + escapeHtml((dataB && dataB.subject) || '') + '</div>' +
+              '<iframe id="email-preview-b" style="width:100%;height:520px;border:1px solid #e5e7eb;border-radius:10px;background:#F9FAFB;"></iframe>';
+            try { $('email-preview-a').contentDocument.write(dataA.html || ''); $('email-preview-a').contentDocument.close(); } catch (_) {}
+            if (dataB) { try { $('email-preview-b').contentDocument.write(dataB.html || ''); $('email-preview-b').contentDocument.close(); } catch (_) {} }
+          } else {
+            previewEl.innerHTML =
+              '<div style="margin-bottom:6px;font-size:12px;color:#6B7280;">主旨：<strong style="color:#1F2937;">' + escapeHtml(dataA.subject || '') + '</strong></div>' +
+              '<iframe id="email-preview" style="width:100%;height:600px;border:1px solid #e5e7eb;border-radius:10px;background:#F9FAFB;"></iframe>';
+            try { $('email-preview').contentDocument.write(dataA.html || ''); $('email-preview').contentDocument.close(); } catch (_) {}
+          }
+        } else if (state.abTestEnabled) {
           previewEl.classList.remove('empty');
           previewEl.innerHTML =
             '<div style="margin-bottom:6px;font-size:12px;font-weight:600;color:#1d4ed8;">版本 A</div>' +
@@ -368,7 +436,8 @@
     'tpl-title', 'tpl-subtitle', 'tpl-coupon-code', 'tpl-disclaimer',
     'tpl-cta-label', 'tpl-cta-url', 'tpl-alt', 'flex-json',
     'b-tpl-title', 'b-tpl-subtitle', 'b-tpl-coupon-code', 'b-tpl-disclaimer',
-    'b-tpl-cta-label', 'b-tpl-cta-url', 'b-tpl-alt', 'b-flex-json'
+    'b-tpl-cta-label', 'b-tpl-cta-url', 'b-tpl-alt', 'b-flex-json',
+    'email-subject', 'email-from-name', 'email-from-address'
   ].forEach(function (id) {
     var el = $(id);
     if (el) el.addEventListener('input', schedulePreview);
@@ -1169,24 +1238,35 @@
   // 7b. test push（單筆，真的打 LINE API）
   // ------------------------------------------------------------------
   $('btn-test-push').addEventListener('click', function () {
-    if (!INIT.hasLineToken) {
+    var channel = getActiveChannel();
+    if (channel === 'line' && !INIT.hasLineToken) {
       alert('尚未設定 LINE_CHANNEL_ACCESS_TOKEN，無法送出。');
       return;
     }
     var statusEl = $('test-push-status');
-    var recipient = $('test-recipient').value.trim();
     var cfg = collectMessageConfig();
     if (cfg.mode === 'flex_json' && cfg.flex === null) {
       statusEl.textContent = 'JSON 格式錯誤：' + cfg._parseError;
       return;
     }
     statusEl.textContent = '送出中…';
-    var body = { message_config: cfg };
-    if (recipient) {
-      if (/^U[0-9a-f]{32}$/i.test(recipient)) {
-        body.test_line_user_id = recipient;
-      } else {
-        body.test_member_name = recipient;
+    var body = { message_config: cfg, channel: channel };
+    if (channel === 'email') {
+      var emailInput = $('test-email');
+      var targetEmail = emailInput && emailInput.value ? emailInput.value.trim() : '';
+      if (!targetEmail) { statusEl.textContent = '請填收件 email'; return; }
+      body.test_email = targetEmail;
+      body.email_subject = ($('email-subject') && $('email-subject').value || '').trim();
+      body.email_from_name = ($('email-from-name') && $('email-from-name').value || '').trim();
+      body.email_from_address = ($('email-from-address') && $('email-from-address').value || '').trim();
+    } else {
+      var recipient = $('test-recipient').value.trim();
+      if (recipient) {
+        if (/^U[0-9a-f]{32}$/i.test(recipient)) {
+          body.test_line_user_id = recipient;
+        } else {
+          body.test_member_name = recipient;
+        }
       }
     }
     fetch('/admin/broadcast/test-push', {
@@ -1669,10 +1749,16 @@
     bar.style.width = '0%';
 
     var createBody = {
+      channel: getActiveChannel(),
       conditions: collectConditions(),
       message_config: collectMessageConfig(),
       send_mode: state.sendMode
     };
+    if (createBody.channel === 'email') {
+      createBody.email_subject = ($('email-subject') && $('email-subject').value || '').trim();
+      createBody.email_from_name = ($('email-from-name') && $('email-from-name').value || '').trim();
+      createBody.email_from_address = ($('email-from-address') && $('email-from-address').value || '').trim();
+    }
     if (state.sendMode === 'scheduled') {
       createBody.scheduled_at = $('schedule-datetime').value;
     }

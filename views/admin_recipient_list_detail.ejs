@@ -51,10 +51,19 @@
           <h3 style="margin:0;">加入成員</h3>
           <button type="button" class="rl-modal-close" id="add-close">×</button>
         </div>
-        <label class="rl-field rl-field-full">
+        <div class="rl-tab-row" style="display:flex;gap:8px;border-bottom:1px solid #ECECEE;margin-bottom:12px;">
+          <button type="button" class="rl-tab-btn active" data-add-type="line" style="padding:8px 16px;background:none;border:none;border-bottom:2px solid #FCC726;font-weight:600;cursor:pointer;color:#1f2937;">LINE userId</button>
+          <button type="button" class="rl-tab-btn" data-add-type="email" style="padding:8px 16px;background:none;border:none;border-bottom:2px solid transparent;font-weight:500;cursor:pointer;color:#6B7280;">Email</button>
+        </div>
+        <label class="rl-field rl-field-full" id="add-line-block">
           <span>LINE userId 清單（一行一個 / 逗號 / 空格 都行）</span>
           <textarea id="add-uids" rows="10" placeholder="U3eca22d67d352c4db1428decf3ebcf14&#10;..." style="font-family:ui-monospace,Menlo,monospace;font-size:12px;"></textarea>
           <div id="add-counter" class="muted" style="font-size:11px;">已輸入 0 個 UID</div>
+        </label>
+        <label class="rl-field rl-field-full" id="add-email-block" hidden>
+          <span>Email 清單（一行一個 / 逗號 / CSV）</span>
+          <textarea id="add-emails" rows="10" placeholder="user1@example.com&#10;user2@example.com&#10;..." style="font-family:ui-monospace,Menlo,monospace;font-size:12px;"></textarea>
+          <div id="add-email-counter" class="muted" style="font-size:11px;">已輸入 0 個 email</div>
         </label>
         <div class="rl-modal-actions">
           <button type="button" class="rl-primary-btn" id="add-save">加入</button>
@@ -143,10 +152,26 @@
           return;
         }
         tbody.innerHTML = rows.map(function (m, idx) {
-          var displayName = m.line_display_name || m.username || '<span class="muted" style="font-style:italic;">未在 CRM 用戶表</span>';
-          var avatar = m.line_picture_url
-            ? '<img src="' + esc(m.line_picture_url) + '" alt="" class="rld-avatar">'
-            : '<div class="rld-avatar rld-avatar-blank">' + esc((m.line_display_name || m.username || '?').slice(0, 1)) + '</div>';
+          var isEmailOnly = !m.line_user_id && m.email;
+          var displayName = m.line_display_name || m.username || m.member_display_name ||
+            (isEmailOnly ? '<span class="muted" style="font-style:italic;">Email 成員</span>'
+                         : '<span class="muted" style="font-style:italic;">未在 CRM 用戶表</span>');
+          var avatar;
+          if (m.line_picture_url) {
+            avatar = '<img src="' + esc(m.line_picture_url) + '" alt="" class="rld-avatar">';
+          } else if (isEmailOnly) {
+            avatar = '<div class="rld-avatar rld-avatar-blank" style="background:#FEF3C7;color:#92400E;">@</div>';
+          } else {
+            avatar = '<div class="rld-avatar rld-avatar-blank">' + esc((m.line_display_name || m.username || '?').slice(0, 1)) + '</div>';
+          }
+          var idCell;
+          if (m.line_user_id) {
+            idCell = '<button type="button" class="rld-uid" data-uid="' + esc(m.line_user_id) + '" title="點擊複製完整 UID">LINE · ' + esc(shortUid(m.line_user_id)) + '</button>';
+          } else if (m.email) {
+            idCell = '<button type="button" class="rld-uid" data-uid="' + esc(m.email) + '" title="點擊複製 email">Email · ' + esc(m.email) + '</button>';
+          } else {
+            idCell = '<span class="muted">—</span>';
+          }
           return '<tr data-id="' + m.id + '">' +
             '<td class="muted" style="font-variant-numeric:tabular-nums;">' + (currentOffset + idx + 1) + '</td>' +
             '<td>' +
@@ -154,7 +179,7 @@
                 avatar +
                 '<div>' +
                   '<div class="rld-user-name">' + displayName + '</div>' +
-                  '<button type="button" class="rld-uid" data-uid="' + esc(m.line_user_id) + '" title="點擊複製完整 UID">' + esc(shortUid(m.line_user_id)) + '</button>' +
+                  idCell +
                 '</div>' +
               '</div>' +
             '</td>' +
@@ -234,10 +259,33 @@
 
       // ---- Add members modal ----
       var addModal = $('add-modal');
+      var currentAddType = 'line';
+      function parseEmails(raw) {
+        return String(raw || '').split(/[\s,\n;]+/).map(function (s) { return s.trim().toLowerCase(); })
+          .filter(function (s) { return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(s); });
+      }
+      function switchAddTab(type) {
+        currentAddType = type;
+        document.querySelectorAll('.rl-tab-btn').forEach(function (b) {
+          var active = b.getAttribute('data-add-type') === type;
+          b.classList.toggle('active', active);
+          b.style.borderBottomColor = active ? '#FCC726' : 'transparent';
+          b.style.fontWeight = active ? '600' : '500';
+          b.style.color = active ? '#1f2937' : '#6B7280';
+        });
+        $('add-line-block').hidden = type !== 'line';
+        $('add-email-block').hidden = type !== 'email';
+      }
+      document.querySelectorAll('.rl-tab-btn').forEach(function (btn) {
+        btn.addEventListener('click', function () { switchAddTab(btn.getAttribute('data-add-type')); });
+      });
       $('btn-add-members').addEventListener('click', function () {
         $('add-uids').value = '';
+        $('add-emails').value = '';
         $('add-counter').textContent = '已輸入 0 個 UID';
+        $('add-email-counter').textContent = '已輸入 0 個 email';
         $('add-status').textContent = '';
+        switchAddTab('line');
         addModal.hidden = false;
         setTimeout(function () { $('add-uids').focus(); }, 50);
       });
@@ -246,15 +294,26 @@
       $('add-uids').addEventListener('input', function () {
         $('add-counter').textContent = '已輸入 ' + parseUids($('add-uids').value).length + ' 個 UID';
       });
+      $('add-emails').addEventListener('input', function () {
+        $('add-email-counter').textContent = '已輸入 ' + parseEmails($('add-emails').value).length + ' 個 email';
+      });
       $('add-save').addEventListener('click', function () {
-        var uids = parseUids($('add-uids').value);
-        if (uids.length === 0) { $('add-status').textContent = '請至少貼一個 UID'; return; }
+        var payload = {};
+        if (currentAddType === 'line') {
+          var uids = parseUids($('add-uids').value);
+          if (uids.length === 0) { $('add-status').textContent = '請至少貼一個 UID'; return; }
+          payload.lineUserIds = uids;
+        } else {
+          var emails = parseEmails($('add-emails').value);
+          if (emails.length === 0) { $('add-status').textContent = '請至少貼一個 email'; return; }
+          payload.emails = emails;
+        }
         $('add-status').textContent = '加入中⋯';
         $('add-save').disabled = true;
         fetch('/admin/recipient-lists/api/' + listId + '/members', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ lineUserIds: uids })
+          body: JSON.stringify(payload)
         })
           .then(function (r) { return r.json(); })
           .then(function (d) {
@@ -263,8 +322,8 @@
               $('add-status').textContent = '失敗：' + (d.detail || d.error);
               return;
             }
-            $('add-status').textContent = '新增 ' + d.inserted + ' 人 · 已存在 ' + d.already_existed +
-              (d.invalid_count > 0 ? ' · 無效 ' + d.invalid_count : '');
+            $('add-status').textContent = '新增 ' + (d.inserted || 0) + ' 筆 · 已存在 ' + (d.already_existed || 0) +
+              ((d.invalid_count || 0) > 0 ? ' · 無效 ' + d.invalid_count : '');
             setTimeout(function () { addModal.hidden = true; loadMembers(); }, 1000);
           });
       });

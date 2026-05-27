@@ -67,11 +67,11 @@ function registerAdminRecipientListsRoutes(app, deps) {
       let whereSearch = '';
       if (search) {
         params.push('%' + search + '%');
-        whereSearch = ` AND (LOWER(m.line_user_id) LIKE $${params.length} OR LOWER(u.line_display_name) LIKE $${params.length} OR LOWER(u.username) LIKE $${params.length})`;
+        whereSearch = ` AND (LOWER(m.line_user_id) LIKE $${params.length} OR LOWER(m.email) LIKE $${params.length} OR LOWER(u.line_display_name) LIKE $${params.length} OR LOWER(u.username) LIKE $${params.length})`;
       }
       params.push(limit, offset);
       const { rows } = await query(
-        `SELECT m.id, m.line_user_id, m.created_at,
+        `SELECT m.id, m.line_user_id, m.email, m.display_name AS member_display_name, m.created_at,
                 u.line_display_name, u.username, u.line_picture_url
          FROM admin_recipient_list_members m
          LEFT JOIN users u ON u.line_user_id = m.line_user_id
@@ -82,7 +82,7 @@ function registerAdminRecipientListsRoutes(app, deps) {
       );
       const cntParams = search ? [id, '%' + search + '%'] : [id];
       const cntSearch = search
-        ? ` AND (LOWER(m.line_user_id) LIKE $2 OR LOWER(u.line_display_name) LIKE $2 OR LOWER(u.username) LIKE $2)`
+        ? ` AND (LOWER(m.line_user_id) LIKE $2 OR LOWER(m.email) LIKE $2 OR LOWER(u.line_display_name) LIKE $2 OR LOWER(u.username) LIKE $2)`
         : '';
       const cntRs = await query(
         `SELECT COUNT(*)::int AS n FROM admin_recipient_list_members m
@@ -98,62 +98,121 @@ function registerAdminRecipientListsRoutes(app, deps) {
   });
 
   // ----- 批次新增成員 -----
+  //  body: { lineUserIds: ['U...', ...], emails: ['x@y.com', ...] }
+  //  兩個 array 可任選或同時存在
   app.post('/admin/recipient-lists/api/:id(\\d+)/members', requireAdmin, async (req, res) => {
     try {
       const id = Number(req.params.id);
       const body = req.body || {};
       const rawIds = Array.isArray(body.lineUserIds) ? body.lineUserIds : [];
-      // 清洗
-      const valid = [];
-      const seen = new Set();
-      const invalid = [];
+      const rawEmails = Array.isArray(body.emails) ? body.emails : [];
+      // LINE UID 清洗
+      const validUids = [];
+      const seenUid = new Set();
+      const invalidUids = [];
       for (const raw of rawIds) {
         const s = String(raw || '').trim();
         if (!s) continue;
-        if (!/^U[0-9a-f]{32}$/i.test(s)) { invalid.push(s.slice(0, 50)); continue; }
+        if (!/^U[0-9a-f]{32}$/i.test(s)) { invalidUids.push(s.slice(0, 50)); continue; }
         const key = s.toLowerCase();
-        if (seen.has(key)) continue;
-        seen.add(key);
-        valid.push(s);
+        if (seenUid.has(key)) continue;
+        seenUid.add(key);
+        validUids.push(s);
       }
-      if (valid.length === 0) {
-        return safeJson(res, 400, 'no_valid_ids', { detail: '沒有合法的 LINE userId（需 U + 32 hex）', invalid_sample: invalid.slice(0, 5) });
+      // Email 清洗
+      const validEmails = [];
+      const seenEmail = new Set();
+      const invalidEmails = [];
+      for (const raw of rawEmails) {
+        const s = String(raw || '').trim().toLowerCase();
+        if (!s) continue;
+        if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(s)) { invalidEmails.push(s.slice(0, 100)); continue; }
+        if (seenEmail.has(s)) continue;
+        seenEmail.add(s);
+        validEmails.push(s);
+      }
+
+      if (validUids.length === 0 && validEmails.length === 0) {
+        return safeJson(res, 400, 'no_valid_inputs', {
+          detail: '沒有合法的 LINE userId 或 email',
+          invalid_uid_sample: invalidUids.slice(0, 5),
+          invalid_email_sample: invalidEmails.slice(0, 5)
+        });
       }
 
       const client = await pool.connect();
+      let insertedUids = 0;
+      let insertedEmails = 0;
+      let existedUids = 0;
+      let existedEmails = 0;
       try {
         await client.query('BEGIN');
-        // 既存 check
-        const existsRs = await client.query(
-          `SELECT line_user_id FROM admin_recipient_list_members
-           WHERE list_id = $1 AND line_user_id = ANY($2)`,
-          [id, valid]
-        );
-        const existing = new Set(existsRs.rows.map(r => r.line_user_id));
-        const toInsert = valid.filter(uid => !existing.has(uid));
-        let inserted = 0;
-        if (toInsert.length > 0) {
-          // 分批 insert
-          const BATCH = 500;
-          for (let i = 0; i < toInsert.length; i += BATCH) {
-            const slice = toInsert.slice(i, i + BATCH);
-            const values = [];
-            const params = [];
-            slice.forEach((uid, idx) => {
-              const base = idx * 2;
-              values.push(`($${base + 1}, $${base + 2})`);
-              params.push(id, uid);
-            });
-            const insRs = await client.query(
-              `INSERT INTO admin_recipient_list_members (list_id, line_user_id)
-               VALUES ${values.join(', ')}
-               ON CONFLICT (list_id, line_user_id) DO NOTHING
-               RETURNING id`,
-              params
-            );
-            inserted += insRs.rowCount;
+        // ----- LINE UID -----
+        if (validUids.length > 0) {
+          const existsRs = await client.query(
+            `SELECT line_user_id FROM admin_recipient_list_members
+             WHERE list_id = $1 AND line_user_id = ANY($2)`,
+            [id, validUids]
+          );
+          const existing = new Set(existsRs.rows.map(r => r.line_user_id));
+          const toInsert = validUids.filter(uid => !existing.has(uid));
+          existedUids = validUids.length - toInsert.length;
+          if (toInsert.length > 0) {
+            const BATCH = 500;
+            for (let i = 0; i < toInsert.length; i += BATCH) {
+              const slice = toInsert.slice(i, i + BATCH);
+              const values = [];
+              const params = [];
+              slice.forEach((uid, idx) => {
+                const base = idx * 2;
+                values.push(`($${base + 1}, $${base + 2})`);
+                params.push(id, uid);
+              });
+              const insRs = await client.query(
+                `INSERT INTO admin_recipient_list_members (list_id, line_user_id)
+                 VALUES ${values.join(', ')}
+                 ON CONFLICT DO NOTHING
+                 RETURNING id`,
+                params
+              );
+              insertedUids += insRs.rowCount;
+            }
           }
         }
+
+        // ----- Email -----
+        if (validEmails.length > 0) {
+          const existsRs = await client.query(
+            `SELECT LOWER(email) AS email FROM admin_recipient_list_members
+             WHERE list_id = $1 AND email IS NOT NULL AND LOWER(email) = ANY($2)`,
+            [id, validEmails]
+          );
+          const existing = new Set(existsRs.rows.map(r => r.email));
+          const toInsert = validEmails.filter(e => !existing.has(e));
+          existedEmails = validEmails.length - toInsert.length;
+          if (toInsert.length > 0) {
+            const BATCH = 500;
+            for (let i = 0; i < toInsert.length; i += BATCH) {
+              const slice = toInsert.slice(i, i + BATCH);
+              const values = [];
+              const params = [];
+              slice.forEach((e, idx) => {
+                const base = idx * 2;
+                values.push(`($${base + 1}, $${base + 2})`);
+                params.push(id, e);
+              });
+              const insRs = await client.query(
+                `INSERT INTO admin_recipient_list_members (list_id, email)
+                 VALUES ${values.join(', ')}
+                 ON CONFLICT DO NOTHING
+                 RETURNING id`,
+                params
+              );
+              insertedEmails += insRs.rowCount;
+            }
+          }
+        }
+
         // 更新 total
         await client.query(
           `UPDATE admin_recipient_lists
@@ -165,12 +224,24 @@ function registerAdminRecipientListsRoutes(app, deps) {
         await client.query('COMMIT');
         res.json({
           ok: true,
-          submitted: rawIds.length,
-          valid: valid.length,
-          inserted,
-          already_existed: valid.length - toInsert.length,
-          invalid_count: invalid.length,
-          invalid_sample: invalid.slice(0, 5)
+          submitted_uids: rawIds.length,
+          submitted_emails: rawEmails.length,
+          valid_uids: validUids.length,
+          valid_emails: validEmails.length,
+          inserted_uids: insertedUids,
+          inserted_emails: insertedEmails,
+          already_existed_uids: existedUids,
+          already_existed_emails: existedEmails,
+          invalid_uid_count: invalidUids.length,
+          invalid_email_count: invalidEmails.length,
+          invalid_uid_sample: invalidUids.slice(0, 5),
+          invalid_email_sample: invalidEmails.slice(0, 5),
+          // 向後相容（舊版前端用）
+          inserted: insertedUids + insertedEmails,
+          valid: validUids.length + validEmails.length,
+          already_existed: existedUids + existedEmails,
+          invalid_count: invalidUids.length + invalidEmails.length,
+          invalid_sample: invalidUids.concat(invalidEmails).slice(0, 5)
         });
       } catch (e) {
         try { await client.query('ROLLBACK'); } catch (_e) {}

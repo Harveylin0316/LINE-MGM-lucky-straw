@@ -103,6 +103,18 @@
       <div class="broadcast-grid">
         <div class="broadcast-form">
           <fieldset class="broadcast-step">
+            <legend><span class="step-pill">0</span> 通道</legend>
+            <div class="broadcast-tabs channel-tabs">
+              <button type="button" class="tab-btn active" data-channel="line">LINE 推播</button>
+              <button type="button" class="tab-btn" data-channel="email">Email 信件</button>
+            </div>
+            <div class="muted" style="font-size:12px;margin-top:6px;">
+              <span class="channel-hint-line">送到使用者的 LINE 聊天視窗。每月免費額度由 LINE OA 方案決定。</span>
+              <span class="channel-hint-email" hidden>用 Brevo 送信，免費 9,000 封/月（300/日）。需先設定 <code>BREVO_API_KEY</code> 與已驗證的 sender。Email 通道需從「名單庫」選一份含 email 的名單。</span>
+            </div>
+          </fieldset>
+
+          <fieldset class="broadcast-step">
             <legend><span class="step-pill">1</span> 收件人</legend>
 
             <div class="broadcast-tabs audience-tabs">
@@ -211,6 +223,25 @@
 
           <fieldset class="broadcast-step">
             <legend><span class="step-pill">2</span> 訊息內容</legend>
+
+            <!-- Email 專屬：主旨 + 寄件人欄位（channel='email' 時顯示）-->
+            <div class="email-only-fields" hidden>
+              <div class="broadcast-field">
+                <div class="broadcast-field-label">主旨 <span class="muted" style="font-weight:400;">（必填，最多 200 字）</span></div>
+                <input type="text" id="email-subject" name="email_subject" maxlength="200" placeholder="例：OpenRice 春日限定優惠 — 滿 $500 折 $100" style="width:100%;padding:10px 12px;border:1px solid #E5E7EB;border-radius:8px;font-size:14px;box-sizing:border-box;">
+              </div>
+              <div class="broadcast-inline-field" style="gap:12px;">
+                <div class="broadcast-field" style="flex:1;">
+                  <div class="broadcast-field-label">寄件人名稱 <span class="muted" style="font-weight:400;">（選填）</span></div>
+                  <input type="text" id="email-from-name" name="email_from_name" maxlength="100" placeholder="OpenRice 開飯喇（留空用預設）" style="width:100%;padding:10px 12px;border:1px solid #E5E7EB;border-radius:8px;font-size:14px;box-sizing:border-box;">
+                </div>
+                <div class="broadcast-field" style="flex:1;">
+                  <div class="broadcast-field-label">寄件人 Email <span class="muted" style="font-weight:400;">（選填）</span></div>
+                  <input type="text" id="email-from-address" name="email_from_address" maxlength="200" placeholder="noreply@openrice.tw（留空用預設）" style="width:100%;padding:10px 12px;border:1px solid #E5E7EB;border-radius:8px;font-size:14px;box-sizing:border-box;">
+                </div>
+              </div>
+              <div class="muted" style="font-size:12px;margin-bottom:12px;">寄件人 email 必須是已在 Brevo 驗證過的，否則會送失敗。</div>
+            </div>
 
             <div class="template-picker">
               <div class="template-picker-head">
@@ -393,11 +424,18 @@
               <details class="add-test-recipient" style="margin-top:12px;">
                 <summary>新增 / 用其他 LINE userId 臨時發送</summary>
                 <div style="margin-top:10px; display:grid; gap:10px;">
-                  <div>
+                  <div id="test-line-wrap">
                     <div class="broadcast-field-label" style="font-size:12px;">臨時發給單一收件人（不會加入清單）</div>
                     <div class="broadcast-inline-field">
                       <input type="text" id="test-recipient" placeholder="留空 = 送給自己｜LINE userId｜會員顯示名/帳號" style="flex:1;min-width:280px;" />
                       <button type="button" class="btn" id="btn-test-push">發測試訊息</button>
+                    </div>
+                  </div>
+                  <div id="test-email-wrap" hidden>
+                    <div class="broadcast-field-label" style="font-size:12px;">Email 測試 — 發給單一收件 email（建議用自己的）</div>
+                    <div class="broadcast-inline-field">
+                      <input type="email" id="test-email" placeholder="example@gmail.com" style="flex:1;min-width:280px;" />
+                      <button type="button" class="btn" id="btn-test-push-email" onclick="document.getElementById('btn-test-push').click();">發測試 Email</button>
                     </div>
                   </div>
                   <div>
