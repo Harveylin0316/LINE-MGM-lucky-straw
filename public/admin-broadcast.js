@@ -75,6 +75,7 @@
     // 切 email 時隱藏 conditions / upload tabs，強制走 saved_list
     var emailMode = channel === 'email';
     document.querySelectorAll('.email-only-fields').forEach(function (el) { el.hidden = !emailMode; });
+    document.querySelectorAll('.channel-line-only').forEach(function (el) { el.hidden = emailMode; });
     document.querySelectorAll('.tab-btn[data-audience]').forEach(function (b) {
       var aud = b.getAttribute('data-audience');
       if (aud === 'conditions' || aud === 'upload') {
@@ -282,11 +283,20 @@
   // ------------------------------------------------------------------
   // 5. collect message config
   // ------------------------------------------------------------------
+  function getTopAltText() {
+    var el = document.getElementById('msg-alt-text');
+    return (el && el.value ? el.value.trim() : '');
+  }
   function collectMessageConfig() {
+    var topAlt = getTopAltText();
     if (state.mode === 'flex_json') {
       var raw = $('flex-json').value;
       try {
         var parsed = JSON.parse(raw);
+        // 用上方 altText 欄位覆寫 JSON 內的（若使用者有填）
+        if (topAlt && parsed && typeof parsed === 'object') {
+          parsed.altText = topAlt;
+        }
         return { mode: 'flex_json', flex: parsed };
       } catch (e) {
         return { mode: 'flex_json', flex: null, _parseError: e.message };
@@ -302,7 +312,7 @@
         disclaimer: $('tpl-disclaimer').value.trim(),
         ctaLabel: $('tpl-cta-label').value.trim(),
         ctaUrl: $('tpl-cta-url').value.trim(),
-        altText: $('tpl-alt').value.trim()
+        altText: topAlt || $('tpl-alt').value.trim()
       }
     };
   }
@@ -437,7 +447,8 @@
     'tpl-cta-label', 'tpl-cta-url', 'tpl-alt', 'flex-json',
     'b-tpl-title', 'b-tpl-subtitle', 'b-tpl-coupon-code', 'b-tpl-disclaimer',
     'b-tpl-cta-label', 'b-tpl-cta-url', 'b-tpl-alt', 'b-flex-json',
-    'email-subject', 'email-from-name', 'email-from-address'
+    'email-subject', 'email-from-name', 'email-from-address',
+    'msg-alt-text'
   ].forEach(function (id) {
     var el = $(id);
     if (el) el.addEventListener('input', schedulePreview);
@@ -1551,6 +1562,7 @@
 
   function applyMessageConfigToForm(messageConfig) {
     if (!messageConfig || typeof messageConfig !== 'object') return;
+    var topAltEl = document.getElementById('msg-alt-text');
     if (messageConfig.mode === 'flex_json') {
       // 自動展開「進階模式」details + 切到 flex_json mode
       var advBlock = document.getElementById('advanced-json-block');
@@ -1559,6 +1571,8 @@
       $('pane-template').hidden = true;
       if (messageConfig.flex) {
         $('flex-json').value = JSON.stringify(messageConfig.flex, null, 2);
+        // 同步 altText 到上方欄位
+        if (topAltEl) topAltEl.value = messageConfig.flex.altText || '';
       }
       // 清空助手 — 載入新模板舊 row 不該保留
       var urlList = $('json-url-list');
@@ -1585,6 +1599,7 @@
     $('tpl-cta-label').value = t.ctaLabel || '';
     $('tpl-cta-url').value = t.ctaUrl || '';
     $('tpl-alt').value = t.altText || '';
+    if (topAltEl) topAltEl.value = t.altText || '';
     if (t.heroMediaId) {
       state.heroMediaId = t.heroMediaId;
       // hero url 不在 message_config 內，模板載入時不還原 url（會顯示 mediaId hint）

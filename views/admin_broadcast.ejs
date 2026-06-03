@@ -267,6 +267,15 @@
               <strong>版本 A</strong>（50% 收件人）
             </div>
 
+            <!-- 通知預覽文字（altText）— 兩種 mode 共用，模板載入時也會帶過來，可隨時改 -->
+            <div class="broadcast-field channel-line-only" style="background:#FFFBEB;border:1px solid #FDE68A;border-radius:8px;padding:10px 12px;margin-bottom:14px;">
+              <label style="display:block;">
+                <span style="font-size:12px;font-weight:600;color:#92400E;">📱 LINE 通知預覽文字（altText）</span>
+                <input type="text" id="msg-alt-text" maxlength="400" placeholder="留空自動用標題；改這裡馬上同步到要送的訊息" style="margin-top:6px;width:100%;padding:8px 10px;border:1px solid #FDE68A;border-radius:6px;font-size:14px;box-sizing:border-box;" />
+                <span class="muted" style="font-size:11px;margin-top:4px;display:block;">這是用戶在 LINE 通知列和聊天列表看到的文字。Flex JSON 模式也會覆蓋 JSON 內的 altText。</span>
+              </label>
+            </div>
+
             <div class="broadcast-tab-pane" id="pane-template">
               <div class="broadcast-field">
                 <div class="broadcast-field-label">Hero 圖（選填，PNG/JPEG，≤2MB）</div>
@@ -323,12 +332,8 @@
                   <input type="url" id="tpl-cta-url" placeholder="https://tw.openrice.com/..." />
                 </label>
               </div>
-              <div class="broadcast-field">
-                <label>
-                  altText（LINE 通知列／聊天列表顯示，留空自動用標題）
-                  <input type="text" id="tpl-alt" maxlength="400" placeholder="留空用標題" />
-                </label>
-              </div>
+              <!-- altText 欄位移到上方 #msg-alt-text（兩種模式共用） -->
+              <input type="hidden" id="tpl-alt" />
             </div>
 
             <details class="advanced-json-block" id="advanced-json-block">
