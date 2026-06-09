@@ -16,6 +16,10 @@
 [functions."scheduled-broadcast-runner"]
   schedule = "*/5 * * * *"
 
+# 每月 1 號 03:30 UTC = 台北 11:30，觸發訂位熱榜推播
+[functions."scheduled-monthly-leaderboard"]
+  schedule = "30 3 1 * *"
+
 [[redirects]]
   from = "/style.css"
   to = "/style.css"

@@ -14,6 +14,8 @@ const { createAdminLoginThrottle } = require('./core/adminLoginThrottle');
 const { registerWebRoutes } = require('./routes/web');
 const { registerLiffRoutes } = require('./routes/liff');
 const { registerAdminBroadcastRoutes } = require('./routes/adminBroadcast');
+const { registerAdminLeaderboardRoutes } = require('./routes/adminLeaderboard');
+const bookingLeaderboard = require('./core/bookingLeaderboard');
 const { registerAdminHubRoutes } = require('./routes/adminHub');
 const { registerAdminLiffAnalyticsRoutes } = require('./routes/adminLiffAnalytics');
 const { registerAdminActivitiesRoutes } = require('./routes/adminActivities');
@@ -468,6 +470,16 @@ registerAdminBroadcastRoutes(app, {
   linePush,
   emailProvider,
   lineChannelAccessToken: LINE_CHANNEL_ACCESS_TOKEN,
+  resolvePublicSiteOrigin
+});
+
+registerAdminLeaderboardRoutes(app, {
+  query,
+  pool,
+  authCore,
+  linePush,
+  lineChannelAccessToken: LINE_CHANNEL_ACCESS_TOKEN,
+  bookingLeaderboard,
   resolvePublicSiteOrigin
 });
 
