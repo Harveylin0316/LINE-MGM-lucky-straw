@@ -340,9 +340,16 @@ function registerAdminBroadcastRoutes(app, deps) {
            ORDER BY started_at ASC NULLS LAST, id ASC`
         )
       ]);
+      // 訊息庫模式：?msglib=1 [&mid=<訊息id>] [&dup=1]
+      // 開啟時藏收件人/送出，只保留訊息編輯器，存到訊息庫
+      const msgLibMode = String(req.query.msglib || '') === '1';
+      const midRaw = String(req.query.mid || '').trim();
+      const msgLibId = /^\d+$/.test(midRaw) ? midRaw : null;
+      const msgLibDup = String(req.query.dup || '') === '1';
+
       return res.render('admin_broadcast', {
-        title: '群發訊息',
-        bodyClass: 'admin-shell broadcast-shell',
+        title: msgLibMode ? '訊息編輯' : '群發訊息',
+        bodyClass: 'admin-shell broadcast-shell' + (msgLibMode ? ' msglib-mode' : ''),
         user: req.authUser && req.authUser.un ? req.authUser.un : '',
         isAdmin: true,
         prizes,
@@ -352,7 +359,10 @@ function registerAdminBroadcastRoutes(app, deps) {
         hasLineToken: Boolean(lineChannelAccessToken),
         maxRecipients: MAX_RECIPIENTS_PER_BROADCAST,
         chunkSize: CHUNK_SIZE_DEFAULT,
-        fieldLimits: FIELD_LIMITS
+        fieldLimits: FIELD_LIMITS,
+        msgLibMode,
+        msgLibId,
+        msgLibDup
       });
     } catch (err) {
       next(err);

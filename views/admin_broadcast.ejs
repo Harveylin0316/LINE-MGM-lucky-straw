@@ -89,6 +89,20 @@
     }
 
     <section class="card broadcast-card">
+      ${
+        (typeof msgLibMode !== 'undefined' && msgLibMode)
+          ? `<div class="msglib-bar">
+              <div class="msglib-bar-left">
+                <a href="/admin/messages" class="msglib-back">← 返回訊息庫</a>
+                <input type="text" id="msglib-name" placeholder="訊息名稱（內部辨識用）" maxlength="200" />
+              </div>
+              <div class="msglib-bar-right">
+                <span id="msglib-status" class="muted" style="font-size:13px;"></span>
+                <button type="button" class="btn btn-warning" id="msglib-save">儲存到訊息庫</button>
+              </div>
+            </div>`
+          : ''
+      }
       <div class="broadcast-page-head">
         <h1>群發訊息</h1>
         <p class="page-subtitle">三步驟：① 選收件人 → ② 編訊息（含預覽即時更新 / 點文字直接編輯） → ③ 先測試再正式送</p>
@@ -102,7 +116,7 @@
 
       <div class="broadcast-grid">
         <div class="broadcast-form">
-          <fieldset class="broadcast-step">
+          <fieldset class="broadcast-step" id="bc-channel-step">
             <legend><span class="step-pill">0</span> 通道</legend>
             <div class="broadcast-tabs channel-tabs">
               <button type="button" class="tab-btn active" data-channel="line">LINE 推播</button>
@@ -114,7 +128,7 @@
             </div>
           </fieldset>
 
-          <fieldset class="broadcast-step">
+          <fieldset class="broadcast-step" id="bc-audience-step">
             <legend><span class="step-pill">1</span> 收件人</legend>
 
             <div class="broadcast-tabs audience-tabs">
@@ -410,7 +424,7 @@
 
           </fieldset>
 
-          <fieldset class="broadcast-step">
+          <fieldset class="broadcast-step" id="bc-send-step">
             <legend><span class="step-pill">3</span> 送出</legend>
             <p class="muted" style="margin-bottom:10px;">建議先發測試訊息確認沒問題，再正式批次送。</p>
 
@@ -1638,13 +1652,39 @@
         margin-top: 4px;
       }
       .sched-more:hover { text-decoration: underline; }
+
+      /* ===== 訊息庫模式：藏掉收件人 / 送出 / 排程，只留訊息編輯器 ===== */
+      .msglib-mode .run-banner,
+      .msglib-mode .sched-banner,
+      .msglib-mode .broadcast-page-head,
+      .msglib-mode #bc-channel-step,
+      .msglib-mode #bc-audience-step,
+      .msglib-mode #bc-send-step,
+      .msglib-mode .advanced-settings-block,
+      .msglib-mode .template-picker,
+      .msglib-mode .draft-bar { display: none !important; }
+      /* 訊息庫模式：編輯器佔滿、預覽固定旁邊 */
+      .msglib-mode .broadcast-grid { grid-template-columns: 1fr 360px; }
+      .msglib-bar {
+        display: flex; align-items: center; justify-content: space-between; gap: 12px;
+        flex-wrap: wrap; padding: 12px 0 16px; margin-bottom: 12px;
+        border-bottom: 1px solid #e5e7eb;
+      }
+      .msglib-bar-left { display: flex; align-items: center; gap: 14px; flex: 1; min-width: 280px; }
+      .msglib-bar-right { display: flex; align-items: center; gap: 12px; }
+      .msglib-back { font-size: 13px; color: #6b7280; text-decoration: none; white-space: nowrap; }
+      .msglib-back:hover { color: #1f2937; text-decoration: underline; }
+      #msglib-name { flex: 1; padding: 9px 12px; border: 1px solid #e5e7eb; border-radius: 8px; font-size: 14px; }
     </style>
 
     <script id="broadcast-init-data" type="application/json">${JSON.stringify({
       hasLineToken: Boolean(hasLineToken),
       maxRecipients: maxRecipients,
       chunkSize: chunkSize,
-      fieldLimits: fieldLimits
+      fieldLimits: fieldLimits,
+      msgLibMode: Boolean(typeof msgLibMode !== 'undefined' && msgLibMode),
+      msgLibId: (typeof msgLibId !== 'undefined' && msgLibId) ? String(msgLibId) : null,
+      msgLibDup: Boolean(typeof msgLibDup !== 'undefined' && msgLibDup)
     }).replace(/</g, '\\u003c')}</script>
 
     <script>

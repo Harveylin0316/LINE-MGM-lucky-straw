@@ -2521,4 +2521,63 @@
   loadDraft();
   // 草稿載入或 template 套用後 JSON 已就位 → scan
   setTimeout(scanJsonImagesAndUrls, 500);
+
+  // ------------------------------------------------------------------
+  // 訊息庫模式（?msglib=1）：複用本編輯器，存到訊息庫而非送出
+  // ------------------------------------------------------------------
+  if (INIT.msgLibMode) {
+    (function initMsgLib() {
+      var nameEl = document.getElementById('msglib-name');
+      var statusEl = document.getElementById('msglib-status');
+      var saveBtn = document.getElementById('msglib-save');
+      var editingId = (INIT.msgLibId && !INIT.msgLibDup) ? INIT.msgLibId : null;
+
+      if (INIT.msgLibId) {
+        // 編輯或複製既有訊息
+        fetch('/admin/messages/api/' + INIT.msgLibId)
+          .then(function (r) { return r.json(); })
+          .then(function (d) {
+            if (!d.ok) { if (statusEl) statusEl.textContent = '載入失敗：' + (d.error || ''); return; }
+            var m = d.message;
+            if (nameEl) nameEl.value = INIT.msgLibDup ? (m.name + ' 複本') : m.name;
+            if (m.message_config) applyMessageConfigToForm(m.message_config);
+          })
+          .catch(function (e) { if (statusEl) statusEl.textContent = '載入錯誤：' + e.message; });
+      } else {
+        // 新增：從空白開始（避免帶到上次群發草稿）
+        try { applyMessageConfigToForm(BLANK_TEMPLATE_CONFIG); } catch (e) {}
+      }
+
+      if (saveBtn) {
+        saveBtn.addEventListener('click', function () {
+          var name = nameEl ? nameEl.value.trim() : '';
+          if (!name) { if (statusEl) statusEl.textContent = '請填訊息名稱'; if (nameEl) nameEl.focus(); return; }
+          var cfg = collectMessageConfig();
+          if (cfg.mode === 'flex_json' && cfg.flex === null) {
+            if (statusEl) statusEl.textContent = 'JSON 格式錯誤：' + cfg._parseError;
+            return;
+          }
+          saveBtn.disabled = true;
+          if (statusEl) statusEl.textContent = '儲存中…';
+          var url = editingId ? ('/admin/messages/api/' + editingId) : '/admin/messages/api';
+          var method = editingId ? 'PUT' : 'POST';
+          fetch(url, {
+            method: method,
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ name: name, channel: 'line', message_config: cfg })
+          })
+            .then(function (r) { return r.json(); })
+            .then(function (d) {
+              saveBtn.disabled = false;
+              if (!d.ok) {
+                if (statusEl) statusEl.textContent = '失敗：' + (d.error || '') + (d.detail ? '（' + d.detail + '）' : '');
+                return;
+              }
+              window.location.href = '/admin/messages';
+            })
+            .catch(function (e) { saveBtn.disabled = false; if (statusEl) statusEl.textContent = '錯誤：' + e.message; });
+        });
+      }
+    })();
+  }
 })();
