@@ -273,13 +273,51 @@ function createFlowEngine({ query, pool, linePush, buildLineMessages }) {
     return new Date(now.getTime() + Math.max(0, waitMs));
   }
 
+  // ---------- 公開網域（給點擊追蹤中轉網址用） ----------
+  function getOrigin() {
+    const o = process.env.LINE_PUSH_PUBLIC_BASE_URL || process.env.URL || process.env.PUBLIC_SITE_URL || '';
+    return String(o).replace(/\/+$/, '');
+  }
+  // 走訪 Flex tree，把 action.uri === fromUrl 的換成 toUrl（點擊追蹤）
+  function wrapCtaUri(node, fromUrl, toUrl) {
+    if (!node || typeof node !== 'object') return;
+    if (Array.isArray(node)) { node.forEach(n => wrapCtaUri(n, fromUrl, toUrl)); return; }
+    if (node.action && node.action.type === 'uri' && node.action.uri === fromUrl) {
+      node.action.uri = toUrl;
+    }
+    Object.keys(node).forEach(k => { const v = node[k]; if (v && typeof v === 'object') wrapCtaUri(v, fromUrl, toUrl); });
+  }
+
+  // ---------- 加入名單 ----------
+  async function addUserToList(listId, lineUserId, userId) {
+    if (!listId || !lineUserId) return;
+    await query(
+      `INSERT INTO admin_recipient_list_members (list_id, line_user_id)
+       VALUES ($1, $2) ON CONFLICT DO NOTHING`,
+      [listId, lineUserId]
+    );
+    await query(
+      `UPDATE admin_recipient_lists
+       SET total = (SELECT COUNT(*) FROM admin_recipient_list_members WHERE list_id = $1), updated_at = now()
+       WHERE id = $1`,
+      [listId]
+    );
+  }
+
   // ---------- 發訊息 ----------
-  async function sendMessage(lineUserId, userId, messageId) {
+  async function sendMessage(lineUserId, userId, messageId, opts = {}) {
     if (!messageId) return false;
     const rs = await query(`SELECT message_config FROM admin_message_templates WHERE id = $1`, [messageId]);
     if (rs.rowCount === 0) return false;
-    const built = buildLineMessages(rs.rows[0].message_config);
+    const cfg = rs.rows[0].message_config;
+    const built = buildLineMessages(cfg);
     if (!built.ok) return false;
+    // 點擊追蹤：template 模式有 CTA 連結時，把連結換成 /rf/:enrollmentId/:messageId 中轉
+    const origin = getOrigin();
+    if (opts.enrollmentId && origin && cfg && cfg.mode === 'template' && cfg.template && cfg.template.ctaUrl) {
+      const trackUrl = origin + '/rf/' + opts.enrollmentId + '/' + messageId;
+      wrapCtaUri(built.messages, cfg.template.ctaUrl, trackUrl);
+    }
     return await linePush.pushLineMessages(lineUserId, built.messages, { userId, pushType: 'flow' });
   }
 
@@ -307,6 +345,14 @@ function createFlowEngine({ query, pool, linePush, buildLineMessages }) {
       const params = [en.line_user_id, refIso];
       if (cond.activity_id) { sql += ` AND activity_id = $3`; params.push(Number(cond.activity_id)); }
       const rs = await query(sql + ' LIMIT 1', params);
+      return rs.rowCount > 0;
+    }
+    if (cond.type === 'clicked') {
+      // 點了上一則訊息的連結（自上次發送之後）
+      const rs = await query(
+        `SELECT 1 FROM admin_flow_clicks WHERE enrollment_id = $1 AND clicked_at >= $2 LIMIT 1`,
+        [en.id, refIso]
+      );
       return rs.rowCount > 0;
     }
     return false;
@@ -339,9 +385,18 @@ function createFlowEngine({ query, pool, linePush, buildLineMessages }) {
             }
           }
           const msgId = node.config && node.config.message_id;
-          await sendMessage(en.line_user_id, en.user_id, msgId);
+          await sendMessage(en.line_user_id, en.user_id, msgId, { enrollmentId: en.id });
           lastMsgId = msgId || lastMsgId;
           lastSentAt = new Date();
+          nodeKey = node.next_key || null;
+          continue;
+        }
+        if (node.type === 'add_to_list') {
+          const listId = node.config && Number(node.config.list_id);
+          if (listId) {
+            try { await addUserToList(listId, en.line_user_id, en.user_id); }
+            catch (e) { console.error('flow add_to_list failed:', e.message); }
+          }
           nodeKey = node.next_key || null;
           continue;
         }

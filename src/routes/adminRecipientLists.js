@@ -314,6 +314,25 @@ function registerAdminRecipientListsRoutes(app, deps) {
       return safeJson(res, 500, 'update_failed', { detail: err && err.message });
     }
   });
+
+  // ----- 自動加入規則：列出「會自動把人加進這個名單」的流程 -----
+  app.get('/admin/recipient-lists/api/:id(\\d+)/auto-rules', requireAdmin, async (req, res) => {
+    try {
+      const id = Number(req.params.id);
+      const rs = await query(
+        `SELECT DISTINCT f.id, f.name, f.status, f.trigger_type
+         FROM admin_flows f
+         JOIN admin_flow_nodes n ON n.flow_id = f.id
+         WHERE n.type = 'add_to_list' AND (n.config->>'list_id')::int = $1
+         ORDER BY f.id DESC`,
+        [id]
+      );
+      res.json({ ok: true, rules: rs.rows });
+    } catch (err) {
+      console.error('list auto-rules error:', err && err.message);
+      return safeJson(res, 500, 'auto_rules_failed', { detail: err && err.message });
+    }
+  });
 }
 
 module.exports = { registerAdminRecipientListsRoutes };

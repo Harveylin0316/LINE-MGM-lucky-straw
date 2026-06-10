@@ -37,6 +37,28 @@ function registerAdminFlowsRoutes(app, deps) {
   }
   function isPosInt(s) { return typeof s === 'string' && /^\d+$/.test(s) && Number(s) > 0; }
 
+  // ---------- 公開：流程訊息點擊中轉（記點擊 + 302 導向真連結） ----------
+  app.get('/rf/:enrollmentId(\\d+)/:messageId(\\d+)', async (req, res) => {
+    const eid = Number(req.params.enrollmentId);
+    const mid = Number(req.params.messageId);
+    try {
+      const rs = await query(`SELECT message_config FROM admin_message_templates WHERE id = $1`, [mid]);
+      const cfg = rs.rows[0] && rs.rows[0].message_config;
+      let target = (cfg && cfg.mode === 'template' && cfg.template && cfg.template.ctaUrl) ? String(cfg.template.ctaUrl).trim() : '';
+      if (!/^https?:\/\//i.test(target)) return res.status(404).type('text/plain').send('Not found');
+      // 記點擊（帶 enrollment 的 line_user_id），不阻塞導向
+      query(
+        `INSERT INTO admin_flow_clicks (enrollment_id, line_user_id, message_id, target_url)
+         SELECT $1, e.line_user_id, $2, $3 FROM admin_flow_enrollments e WHERE e.id = $1`,
+        [eid, mid, target]
+      ).catch(err => console.error('flow click log failed:', err.message));
+      return res.redirect(302, target);
+    } catch (err) {
+      console.error('flow click redirect error:', err && err.message);
+      return res.status(500).type('text/plain').send('Server error');
+    }
+  });
+
   // ---------- 步驟樹 → 節點 ----------
   function flattenSteps(steps) {
     let counter = 0;
@@ -58,6 +80,8 @@ function registerAdminFlowsRoutes(app, deps) {
           node.config = { message_id: Number(step.message_id) || null };
         } else if (step.type === 'wait') {
           node.config = { amount: Number(step.amount) || 0, unit: step.unit || 'days' };
+        } else if (step.type === 'add_to_list') {
+          node.config = { list_id: Number(step.list_id) || null };
         } else if (step.type === 'branch') {
           node.config = { condition: step.condition || {} };
         } else {
@@ -100,6 +124,9 @@ function registerAdminFlowsRoutes(app, deps) {
         } else if (n.type === 'wait') {
           steps.push({ type: 'wait', amount: n.config && n.config.amount, unit: n.config && n.config.unit });
           key = n.next_key;
+        } else if (n.type === 'add_to_list') {
+          steps.push({ type: 'add_to_list', list_id: n.config && n.config.list_id });
+          key = n.next_key;
         } else if (n.type === 'branch') {
           steps.push({
             type: 'branch',
@@ -132,11 +159,11 @@ function registerAdminFlowsRoutes(app, deps) {
     }
     const steps = Array.isArray(body.steps) ? body.steps : [];
     if (steps.length === 0) return { ok: false, error: 'need_at_least_one_step' };
-    // 至少要有一個 send
-    function hasSend(list) {
-      return (list || []).some(s => s.type === 'send' || (s.type === 'branch' && (hasSend(s.yes) || hasSend(s.no))));
+    // 至少要有一個動作（發訊息 或 加入名單）
+    function hasAction(list) {
+      return (list || []).some(s => s.type === 'send' || s.type === 'add_to_list' || (s.type === 'branch' && (hasAction(s.yes) || hasAction(s.no))));
     }
-    if (!hasSend(steps)) return { ok: false, error: 'need_at_least_one_send' };
+    if (!hasAction(steps)) return { ok: false, error: 'need_at_least_one_action' };
     return { ok: true, name, trigger: { type: tType, config: tCfg }, steps, re_enroll: !!body.re_enroll };
   }
 

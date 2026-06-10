@@ -44,6 +44,28 @@
       <div id="rld-pagination" style="margin-top:14px;display:flex;align-items:center;gap:8px;font-size:12px;color:#6B6B70;"></div>
     </section>
 
+    <!-- 自動加入規則 -->
+    <section class="card">
+      <div style="display:flex;align-items:center;justify-content:space-between;gap:12px;margin-bottom:6px;">
+        <div>
+          <h2 style="margin:0;">自動加入規則</h2>
+          <p class="muted" style="margin-top:4px;font-size:13px;">設定觸發條件，符合的用戶會自動進入這個名單（背後用自動化流程運作）。</p>
+        </div>
+      </div>
+      <div id="ar-list" style="margin:10px 0;"><p class="muted" style="font-size:13px;">載入中…</p></div>
+      <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;border-top:1px solid #ECECEE;padding-top:12px;">
+        <span style="font-size:13px;color:#374151;">當用戶</span>
+        <select id="ar-trigger" style="padding:8px 10px;border:1px solid #e5e7eb;border-radius:7px;font-size:14px;">
+          <option value="follow">加好友</option>
+          <option value="broadcast_click">點了任何群發訊息連結</option>
+          <option value="game_play">玩了任何活動遊戲</option>
+        </select>
+        <span style="font-size:13px;color:#374151;">→ 自動加入此名單</span>
+        <button type="button" class="rl-primary-btn" id="ar-create">建立規則</button>
+        <span id="ar-status" class="muted" style="font-size:13px;"></span>
+      </div>
+    </section>
+
     <!-- 加入成員 modal -->
     <div id="add-modal" class="rl-modal" hidden>
       <div class="rl-modal-inner">
@@ -359,7 +381,42 @@
           });
       });
 
+      // ---- 自動加入規則 ----
+      var TRIGGER_LABEL = { follow: '加好友時', broadcast_click: '點了群發連結時', game_play: '玩了活動遊戲時', list_join: '加入其他名單時', event: 'LIFF 事件時', schedule: '定時' };
+      function loadAutoRules() {
+        fetch('/admin/recipient-lists/api/' + listId + '/auto-rules').then(function (r) { return r.json(); }).then(function (d) {
+          var box = $('ar-list');
+          if (!d.ok) { box.innerHTML = '<p class="muted" style="font-size:13px;">載入失敗</p>'; return; }
+          if (!d.rules.length) { box.innerHTML = '<p class="muted" style="font-size:13px;">尚無自動加入規則。用下方設定一個。</p>'; return; }
+          box.innerHTML = d.rules.map(function (f) {
+            var st = f.status === 'active' ? '啟用中' : (f.status === 'paused' ? '已暫停' : '草稿');
+            return '<div style="display:flex;align-items:center;justify-content:space-between;gap:8px;padding:8px 10px;border:1px solid #ECECEE;border-radius:8px;margin-bottom:6px;">' +
+              '<span style="font-size:13px;">' + esc(TRIGGER_LABEL[f.trigger_type] || f.trigger_type) + ' → 加入此名單　<span class="muted">(' + st + ')</span></span>' +
+              '<a href="/admin/flows" style="font-size:12px;color:#6B6B70;">在流程編輯</a></div>';
+          }).join('');
+        });
+      }
+      $('ar-create').addEventListener('click', function () {
+        var trigger = $('ar-trigger').value;
+        var s = $('ar-status'); var btn = $('ar-create'); btn.disabled = true; s.textContent = '建立中…';
+        var payload = {
+          name: '自動加入：' + (currentList.name || ('名單' + listId)),
+          trigger: { type: trigger, config: {} },
+          steps: [{ type: 'add_to_list', list_id: listId }]
+        };
+        fetch('/admin/flows/api', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) })
+          .then(function (r) { return r.json(); })
+          .then(function (d) {
+            if (!d.ok) { btn.disabled = false; s.textContent = '失敗：' + (d.error || ''); return; }
+            return fetch('/admin/flows/api/' + d.id + '/status', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ status: 'active' }) })
+              .then(function (r2) { return r2.json(); })
+              .then(function () { btn.disabled = false; s.textContent = '已建立並啟用'; loadAutoRules(); });
+          })
+          .catch(function (e) { btn.disabled = false; s.textContent = '錯誤：' + e.message; });
+      });
+
       loadMembers();
+      loadAutoRules();
     })();
     </script>
 

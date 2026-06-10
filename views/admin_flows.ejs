@@ -51,6 +51,7 @@
       <div class="fl-add-row">
         <button type="button" class="fl-add-btn" data-add="send">＋ 發訊息</button>
         <button type="button" class="fl-add-btn" data-add="wait">＋ 等待</button>
+        <button type="button" class="fl-add-btn" data-add="add_to_list">＋ 加入名單</button>
         <button type="button" class="fl-add-btn" data-add="branch">＋ 條件分支</button>
       </div>
 
@@ -266,20 +267,25 @@
               '<option value="days"'+(u==='days'?' selected':'')+'>天</option>'+
             '</select></div>';
         }
+        function addToListStepHtml(step,path){
+          return '<div class="fl-inline"><span class="fl-step-tag" style="background:#15803d;">加入名單</span>'+
+            '<select data-field="list_id" data-path="'+path+'">'+optionsHtml(OPT.lists,step.list_id,'選一個名單')+'</select></div>';
+        }
         function subStepInner(step,path){
           if(step.type==='send')return sendStepHtml(step,path);
           if(step.type==='wait')return waitStepHtml(step,path);
           return '';
         }
         function branchCondHtml(cond,path){
-          cond=cond||{};var ty=cond.type||'event';
+          cond=cond||{};var ty=cond.type||'clicked';
           var h='<div class="fl-inline" style="margin-bottom:8px;"><span class="fl-step-tag branch">條件</span> 如果用戶 '+
             '<select data-field="cond_type" data-path="'+path+'">'+
-              '<option value="event"'+(ty==='event'?' selected':'')+'>做了某事件</option>'+
+              '<option value="clicked"'+(ty==='clicked'?' selected':'')+'>點了上一則訊息的連結</option>'+
               '<option value="played"'+(ty==='played'?' selected':'')+'>玩了某活動</option>'+
+              '<option value="event"'+(ty==='event'?' selected':'')+'>做了某 LIFF 事件</option>'+
             '</select>';
           if(ty==='event'){h+='<select data-field="cond_event" data-path="'+path+'">'+eventOptionsHtml(cond.event_name)+'</select>';}
-          else{h+='<select data-field="cond_activity" data-path="'+path+'"><option value="">任一活動</option>'+OPT.activities.map(function(a){return '<option value="'+a.id+'"'+(String(cond.activity_id)===String(a.id)?' selected':'')+'>'+esc(a.name)+'</option>';}).join('')+'</select>';}
+          else if(ty==='played'){h+='<select data-field="cond_activity" data-path="'+path+'"><option value="">任一活動</option>'+OPT.activities.map(function(a){return '<option value="'+a.id+'"'+(String(cond.activity_id)===String(a.id)?' selected':'')+'>'+esc(a.name)+'</option>';}).join('')+'</select>';}
           h+='</div>';
           return h;
         }
@@ -294,6 +300,7 @@
             h+='<button data-rm="'+i+'">移除</button></div></div>';
             if(step.type==='send')h+=sendStepHtml(step,i+'');
             else if(step.type==='wait')h+=waitStepHtml(step,i+'');
+            else if(step.type==='add_to_list')h+=addToListStepHtml(step,i+'');
             else if(step.type==='branch'){
               h+=branchCondHtml(step.condition,i+'');
               h+='<div class="fl-branch-cols">';
@@ -327,6 +334,7 @@
             else target=flow.steps[Number(parts[0])][parts[1]][Number(parts[2])];
             if(!target)return;
             if(field==='message_id')target.message_id=Number(el.value)||null;
+            else if(field==='list_id')target.list_id=Number(el.value)||null;
             else if(field==='amount')target.amount=Number(el.value)||0;
             else if(field==='unit')target.unit=el.value;
             else if(field==='cond_type'){target.condition=target.condition||{};target.condition.type=el.value;}
@@ -341,7 +349,8 @@
             var t=b.getAttribute('data-add');
             if(t==='send')flow.steps.push({type:'send',message_id:null});
             else if(t==='wait')flow.steps.push({type:'wait',amount:1,unit:'days'});
-            else if(t==='branch')flow.steps.push({type:'branch',condition:{type:'event'},yes:[],no:[]});
+            else if(t==='add_to_list')flow.steps.push({type:'add_to_list',list_id:null});
+            else if(t==='branch')flow.steps.push({type:'branch',condition:{type:'clicked'},yes:[],no:[]});
             renderSteps();
           });
         });
@@ -376,7 +385,7 @@
             }).catch(function(e){$('fl-save').disabled=false;$('fl-save-activate').disabled=false;$('fl-save-status').textContent='錯誤：'+e.message;});
         }
         function errMsg(code){
-          var m={name_required:'請填名稱',need_at_least_one_step:'至少要有一個步驟',need_at_least_one_send:'至少要有一個發訊息步驟',list_join_needs_list:'請選名單',event_needs_name:'請選事件',schedule_needs_hour:'請填時間',flow_has_no_steps:'流程沒有步驟'};
+          var m={name_required:'請填名稱',need_at_least_one_step:'至少要有一個步驟',need_at_least_one_action:'至少要有一個動作（發訊息或加入名單）',list_join_needs_list:'請選名單',event_needs_name:'請選事件',schedule_needs_hour:'請填時間',flow_has_no_steps:'流程沒有步驟'};
           return m[code]||code||'';
         }
         function backToList(){showEditor(false);loadList();}
