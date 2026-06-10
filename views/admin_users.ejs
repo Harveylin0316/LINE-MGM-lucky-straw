@@ -96,6 +96,17 @@
               stat(c.game_plays,'玩遊戲次數')+stat(c.prizes_won,'中獎次數')+stat(c.invites_rewarded,'成功邀請')+
               stat(c.broadcast_clicks,'點推播')+stat(c.restaurant_clicks,'點餐廳')+stat(c.inbound_messages,'傳訊息')+
               stat(c.liff_events,'今天吃什麼')+'</div>';
+            if(d.rfm){
+              var rf=d.rfm;
+              var via=rf.matched_by_line?'lineId':'email';
+              h+='<div class="us-sec-title">RFM 檔案（外部名單對上，依 '+via+'）</div>'+
+                '<div class="us-stats">'+
+                  stat((rf.recency==null?'—':rf.recency),'最近一次(天)')+
+                  stat((rf.frequency==null?'—':rf.frequency),'次數(F,參考)')+
+                  '<div class="us-stat"><div class="v">'+(rf.monetary_est==null?'—':Math.round(rf.monetary_est).toLocaleString())+'</div><div class="k">預估價位帶*</div></div>'+
+                '</div>'+
+                '<p class="muted" style="font-size:11px;margin-top:4px;">*M 為餐廳客單價推算的預估價位帶，非真實消費金額</p>';
+            }
             if(d.interest&&d.interest.length){
               h+='<div class="us-sec-title">餐廳興趣（點過的）</div><div>'+d.interest.map(function(i){return '<span class="us-chip">'+esc(i.name)+' ×'+i.clicks+'</span>';}).join('')+'</div>';
             }

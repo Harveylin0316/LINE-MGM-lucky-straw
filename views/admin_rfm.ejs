@@ -1,0 +1,118 @@
+<%-
+  include('layout', {
+    user: user,
+    isAdmin: isAdmin,
+    bodyClass: bodyClass,
+    body: `
+    <section class="card">
+      <h1>RFM 資料層</h1>
+      <p class="muted" style="margin-top:6px;line-height:1.7;">
+        上傳外部 RFM 名單（JSON）。資料會以 RFM 會員 id 為錨點存起來，隨著 LINE 好友 / email 對得上，
+        系統自動把消費歷史接到對應的 OA 好友身上（在「用戶檔案」顯示）。<br>
+        <strong>注意：M（價位）是用餐廳客單價推算的「預估價位帶」，不是真實消費金額。</strong>
+      </p>
+      <div style="margin-top:14px;display:flex;align-items:center;gap:12px;flex-wrap:wrap;">
+        <input type="file" id="rfm-file" accept=".json,application/json" />
+        <button type="button" class="rl-primary-btn" id="rfm-upload" disabled>開始上傳</button>
+        <span id="rfm-progress" class="muted" style="font-size:13px;"></span>
+      </div>
+    </section>
+
+    <section class="card">
+      <div style="display:flex;align-items:center;justify-content:space-between;gap:12px;">
+        <h2 style="margin:0;">目前資料概況</h2>
+        <button type="button" class="rl-secondary-btn" id="rfm-refresh">重新整理</button>
+      </div>
+      <div id="rfm-stats" style="margin-top:14px;"><p class="muted">載入中…</p></div>
+    </section>
+
+    <style>
+      .rfm-stat-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:10px;}
+      .rfm-stat{border:1px solid #ECECEE;border-radius:10px;padding:14px;background:#FAFAFA;}
+      .rfm-stat .v{font-size:24px;font-weight:700;color:#1f2937;font-variant-numeric:tabular-nums;letter-spacing:-0.02em;}
+      .rfm-stat .k{font-size:12px;color:#6B6B70;margin-top:4px;}
+      .rfm-stat.hi{background:#FFFBEB;border-color:#FCC726;}
+      .rfm-sub-title{font-size:13px;font-weight:700;color:#1f2937;margin:20px 0 8px;}
+      .rl-primary-btn{padding:9px 16px;background:#FCC726;color:#1f2937;font-weight:600;border:none;border-radius:7px;cursor:pointer;font-size:14px;}
+      .rl-primary-btn:disabled{opacity:.5;cursor:not-allowed;}
+      .rl-secondary-btn{padding:6px 12px;background:#fff;border:1px solid #ECECEE;border-radius:6px;font-size:12px;cursor:pointer;color:#374151;}
+    </style>
+
+    <script>
+      (function(){
+        var $=function(id){return document.getElementById(id);};
+        var fileInput=$('rfm-file'), uploadBtn=$('rfm-upload'), prog=$('rfm-progress');
+        var parsed=null, fileName='';
+
+        fileInput.addEventListener('change',function(){
+          var f=fileInput.files&&fileInput.files[0];
+          parsed=null; uploadBtn.disabled=true;
+          if(!f){prog.textContent='';return;}
+          fileName=f.name; prog.textContent='讀取中…';
+          var reader=new FileReader();
+          reader.onload=function(){
+            try{
+              var data=JSON.parse(reader.result);
+              if(!Array.isArray(data)){prog.textContent='格式錯誤：JSON 最外層必須是陣列';return;}
+              parsed=data;
+              prog.textContent='已讀取 '+data.length.toLocaleString()+' 筆，可上傳';
+              uploadBtn.disabled=false;
+            }catch(e){prog.textContent='JSON 解析失敗：'+e.message;}
+          };
+          reader.onerror=function(){prog.textContent='讀檔失敗';};
+          reader.readAsText(f);
+        });
+
+        uploadBtn.addEventListener('click',function(){
+          if(!parsed){return;}
+          uploadBtn.disabled=true; fileInput.disabled=true;
+          var CHUNK=1000, total=parsed.length, done=0, ok=0;
+          function sendNext(){
+            if(done>=total){
+              prog.textContent='完成！共上傳 '+ok.toLocaleString()+' / '+total.toLocaleString()+' 筆';
+              fileInput.disabled=false; loadStats();
+              return;
+            }
+            var slice=parsed.slice(done,done+CHUNK);
+            fetch('/admin/rfm/api/upload-chunk',{
+              method:'POST',headers:{'Content-Type':'application/json'},
+              body:JSON.stringify({records:slice,source:fileName})
+            }).then(function(r){return r.json();}).then(function(d){
+              if(!d.ok){prog.textContent='第 '+(done+1)+' 批失敗：'+(d.detail||d.error||'');uploadBtn.disabled=false;fileInput.disabled=false;return;}
+              ok+=(d.upserted||0); done+=slice.length;
+              prog.textContent='上傳中… '+done.toLocaleString()+' / '+total.toLocaleString();
+              setTimeout(sendNext,30);
+            }).catch(function(e){prog.textContent='錯誤：'+e.message;uploadBtn.disabled=false;fileInput.disabled=false;});
+          }
+          sendNext();
+        });
+
+        function stat(v,k,hi){return '<div class="rfm-stat'+(hi?' hi':'')+'"><div class="v">'+(Number(v||0)).toLocaleString()+'</div><div class="k">'+k+'</div></div>';}
+        function loadStats(){
+          fetch('/admin/rfm/api/stats').then(function(r){return r.json();}).then(function(d){
+            var box=$('rfm-stats');
+            if(!d.ok){box.innerHTML='<p class="muted">載入失敗</p>';return;}
+            var s=d.stats;
+            var h='<div class="rfm-sub-title">規模與對應</div><div class="rfm-stat-grid">'+
+              stat(s.total,'RFM 總筆數')+
+              stat(s.matched_oa_by_line,'已對上 OA 好友（lineId）',true)+
+              stat(s.matched_oa_by_email,'已對上 OA 好友（email）',true)+
+              stat(s.with_lineid,'名單帶 lineId')+
+              stat(s.with_email,'有 email')+
+              stat(s.with_phone,'有 phone')+
+              '</div>';
+            h+='<div class="rfm-sub-title">R｜最近一次活動（沉睡程度）</div><div class="rfm-stat-grid">'+
+              stat(s.r_le30,'30 天內')+stat(s.r_31_90,'31-90 天')+stat(s.r_91_365,'91-365 天')+
+              stat(s.r_366_730,'1-2 年')+stat(s.r_730plus,'2 年以上沉睡')+
+              stat(s.email_recent365,'有 email 且近 1 年',true)+
+              '</div>';
+            box.innerHTML=h;
+          });
+        }
+        $('rfm-refresh').addEventListener('click',loadStats);
+        loadStats();
+      })();
+    </script>
+    `
+  })
+%>
