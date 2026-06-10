@@ -16,6 +16,7 @@
           </p>
         </div>
         <div style="display:flex;gap:8px;flex-wrap:wrap;">
+          <button type="button" class="btn btn-export-list" id="btn-resend-nonclick">重發給沒點擊的人</button>
           <button type="button" class="btn btn-export-list" id="btn-export-list">匯出到名單庫</button>
           <a href="/admin/broadcast/history" class="btn">回歷史列表</a>
           <a href="/admin/broadcast" class="btn">回主頁</a>
@@ -248,6 +249,8 @@
               <option value="failed">送達失敗的人</option>
               <option value="viewed">開過信的人（hero 圖被載入）</option>
               <option value="clicked">點過 CTA 按鈕的人</option>
+              <option value="not_clicked">送達了但沒點 CTA 的人（重發用）</option>
+              <option value="not_viewed">送達了但沒開信的人</option>
             </select>
           </label>
         </div>
@@ -293,6 +296,14 @@
         }
         function close() { modal.hidden = true; }
         openBtn.addEventListener('click', open);
+        // 重發給沒點擊的人：開 modal 並預設「未點擊」+ 自動命名
+        var resendBtn = document.getElementById('btn-resend-nonclick');
+        if (resendBtn) resendBtn.addEventListener('click', function () {
+          open();
+          document.getElementById('bcex-filter').value = 'not_clicked';
+          document.getElementById('bcex-name').value = '未點擊 - 批次#${broadcast.id}';
+          document.getElementById('bcex-desc').value = '批次 #${broadcast.id} 送達了但沒點 CTA 的人，用來重發';
+        });
         document.getElementById('bc-export-close').addEventListener('click', close);
         document.getElementById('bcex-cancel').addEventListener('click', close);
         document.getElementById('bcex-save').addEventListener('click', function () {
@@ -318,8 +329,9 @@
               }
               statusEl.innerHTML =
                 '成功！已建立「' + (d.list.name || '').replace(/</g,'&lt;') + '」（' + d.total + ' 人）<br>' +
-                '<a href="/admin/recipient-lists/' + d.list.id + '" style="color:#2563eb;">→ 前往名單庫</a>';
-              setTimeout(close, 3500);
+                '<a href="/admin/broadcast" style="color:#2563eb;font-weight:600;">→ 去群發給這份名單（重發）</a>　' +
+                '<a href="/admin/recipient-lists/' + d.list.id + '" style="color:#6b7280;">查看名單</a>';
+              // 不自動關閉（讓使用者點連結）
             })
             .catch(function (e) {
               saveBtn.disabled = false;

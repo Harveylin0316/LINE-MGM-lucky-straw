@@ -1614,7 +1614,7 @@ function registerAdminBroadcastRoutes(app, deps) {
       const description = String(body.description || '').trim().slice(0, 500);
       const filter = String(body.filter || 'all').trim();
       if (!name) return safeJsonError(res, 400, 'name_required');
-      const ALLOWED = ['all', 'sent', 'failed', 'clicked', 'viewed'];
+      const ALLOWED = ['all', 'sent', 'failed', 'clicked', 'viewed', 'not_clicked', 'not_viewed'];
       if (!ALLOWED.includes(filter)) {
         return safeJsonError(res, 400, 'invalid_filter', { detail: '必須是 ' + ALLOWED.join(' / ') });
       }
@@ -1631,10 +1631,25 @@ function registerAdminBroadcastRoutes(app, deps) {
       } else if (filter === 'clicked') {
         sql = `SELECT DISTINCT line_user_id FROM admin_broadcast_clicks
                WHERE broadcast_id = $1 AND line_user_id IS NOT NULL`;
-      } else {
-        // viewed
+      } else if (filter === 'viewed') {
         sql = `SELECT DISTINCT line_user_id FROM admin_broadcast_views
                WHERE broadcast_id = $1 AND line_user_id IS NOT NULL`;
+      } else if (filter === 'not_clicked') {
+        // 已送達但沒點擊 → 重發給沒點擊的人
+        sql = `SELECT DISTINCT r.line_user_id FROM admin_broadcast_recipients r
+               WHERE r.broadcast_id = $1 AND r.status = 'sent' AND r.line_user_id IS NOT NULL
+                 AND NOT EXISTS (
+                   SELECT 1 FROM admin_broadcast_clicks c
+                   WHERE c.broadcast_id = $1 AND c.line_user_id = r.line_user_id
+                 )`;
+      } else {
+        // not_viewed：已送達但沒開封
+        sql = `SELECT DISTINCT r.line_user_id FROM admin_broadcast_recipients r
+               WHERE r.broadcast_id = $1 AND r.status = 'sent' AND r.line_user_id IS NOT NULL
+                 AND NOT EXISTS (
+                   SELECT 1 FROM admin_broadcast_views v
+                   WHERE v.broadcast_id = $1 AND v.line_user_id = r.line_user_id
+                 )`;
       }
       const { rows } = await query(sql, [broadcastId]);
       const uids = rows.map(r => r.line_user_id).filter(Boolean);
