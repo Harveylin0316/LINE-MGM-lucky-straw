@@ -1,0 +1,186 @@
+<%-
+  include('layout', {
+    user: user,
+    isAdmin: isAdmin,
+    bodyClass: bodyClass,
+    body: `
+    <section class="card msg-hero">
+      <div class="msg-hero-inner">
+        <div>
+          <h1>訊息庫</h1>
+          <p class="muted" style="margin-top:6px;">設計一次、存起來，之後在「群發訊息」或自動化流程都能直接選用。目前支援 LINE 卡片訊息。</p>
+        </div>
+        <button type="button" class="msg-primary-btn" id="btn-new-msg">＋ 新增訊息</button>
+      </div>
+    </section>
+
+    <section class="card">
+      <div id="msg-list" class="msg-grid"><p class="muted">載入中…</p></div>
+    </section>
+
+    <div id="msg-modal" class="msg-modal" hidden>
+      <div class="msg-modal-inner">
+        <div class="msg-modal-head">
+          <h3 id="msg-modal-title" style="margin:0;">新增訊息</h3>
+          <button type="button" class="msg-modal-close" id="msg-close">×</button>
+        </div>
+        <div class="msg-editor-grid">
+          <div class="msg-fields">
+            <label class="msg-f"><span>訊息名稱（內部辨識用）</span><input id="m-name" maxlength="200" placeholder="例：歡迎卡片 D0"></label>
+            <label class="msg-f"><span>備註（選填）</span><input id="m-desc" maxlength="500" placeholder="這則訊息的用途"></label>
+            <div class="msg-divider"></div>
+            <label class="msg-f"><span>標題</span><input id="m-title" maxlength="100"></label>
+            <label class="msg-f"><span>內文（可換行）</span><textarea id="m-subtitle" rows="3" maxlength="500"></textarea></label>
+            <label class="msg-f"><span>優惠碼（選填）</span><input id="m-coupon" maxlength="60"></label>
+            <label class="msg-f"><span>注意事項（選填）</span><input id="m-disclaimer" maxlength="300"></label>
+            <label class="msg-f"><span>按鈕文字（選填）</span><input id="m-cta-label" maxlength="40"></label>
+            <label class="msg-f"><span>按鈕連結（選填，https://）</span><input id="m-cta-url" maxlength="1000" placeholder="https://"></label>
+            <label class="msg-f"><span>通知列文字（留空自動用標題）</span><input id="m-alt" maxlength="400"></label>
+          </div>
+          <div class="msg-preview-col">
+            <div class="msg-preview-label">預覽</div>
+            <div id="msg-preview" class="msg-card-preview"></div>
+          </div>
+        </div>
+        <div class="msg-modal-actions">
+          <button type="button" class="msg-primary-btn" id="msg-save">儲存</button>
+          <button type="button" class="msg-secondary-btn" id="msg-cancel">取消</button>
+          <span id="msg-status" class="muted" style="font-size:13px;"></span>
+        </div>
+      </div>
+    </div>
+
+    <style>
+      .msg-hero-inner{display:flex;align-items:flex-start;justify-content:space-between;gap:16px;}
+      .msg-primary-btn{padding:9px 16px;background:#FCC726;color:#1f2937;font-weight:700;border:0;border-radius:8px;cursor:pointer;font-size:14px;}
+      .msg-secondary-btn{padding:9px 16px;background:#fff;color:#374151;border:1px solid #e5e7eb;border-radius:8px;cursor:pointer;font-size:14px;}
+      .msg-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(260px,1fr));gap:14px;}
+      .msg-item{border:1px solid #e5e7eb;border-radius:12px;padding:16px;background:#fff;display:flex;flex-direction:column;gap:8px;}
+      .msg-item:hover{border-color:#1f2937;}
+      .msg-item h4{margin:0;font-size:15px;color:#1f2937;}
+      .msg-item .desc{font-size:13px;color:#6b7280;min-height:18px;}
+      .msg-item .meta{font-size:12px;color:#9ca3af;}
+      .msg-item .row{display:flex;gap:8px;margin-top:4px;}
+      .msg-item .row button{flex:1;padding:7px;border:1px solid #e5e7eb;background:#fff;border-radius:6px;cursor:pointer;font-size:13px;color:#374151;}
+      .msg-item .row button.del{color:#b91c1c;}
+      .msg-item .row button:hover{border-color:#1f2937;}
+      .msg-modal{position:fixed;inset:0;background:rgba(17,24,39,.4);display:flex;align-items:flex-start;justify-content:center;padding:32px 16px;overflow:auto;z-index:50;}
+      .msg-modal-inner{background:#fff;border-radius:14px;max-width:880px;width:100%;padding:22px 24px;}
+      .msg-modal-head{display:flex;align-items:center;justify-content:space-between;margin-bottom:16px;}
+      .msg-modal-close{background:none;border:0;font-size:22px;cursor:pointer;color:#6b7280;line-height:1;}
+      .msg-editor-grid{display:grid;grid-template-columns:1fr 320px;gap:24px;}
+      .msg-fields{display:flex;flex-direction:column;gap:12px;}
+      .msg-f{display:flex;flex-direction:column;gap:5px;font-size:13px;color:#374151;}
+      .msg-f input,.msg-f textarea{padding:9px 11px;border:1px solid #e5e7eb;border-radius:7px;font-size:14px;font-family:inherit;box-sizing:border-box;width:100%;}
+      .msg-divider{height:1px;background:#e5e7eb;margin:4px 0;}
+      .msg-preview-label{font-size:12px;color:#9ca3af;margin-bottom:8px;letter-spacing:.04em;}
+      .msg-card-preview{border:1px solid #e5e7eb;border-radius:14px;overflow:hidden;background:#fff;}
+      .mp-bar{height:6px;background:#FCC726;}
+      .mp-in{padding:16px 18px;}
+      .mp-title{font-size:18px;font-weight:700;color:#1f2937;margin:0 0 10px;}
+      .mp-sub{font-size:14px;line-height:1.6;color:#4b5563;margin:0 0 10px;white-space:pre-wrap;}
+      .mp-coupon{background:#FFFBEB;border:1px solid #FCC726;border-radius:8px;padding:12px;text-align:center;margin:10px 0;}
+      .mp-coupon .lbl{font-size:11px;color:#92400e;}
+      .mp-coupon .code{font-size:20px;font-weight:700;color:#1f2937;letter-spacing:1px;}
+      .mp-disc{font-size:11px;color:#9ca3af;margin:8px 0;}
+      .mp-cta{background:#FCC726;color:#1f2937;font-weight:700;text-align:center;padding:12px;border-radius:10px;font-size:15px;margin-top:12px;}
+      .mp-empty{padding:24px;text-align:center;color:#9ca3af;font-size:13px;}
+      @media(max-width:720px){.msg-editor-grid{grid-template-columns:1fr;}}
+    </style>
+
+    <script>
+      (function(){
+        var $=function(id){return document.getElementById(id);};
+        var editingId=null;
+        function esc(s){return String(s==null?'':s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');}
+        function fmt(ts){if(!ts)return'';var d=new Date(ts);return isNaN(d.getTime())?'':d.toLocaleString('sv-SE',{timeZone:'Asia/Taipei'}).slice(0,16);}
+
+        function loadList(){
+          fetch('/admin/messages/api/list').then(function(r){return r.json();}).then(function(d){
+            var box=$('msg-list');
+            if(!d.ok){box.innerHTML='<p class="muted">載入失敗：'+esc(d.error||'')+'</p>';return;}
+            if(!d.messages.length){box.innerHTML='<p class="muted">還沒有訊息。點右上「新增訊息」建立第一則。</p>';return;}
+            box.innerHTML=d.messages.map(function(m){
+              return '<div class="msg-item"><h4>'+esc(m.name)+'</h4>'+
+                '<div class="desc">'+esc(m.description||'')+'</div>'+
+                '<div class="meta">'+esc(m.channel||'line').toUpperCase()+' · 更新 '+fmt(m.updated_at)+'</div>'+
+                '<div class="row"><button data-edit="'+m.id+'">編輯</button>'+
+                '<button data-dup="'+m.id+'">複製</button>'+
+                '<button class="del" data-del="'+m.id+'">刪除</button></div></div>';
+            }).join('');
+            box.querySelectorAll('[data-edit]').forEach(function(b){b.addEventListener('click',function(){openEditor(b.getAttribute('data-edit'));});});
+            box.querySelectorAll('[data-dup]').forEach(function(b){b.addEventListener('click',function(){openEditor(b.getAttribute('data-dup'),true);});});
+            box.querySelectorAll('[data-del]').forEach(function(b){b.addEventListener('click',function(){delMsg(b.getAttribute('data-del'));});});
+          });
+        }
+
+        function fields(){return{title:$('m-title').value.trim(),subtitle:$('m-subtitle').value.trim(),couponCode:$('m-coupon').value.trim(),disclaimer:$('m-disclaimer').value.trim(),ctaLabel:$('m-cta-label').value.trim(),ctaUrl:$('m-cta-url').value.trim(),altText:$('m-alt').value.trim()};}
+        function renderPreview(){
+          var t=fields();var h='<div class="mp-bar"></div><div class="mp-in">';
+          if(t.title)h+='<div class="mp-title">'+esc(t.title)+'</div>';
+          if(t.subtitle)h+='<div class="mp-sub">'+esc(t.subtitle)+'</div>';
+          if(t.couponCode)h+='<div class="mp-coupon"><div class="lbl">優惠碼</div><div class="code">'+esc(t.couponCode)+'</div></div>';
+          if(t.disclaimer)h+='<div class="mp-disc">'+esc(t.disclaimer)+'</div>';
+          if(t.ctaLabel)h+='<div class="mp-cta">'+esc(t.ctaLabel)+'</div>';
+          h+='</div>';
+          if(!t.title&&!t.subtitle&&!t.couponCode)h='<div class="mp-empty">開始填左邊欄位，這裡會即時預覽</div>';
+          $('msg-preview').innerHTML=h;
+        }
+
+        function openEditor(id,dup){
+          editingId=(id&&!dup)?id:null;
+          $('msg-status').textContent='';
+          if(id){
+            fetch('/admin/messages/api/'+id).then(function(r){return r.json();}).then(function(d){
+              if(!d.ok){alert('載入失敗');return;}
+              var m=d.message;var tpl=(m.message_config&&m.message_config.template)||{};
+              $('m-name').value=dup?(m.name+' 複本'):m.name;
+              $('m-desc').value=m.description||'';
+              $('m-title').value=tpl.title||'';$('m-subtitle').value=tpl.subtitle||'';
+              $('m-coupon').value=tpl.couponCode||'';$('m-disclaimer').value=tpl.disclaimer||'';
+              $('m-cta-label').value=tpl.ctaLabel||'';$('m-cta-url').value=tpl.ctaUrl||'';$('m-alt').value=tpl.altText||'';
+              $('msg-modal-title').textContent=dup?'複製訊息':'編輯訊息';
+              renderPreview();$('msg-modal').hidden=false;
+            });
+          }else{
+            ['m-name','m-desc','m-title','m-subtitle','m-coupon','m-disclaimer','m-cta-label','m-cta-url','m-alt'].forEach(function(i){$(i).value='';});
+            $('msg-modal-title').textContent='新增訊息';
+            renderPreview();$('msg-modal').hidden=false;
+          }
+        }
+        function closeEditor(){$('msg-modal').hidden=true;}
+
+        function save(){
+          var name=$('m-name').value.trim();
+          if(!name){$('msg-status').textContent='請填訊息名稱';return;}
+          var t=fields();
+          if(!t.title&&!t.subtitle&&!t.couponCode){$('msg-status').textContent='請至少填標題、內文或優惠碼';return;}
+          var payload={name:name,description:$('m-desc').value.trim(),channel:'line',message_config:{mode:'template',template:t}};
+          $('msg-save').disabled=true;$('msg-status').textContent='儲存中…';
+          var url=editingId?('/admin/messages/api/'+editingId):'/admin/messages/api';
+          var method=editingId?'PUT':'POST';
+          fetch(url,{method:method,headers:{'Content-Type':'application/json'},body:JSON.stringify(payload)})
+            .then(function(r){return r.json();}).then(function(d){
+              $('msg-save').disabled=false;
+              if(!d.ok){$('msg-status').textContent='失敗：'+esc(d.error||'');return;}
+              closeEditor();loadList();
+            }).catch(function(e){$('msg-save').disabled=false;$('msg-status').textContent='錯誤：'+e.message;});
+        }
+        function delMsg(id){
+          if(!confirm('確定刪除這則訊息？流程若有引用會失效。'))return;
+          fetch('/admin/messages/api/'+id,{method:'DELETE'}).then(function(r){return r.json();}).then(function(d){
+            if(d.ok)loadList();else alert('刪除失敗：'+(d.error||''));
+          });
+        }
+
+        $('btn-new-msg').addEventListener('click',function(){openEditor();});
+        $('msg-close').addEventListener('click',closeEditor);
+        $('msg-cancel').addEventListener('click',closeEditor);
+        $('msg-save').addEventListener('click',save);
+        ['m-title','m-subtitle','m-coupon','m-disclaimer','m-cta-label'].forEach(function(i){$(i).addEventListener('input',renderPreview);});
+        loadList();
+      })();
+    </script>
+    `
+  })
+%>
