@@ -62,12 +62,13 @@ function registerAdminRecipientListsRoutes(app, deps) {
       const id = Number(req.params.id);
       const limit = Math.min(Math.max(Number.parseInt(req.query.limit, 10) || 200, 1), 1000);
       const offset = Math.max(Number.parseInt(req.query.offset, 10) || 0, 0);
-      const search = String(req.query.search || '').trim().toLowerCase();
+      const searchRaw = String(req.query.search || '').trim().toLowerCase();
+      const search = searchRaw.replace(/[\\%_]/g, '\\$&'); // 跳脫 LIKE 萬用字元
       const params = [id];
       let whereSearch = '';
-      if (search) {
+      if (searchRaw) {
         params.push('%' + search + '%');
-        whereSearch = ` AND (LOWER(m.line_user_id) LIKE $${params.length} OR LOWER(m.email) LIKE $${params.length} OR LOWER(u.line_display_name) LIKE $${params.length} OR LOWER(u.username) LIKE $${params.length})`;
+        whereSearch = ` AND (LOWER(m.line_user_id) LIKE $${params.length} ESCAPE '\\' OR LOWER(m.email) LIKE $${params.length} ESCAPE '\\' OR LOWER(u.line_display_name) LIKE $${params.length} ESCAPE '\\' OR LOWER(u.username) LIKE $${params.length} ESCAPE '\\')`;
       }
       params.push(limit, offset);
       const { rows } = await query(
@@ -80,9 +81,9 @@ function registerAdminRecipientListsRoutes(app, deps) {
          LIMIT $${params.length - 1} OFFSET $${params.length}`,
         params
       );
-      const cntParams = search ? [id, '%' + search + '%'] : [id];
-      const cntSearch = search
-        ? ` AND (LOWER(m.line_user_id) LIKE $2 OR LOWER(m.email) LIKE $2 OR LOWER(u.line_display_name) LIKE $2 OR LOWER(u.username) LIKE $2)`
+      const cntParams = searchRaw ? [id, '%' + search + '%'] : [id];
+      const cntSearch = searchRaw
+        ? ` AND (LOWER(m.line_user_id) LIKE $2 ESCAPE '\\' OR LOWER(m.email) LIKE $2 ESCAPE '\\' OR LOWER(u.line_display_name) LIKE $2 ESCAPE '\\' OR LOWER(u.username) LIKE $2 ESCAPE '\\')`
         : '';
       const cntRs = await query(
         `SELECT COUNT(*)::int AS n FROM admin_recipient_list_members m
@@ -137,6 +138,16 @@ function registerAdminRecipientListsRoutes(app, deps) {
           detail: '沒有合法的 LINE userId 或 email',
           invalid_uid_sample: invalidUids.slice(0, 5),
           invalid_email_sample: invalidEmails.slice(0, 5)
+        });
+      }
+
+      // 單一名單上限 5000（與群發建立名單一致；避免下游 fetch 靜默截斷只送前 5000）
+      const MAX_LIST = 5000;
+      const curRs = await query('SELECT COUNT(*)::int AS n FROM admin_recipient_list_members WHERE list_id = $1', [id]);
+      const currentTotal = Number(curRs.rows[0]?.n || 0);
+      if (currentTotal + validUids.length + validEmails.length > MAX_LIST) {
+        return safeJson(res, 400, 'too_many_recipients', {
+          detail: `單一名單上限 ${MAX_LIST} 人（目前 ${currentTotal}，欲新增 ${validUids.length + validEmails.length}）`
         });
       }
 

@@ -165,6 +165,15 @@ function registerAdminFlowsRoutes(app, deps) {
     // game_play / broadcast_click：無必填設定（活動可選任一、推播點擊任意）
     if (tType === 'schedule') {
       if (!Number.isFinite(Number(tCfg.hour))) return { ok: false, error: 'schedule_needs_hour' };
+      // 正規化：對齊 */5 cron、避開 23:56-23:59 死區、夾正範圍
+      tCfg.hour = Math.min(23, Math.max(0, Math.round(Number(tCfg.hour))));
+      const mm = Number.isFinite(Number(tCfg.minute)) ? Number(tCfg.minute) : 0;
+      tCfg.minute = Math.min(55, Math.max(0, Math.round(mm / 5) * 5));
+      if (tCfg.freq === 'monthly') tCfg.dom = Math.min(31, Math.max(1, Math.round(Number(tCfg.dom) || 1)));
+      if (tCfg.freq === 'weekly') {
+        const dow = Number(tCfg.dow);
+        tCfg.dow = Number.isFinite(dow) ? ((Math.round(dow) % 7) + 7) % 7 : 1;
+      }
     }
     const steps = Array.isArray(body.steps) ? body.steps : [];
     if (steps.length === 0) return { ok: false, error: 'need_at_least_one_step' };

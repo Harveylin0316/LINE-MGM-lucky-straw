@@ -130,6 +130,16 @@ function registerAdminMessagesRoutes(app, deps) {
     const idStr = String(req.params.id || '').trim();
     if (!isPosInt(idStr)) return jsonErr(res, 400, 'invalid_id');
     try {
+      // 引用檢查：被流程 send 節點引用時不可硬刪（否則流程靜默漏發）
+      const used = await query(
+        `SELECT DISTINCT f.id, f.name, f.status FROM admin_flows f
+         JOIN admin_flow_nodes n ON n.flow_id = f.id
+         WHERE n.type = 'send' AND (n.config->>'message_id')::int = $1`,
+        [Number(idStr)]
+      );
+      if (used.rowCount > 0) {
+        return jsonErr(res, 409, 'message_in_use', { detail: '此訊息被自動化流程引用，請先移除引用再刪除', flows: used.rows });
+      }
       const rs = await query('DELETE FROM admin_message_templates WHERE id = $1 RETURNING id', [Number(idStr)]);
       if (rs.rowCount === 0) return jsonErr(res, 404, 'not_found');
       return res.json({ ok: true, deletedId: Number(idStr) });

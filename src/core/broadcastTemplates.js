@@ -379,6 +379,20 @@ function buildLineMessages(messageConfig, { heroImageBaseUrl, broadcastId, varia
     if (!flex.contents || typeof flex.contents !== 'object') {
       return { ok: false, error: '缺少 contents（氣泡內容）。' };
     }
+    // LINE 規範：contents 頂層只能是 bubble 或 carousel，否則 push 會被 LINE 退 400
+    const root = flex.contents;
+    if (root.type !== 'bubble' && root.type !== 'carousel') {
+      return { ok: false, error: 'contents.type 必須是 bubble 或 carousel。' };
+    }
+    if (root.type === 'bubble') {
+      if (!root.body && !root.hero && !root.header && !root.footer) {
+        return { ok: false, error: 'bubble 至少需要 body / hero / header / footer 其中一個區塊。' };
+      }
+    } else {
+      if (!Array.isArray(root.contents) || root.contents.length < 1 || !root.contents.every(b => b && b.type === 'bubble')) {
+        return { ok: false, error: 'carousel.contents 需為至少一個 bubble 組成的陣列。' };
+      }
+    }
     // Clone 後移除 placeholder image + 空 text + bullet normalize + clipboard auto-sync
     const cloned = JSON.parse(JSON.stringify(flex));
     stripPlaceholderImages(cloned.contents);

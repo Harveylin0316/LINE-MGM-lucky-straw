@@ -63,6 +63,10 @@ function createFlowEngine({ query, pool, linePush, buildLineMessages }) {
     if (!entry) return { enrolled: false, reason: 'no_entry_node' };
     // 原子去重：靠 partial unique index (flow_id, line_user_id) WHERE status='active'
     // 防止並發 follow/webhook 重送造成同一用戶重複 active 報名（→ 重複推播）
+    // 原子去重（partial unique index: (flow_id,line_user_id) WHERE status='active'）。
+    // 對所有流程：同一用戶同時最多一筆 active。re_enroll=true 的「重複進入」語意 =
+    // 「上一輪跑完(done/ended)後可再次進入」，而非「同時並行多份」——這也是合理的設計，
+    // 且與唯一索引相容（移除 ON CONFLICT 會在重入時直接撞唯一鍵報錯）。
     const ins = await query(
       `INSERT INTO admin_flow_enrollments (flow_id, line_user_id, user_id, current_node_key, status, next_run_at, context)
        VALUES ($1, $2, $3, $4, 'active', now(), $5::jsonb)
@@ -240,7 +244,9 @@ function createFlowEngine({ query, pool, linePush, buildLineMessages }) {
       return 'W' + tp.y + '-' + tp.m + '-' + Math.ceil(tp.day / 7) + '-' + tp.dow;
     }
     if (freq === 'monthly') {
-      const dom = Number(cfg.dom) || 1;
+      // 把 dom 夾到當月實際天數：dom=31 在 2 月會落在 28/29，否則整月不觸發
+      const daysInMonth = new Date(tp.y, tp.m, 0).getDate();
+      const dom = Math.min(Math.max(Number(cfg.dom) || 1, 1), daysInMonth);
       if (dom !== tp.day) return null;
       return 'M' + tp.y + '-' + String(tp.m).padStart(2, '0');
     }
@@ -252,15 +258,16 @@ function createFlowEngine({ query, pool, linePush, buildLineMessages }) {
       const rs = await query(
         `SELECT u.id AS user_id, m.line_user_id FROM admin_recipient_list_members m
          LEFT JOIN users u ON u.line_user_id = m.line_user_id
-         WHERE m.list_id = $1 AND m.line_user_id IS NOT NULL AND BTRIM(m.line_user_id) <> ''`,
+         WHERE m.list_id = $1 AND m.line_user_id IS NOT NULL AND BTRIM(m.line_user_id) <> ''
+           AND (u.blocked_at IS NULL OR u.id IS NULL)`,
         [Number(audience.list_id)]
       );
       return rs.rows;
     }
-    // 預設全好友
+    // 預設全好友（排除已封鎖）
     const rs = await query(
       `SELECT id AS user_id, line_user_id FROM users
-       WHERE line_user_id IS NOT NULL AND BTRIM(line_user_id) <> '' AND is_admin = false`
+       WHERE line_user_id IS NOT NULL AND BTRIM(line_user_id) <> '' AND is_admin = false AND blocked_at IS NULL`
     );
     return rs.rows;
   }
@@ -321,9 +328,10 @@ function createFlowEngine({ query, pool, linePush, buildLineMessages }) {
   // ---------- 加入名單 ----------
   async function addUserToList(listId, lineUserId, userId) {
     if (!listId || !lineUserId) return;
-    await query(
+    const ins = await query(
       `INSERT INTO admin_recipient_list_members (list_id, line_user_id)
-       VALUES ($1, $2) ON CONFLICT DO NOTHING`,
+       VALUES ($1, $2) ON CONFLICT DO NOTHING
+       RETURNING line_user_id`,
       [listId, lineUserId]
     );
     await query(
@@ -332,6 +340,11 @@ function createFlowEngine({ query, pool, linePush, buildLineMessages }) {
        WHERE id = $1`,
       [listId]
     );
+    // 只在「真正新加入」時觸發 list_join，對齊手動加名單的行為（鏈式自動化）
+    if (ins.rowCount > 0) {
+      try { await triggerListJoin(Number(listId), lineUserId, userId || null); }
+      catch (e) { console.error('flow add_to_list -> triggerListJoin failed:', e.message); }
+    }
   }
 
   // ---------- 發訊息 ----------
@@ -348,7 +361,9 @@ function createFlowEngine({ query, pool, linePush, buildLineMessages }) {
       const trackUrl = origin + '/rf/' + opts.enrollmentId + '/' + messageId;
       wrapCtaUri(built.messages, cfg.template.ctaUrl, trackUrl);
     }
-    return await linePush.pushLineMessages(lineUserId, built.messages, { userId, pushType: 'flow' });
+    // 冪等鍵：同一 enrollment 的同一節點重跑時，LINE 端去重，避免崩潰/逾時後重發
+    const retryKey = opts.enrollmentId ? `flow-${opts.enrollmentId}-${opts.nodeKey || messageId}` : undefined;
+    return await linePush.pushLineMessages(lineUserId, built.messages, { userId, pushType: 'flow', retryKey });
   }
 
   function waitMs(cfg) {
@@ -360,20 +375,25 @@ function createFlowEngine({ query, pool, linePush, buildLineMessages }) {
 
   async function evalBranch(config, en, lastSentAt) {
     const cond = (config && config.condition) || {};
-    const refTime = lastSentAt || en.last_message_sent_at || en.enrolled_at;
-    const refIso = new Date(refTime).toISOString();
+    // 只有「真的送過訊息」才用時間下限（判斷「發訊息後有沒有互動」）。
+    // 若 branch 是入口節點（還沒送過任何訊息），played/event 改查「是否曾經做過」，
+    // 否則時間窗退化成 enrolled_at，yes 分支幾乎永遠走不到。
+    const sentAt = lastSentAt || en.last_message_sent_at;
+    const hasPriorSend = !!sentAt;
+    const refIso = new Date(sentAt || en.enrolled_at).toISOString();
     if (cond.type === 'event') {
       if (!cond.event_name) return false;
-      const rs = await query(
-        `SELECT 1 FROM user_events WHERE line_id = $1 AND event_name = $2 AND created_at >= $3 LIMIT 1`,
-        [en.line_user_id, cond.event_name, refIso]
-      );
+      let sql = `SELECT 1 FROM user_events WHERE line_id = $1 AND event_name = $2`;
+      const params = [en.line_user_id, cond.event_name];
+      if (hasPriorSend) { params.push(refIso); sql += ` AND created_at >= $${params.length}`; }
+      const rs = await query(sql + ' LIMIT 1', params);
       return rs.rowCount > 0;
     }
     if (cond.type === 'played') {
-      let sql = `SELECT 1 FROM activity_plays WHERE line_user_id = $1 AND played_at >= $2`;
-      const params = [en.line_user_id, refIso];
-      if (cond.activity_id) { sql += ` AND activity_id = $3`; params.push(Number(cond.activity_id)); }
+      let sql = `SELECT 1 FROM activity_plays WHERE line_user_id = $1`;
+      const params = [en.line_user_id];
+      if (hasPriorSend) { params.push(refIso); sql += ` AND played_at >= $${params.length}`; }
+      if (cond.activity_id) { params.push(Number(cond.activity_id)); sql += ` AND activity_id = $${params.length}`; }
       const rs = await query(sql + ' LIMIT 1', params);
       return rs.rowCount > 0;
     }
@@ -415,7 +435,7 @@ function createFlowEngine({ query, pool, linePush, buildLineMessages }) {
             }
           }
           const msgId = node.config && node.config.message_id;
-          await sendMessage(en.line_user_id, en.user_id, msgId, { enrollmentId: en.id });
+          await sendMessage(en.line_user_id, en.user_id, msgId, { enrollmentId: en.id, nodeKey: node.node_key });
           lastMsgId = msgId || lastMsgId;
           lastSentAt = new Date();
           nodeKey = node.next_key || null;
@@ -485,9 +505,10 @@ function createFlowEngine({ query, pool, linePush, buildLineMessages }) {
         `UPDATE admin_flow_enrollments
          SET next_run_at = now() + interval '10 minutes', updated_at = now()
          WHERE id IN (
-           SELECT id FROM admin_flow_enrollments
-           WHERE status = 'active' AND next_run_at <= now()
-           ORDER BY next_run_at ASC LIMIT $1 FOR UPDATE SKIP LOCKED
+           SELECT e.id FROM admin_flow_enrollments e
+           JOIN admin_flows f ON f.id = e.flow_id
+           WHERE e.status = 'active' AND e.next_run_at <= now() AND f.status = 'active'
+           ORDER BY e.next_run_at ASC LIMIT $1 FOR UPDATE OF e SKIP LOCKED
          )
          RETURNING *`,
         [limit]

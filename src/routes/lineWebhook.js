@@ -154,26 +154,25 @@ function createLineWebhookHandler({
         });
 
         // 自動化流程：觸發 follow-flows（取代舊的寫死 D0；歡迎訊息改由流程系統發）
+        // 必須 await：serverless（Lambda）在 response 送出後會凍結，未 await 的背景工作可能丟失
+        // → 新好友收不到歡迎流程。enrollUser 已用 ON CONFLICT 去重，重送 webhook 安全。
         if (flowEngine && typeof flowEngine.triggerFollow === 'function') {
-          Promise.resolve().then(function () { return flowEngine.triggerFollow(lineUserId, null); })
-            .catch(function (e) { console.error('flow follow trigger failed:', e.message); });
+          try { await flowEngine.triggerFollow(lineUserId, null); }
+          catch (e) { console.error('flow follow trigger failed:', e.message); }
         }
 
         if (rewardResult?.result === 'rewarded' && linePush && typeof linePush.pushLineMessages === 'function') {
-          Promise.resolve()
-            .then(async () => {
-              const payload = await buildInviteRewardPushMessages({
-                rewardResult,
-                friendsPerDraw,
-                liffLotteryPushUrl,
-                linePushImageBaseCandidates
-              });
-              if (!payload) return;
-              return linePush.pushLineMessages(payload.inviterLineUserId, payload.messages, payload.pushExtras);
-            })
-            .catch(err => {
-              console.error('LINE invite reward push failed:', err.message);
+          try {
+            const payload = await buildInviteRewardPushMessages({
+              rewardResult,
+              friendsPerDraw,
+              liffLotteryPushUrl,
+              linePushImageBaseCandidates
             });
+            if (payload) await linePush.pushLineMessages(payload.inviterLineUserId, payload.messages, payload.pushExtras);
+          } catch (err) {
+            console.error('LINE invite reward push failed:', err.message);
+          }
         }
       }
 

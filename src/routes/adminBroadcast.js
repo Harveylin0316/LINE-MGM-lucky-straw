@@ -170,9 +170,14 @@ function registerAdminBroadcastRoutes(app, deps) {
       recipientId: recipient.id
     });
     if (!built.ok) return { result: 'failed', error: 'build_failed' };
+    // 封鎖兜底：名單物化後才封鎖的人也要擋（audience 已先排除，這裡保險）
+    const blk = await query(`SELECT 1 FROM users WHERE line_user_id = $1 AND blocked_at IS NOT NULL LIMIT 1`, [target]);
+    if (blk.rowCount > 0) return { result: 'skipped', error: 'blocked' };
     const pushed = await linePush.pushLineMessages(target, built.messages, {
       userId: recipient.user_id,
-      pushType: 'admin_broadcast'
+      pushType: 'admin_broadcast',
+      // 冪等鍵：sweep 退回 pending 重送時 LINE 端去重，避免對真用戶重複投遞
+      retryKey: `bc-${broadcast.id}-${recipient.id}`
     });
     return pushed
       ? { result: 'sent' }
@@ -660,6 +665,18 @@ function registerAdminBroadcastRoutes(app, deps) {
     const idStr = String(req.params.id || '').trim();
     if (!isPositiveIntegerString(idStr)) return safeJsonError(res, 400, 'invalid_id');
     try {
+      // 引用檢查：被流程（list_join 觸發 / add_to_list 動作 / 排程受眾）引用時不可硬刪
+      const refs = await query(
+        `SELECT DISTINCT f.id, f.name, f.status FROM admin_flows f
+         LEFT JOIN admin_flow_nodes n ON n.flow_id = f.id
+         WHERE (n.type = 'add_to_list' AND (n.config->>'list_id')::int = $1)
+            OR (f.trigger_type = 'list_join' AND (f.trigger_config->>'list_id')::int = $1)
+            OR (f.trigger_type = 'schedule' AND (f.trigger_config->'audience'->>'list_id')::int = $1)`,
+        [Number(idStr)]
+      );
+      if (refs.rowCount > 0) {
+        return safeJsonError(res, 409, 'list_in_use', { detail: '此名單被自動化流程引用，請先移除引用再刪除', flows: refs.rows });
+      }
       const rs = await query(
         'DELETE FROM admin_recipient_lists WHERE id = $1 RETURNING id',
         [Number(idStr)]
@@ -1572,6 +1589,8 @@ function registerAdminBroadcastRoutes(app, deps) {
     try {
       const b = await loadBroadcast(broadcastId);
       if (!b) return safeJsonError(res, 404, 'broadcast_not_found');
+      // cancelled 是終態，不可重發復活（否則被取消的收件人遭遺棄、批次語意錯亂）
+      if (b.status === 'cancelled') return safeJsonError(res, 400, 'broadcast_cancelled_cannot_resend');
 
       // 把 failed 改回 pending，並把 broadcast status 改回 running
       const updRs = await query(

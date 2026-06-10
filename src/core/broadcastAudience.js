@@ -80,7 +80,8 @@ function buildWhere(conds) {
   const where = [
     'u.line_user_id IS NOT NULL',
     "BTRIM(u.line_user_id) <> ''",
-    "u.is_admin = false"
+    "u.is_admin = false",
+    'u.blocked_at IS NULL'
   ];
 
   // allMembers = 全部會員（不套用其他行為條件，但加入時間仍可疊加）
@@ -164,15 +165,19 @@ async function previewAudience(query, rawConditions, { channel = 'line' } = {}) 
   }
   // 來源：已儲存名單
   if (conds.savedListId) {
+    // LINE 通道：只算有 line_user_id 的成員（email-only 成員不能用 LINE 發），並排除已封鎖
+    const LINE_FILTER = `AND m.line_user_id IS NOT NULL AND BTRIM(m.line_user_id) <> '' AND (u.blocked_at IS NULL OR u.id IS NULL)`;
     const total = await query(
-      `SELECT COUNT(*)::int AS n FROM admin_recipient_list_members WHERE list_id = $1`,
+      `SELECT COUNT(*)::int AS n FROM admin_recipient_list_members m
+       LEFT JOIN users u ON u.line_user_id = m.line_user_id
+       WHERE m.list_id = $1 ${LINE_FILTER}`,
       [conds.savedListId]
     );
     const sampleRs = await query(
       `SELECT m.id, m.line_user_id, u.line_display_name, u.username
        FROM admin_recipient_list_members m
        LEFT JOIN users u ON u.line_user_id = m.line_user_id
-       WHERE m.list_id = $1
+       WHERE m.list_id = $1 ${LINE_FILTER}
        ORDER BY m.id ASC
        LIMIT $2`,
       [conds.savedListId, PREVIEW_SAMPLE_LIMIT]
@@ -226,11 +231,13 @@ async function fetchAudienceRecipients(query, rawConditions, { limit = MAX_RECIP
   if (!hasAnyCondition(conds)) return { conditions: conds, rows: [] };
   // 來源：已儲存名單
   if (conds.savedListId) {
+    // LINE 通道：只送有 line_user_id 的成員、排除已封鎖（與預覽一致，避免灌水+漏發）
     const rs = await query(
       `SELECT u.id AS user_id, m.line_user_id
        FROM admin_recipient_list_members m
        LEFT JOIN users u ON u.line_user_id = m.line_user_id
-       WHERE m.list_id = $1
+       WHERE m.list_id = $1 AND m.line_user_id IS NOT NULL AND BTRIM(m.line_user_id) <> ''
+         AND (u.blocked_at IS NULL OR u.id IS NULL)
        ORDER BY m.id ASC
        LIMIT $2`,
       [conds.savedListId, cappedLimit]

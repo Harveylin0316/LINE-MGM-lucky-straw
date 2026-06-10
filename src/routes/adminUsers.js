@@ -28,13 +28,14 @@ function registerAdminUsersRoutes(app, deps) {
     try {
       const limit = Math.min(Math.max(parseInt(req.query.limit, 10) || 50, 1), 200);
       const offset = Math.max(parseInt(req.query.offset, 10) || 0, 0);
-      const search = String(req.query.search || '').trim().toLowerCase();
+      const searchRaw = String(req.query.search || '').trim().toLowerCase();
+      const search = searchRaw.replace(/[\\%_]/g, '\\$&'); // 跳脫 LIKE 萬用字元
       // 搜尋條件：$1 = like pattern（有搜尋才用）
       const baseWhere = `line_user_id IS NOT NULL AND BTRIM(line_user_id) <> '' AND is_admin = false`;
-      const searchWhere = search
-        ? ` AND (LOWER(line_user_id) LIKE $1 OR LOWER(COALESCE(line_display_name,'')) LIKE $1 OR LOWER(COALESCE(username,'')) LIKE $1)`
+      const searchWhere = searchRaw
+        ? ` AND (LOWER(line_user_id) LIKE $1 ESCAPE '\\' OR LOWER(COALESCE(line_display_name,'')) LIKE $1 ESCAPE '\\' OR LOWER(COALESCE(username,'')) LIKE $1 ESCAPE '\\')`
         : '';
-      const likeParam = search ? ['%' + search + '%'] : [];
+      const likeParam = searchRaw ? ['%' + search + '%'] : [];
       const listParams = likeParam.concat([limit, offset]);
       const rs = await query(
         `SELECT id, line_user_id, line_display_name, username, created_at, blocked_at

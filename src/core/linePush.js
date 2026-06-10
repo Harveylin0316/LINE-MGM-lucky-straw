@@ -44,6 +44,12 @@ function createLinePushService({ query, lineChannelAccessToken }) {
     }
   }
 
+  // 把任意穩定字串轉成合法的 UUID（X-Line-Retry-Key 必須是 UUID 格式）
+  function toRetryUuid(s) {
+    const h = require('crypto').createHash('sha1').update(String(s)).digest('hex');
+    return h.slice(0, 8) + '-' + h.slice(8, 12) + '-5' + h.slice(13, 16) + '-8' + h.slice(17, 20) + '-' + h.slice(20, 32);
+  }
+
   async function pushLineMessages(lineUserId, messages, extra = {}) {
     const normalizedMessages = Array.isArray(messages)
       ? messages.map(normalizeLinePushMessageItem).filter(Boolean)
@@ -73,7 +79,9 @@ function createLinePushService({ query, lineChannelAccessToken }) {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
-          Authorization: `Bearer ${lineChannelAccessToken}`
+          Authorization: `Bearer ${lineChannelAccessToken}`,
+          // 冪等鍵：claim 重送 / sweep 重跑時 LINE 端去重，避免重複投遞給真用戶
+          ...(extra.retryKey ? { 'X-Line-Retry-Key': toRetryUuid(extra.retryKey) } : {})
         },
         body: JSON.stringify({
           to: lineUserId,
