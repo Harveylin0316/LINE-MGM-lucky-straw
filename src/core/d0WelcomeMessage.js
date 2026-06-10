@@ -10,8 +10,8 @@
  *   按鈕：幫我決定吃哪間 → D0_CTA_URL
  *
  * 按鈕網址用環境變數 D0_CTA_URL（預設今天吃什麼 LIFF）。
- * 注意：今天吃什麼 Mini App 若還在 Development 階段，非 tester 點了會打不開，
- * 等上架 Published 後此按鈕才對所有人有效。
+ * 用「舊版 LIFF Channel」2008944358-649rLhGj —— random-rice app.js 目前預設就是它，
+ * 註解標「穩定可用」，且 LIFF（非 Mini App）一般人有連結即可開，不受 Mini App 送審限制。
  */
 
 const BRAND = {
@@ -21,8 +21,8 @@ const BRAND = {
   sub: '#4B5563'
 };
 
-// 預設指向今天吃什麼 LIFF（Mini App ID 2010198695-KNvBANCO）
-const DEFAULT_CTA_URL = 'https://liff.line.me/2010198695-KNvBANCO';
+// 預設指向今天吃什麼「舊版 LIFF Channel」（穩定可用、一般人可開）
+const DEFAULT_CTA_URL = 'https://liff.line.me/2008944358-649rLhGj';
 
 const TITLE = '今天吃什麼，交給開飯';
 const BODY_LINES = [
