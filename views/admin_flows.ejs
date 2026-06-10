@@ -10,8 +10,12 @@
           <h1>自動化流程</h1>
           <p class="muted" style="margin-top:6px;">設計「觸發 → 一連串動作」的自動流程。每個發訊息步驟可選訊息庫的訊息。目前發送通道為 LINE。</p>
         </div>
-        <button type="button" class="fl-primary-btn" id="fl-new">＋ 新增流程</button>
+        <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;">
+          <button type="button" class="fl-secondary-btn" id="fl-run-now">手動推進一次</button>
+          <button type="button" class="fl-primary-btn" id="fl-new">＋ 新增流程</button>
+        </div>
       </div>
+      <div id="fl-run-status" class="muted" style="font-size:13px;margin-top:8px;"></div>
     </section>
 
     <section class="card" id="fl-list-card">
@@ -368,6 +372,15 @@
         }
         function backToList(){showEditor(false);loadList();}
 
+        $('fl-run-now').addEventListener('click',function(){
+          var s=$('fl-run-status');var btn=$('fl-run-now');btn.disabled=true;s.textContent='推進中…';
+          fetch('/admin/flows/run-now',{method:'POST'}).then(function(r){return r.json();}).then(function(d){
+            btn.disabled=false;
+            if(!d.ok){s.textContent='失敗：'+(d.error||'');return;}
+            s.textContent='已推進：新進流程 '+((d.scheduleEnrolled||0)+(d.eventEnrolled||0))+' 人、處理進行中 '+(d.advanced||0)+' 步。';
+            loadList();
+          }).catch(function(e){btn.disabled=false;s.textContent='錯誤：'+e.message;});
+        });
         $('fl-new').addEventListener('click',function(){openEditor(null);});
         $('fl-back').addEventListener('click',backToList);
         $('fl-save').addEventListener('click',function(){save(false);});
