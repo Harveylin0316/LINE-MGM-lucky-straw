@@ -78,12 +78,25 @@ function createLineWebhookHandler({
       const payload = JSON.parse(rawBody || '{}');
       const events = Array.isArray(payload.events) ? payload.events : [];
       for (const event of events) {
+        // 封鎖：標記 blocked_at（給流失分眾 + 抑制發送）
+        if (event?.type === 'unfollow') {
+          const blockedUid = event?.source?.userId || null;
+          if (blockedUid) {
+            try { await pool.query(`UPDATE users SET blocked_at = now() WHERE line_user_id = $1`, [blockedUid]); }
+            catch (e) { console.error('mark blocked failed:', e.message); }
+          }
+          await appendWebhookEventLog({
+            eventType: 'unfollow', lineUserId: blockedUid, result: 'blocked',
+            detail: '用戶封鎖 OA', eventTimestamp: event?.timestamp, rawEvent: event || {}
+          });
+          continue;
+        }
         if (event?.type !== 'follow') {
           await appendWebhookEventLog({
             eventType: event?.type || 'unknown',
             lineUserId: event?.source?.userId || null,
             result: 'ignored_event_type',
-            detail: 'Only follow events trigger invite rewards.',
+            detail: '非 follow/unfollow 事件（仍記 log）',
             eventTimestamp: event?.timestamp,
             rawEvent: event || {}
           });
@@ -101,6 +114,9 @@ function createLineWebhookHandler({
           });
           continue;
         }
+        // 重新加好友：清除封鎖標記
+        try { await pool.query(`UPDATE users SET blocked_at = NULL WHERE line_user_id = $1`, [lineUserId]); }
+        catch (e) { console.error('clear blocked failed:', e.message); }
         let rewardResult;
         try {
           rewardResult = await rewardInviteForFollow(lineUserId, event.timestamp);

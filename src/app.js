@@ -20,6 +20,7 @@ const { registerAdminMessagesRoutes } = require('./routes/adminMessages');
 const { buildLineMessages: buildLineMessagesForLib } = require('./core/broadcastTemplates');
 const { registerAdminFlowsRoutes } = require('./routes/adminFlows');
 const { createFlowEngine } = require('./core/flowEngine');
+const { registerAdminUsersRoutes } = require('./routes/adminUsers');
 const { registerAdminHubRoutes } = require('./routes/adminHub');
 const { registerAdminLiffAnalyticsRoutes } = require('./routes/adminLiffAnalytics');
 const { registerAdminActivitiesRoutes } = require('./routes/adminActivities');
@@ -502,6 +503,8 @@ registerAdminMessagesRoutes(app, {
 });
 
 registerAdminFlowsRoutes(app, { query, pool, flowEngine, authCore });
+
+registerAdminUsersRoutes(app, { query, authCore });
 
 registerAdminHubRoutes(app, { authCore });
 

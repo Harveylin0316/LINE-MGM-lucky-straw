@@ -1,0 +1,121 @@
+<%-
+  include('layout', {
+    user: user,
+    isAdmin: isAdmin,
+    bodyClass: bodyClass,
+    body: `
+    <section class="card us-hero">
+      <div>
+        <h1>用戶檔案</h1>
+        <p class="muted" style="margin-top:6px;">看單一用戶在系統內的所有行為：加入/封鎖、玩遊戲、邀請、點擊、餐廳興趣、傳訊息、時間軸。</p>
+      </div>
+      <input type="search" id="us-search" placeholder="搜尋 lineId / 顯示名…" />
+    </section>
+
+    <div class="us-grid">
+      <section class="card us-list-card">
+        <div id="us-list"><p class="muted">載入中…</p></div>
+      </section>
+      <section class="card us-profile-card">
+        <div id="us-profile"><p class="muted">← 從左邊點一個用戶看完整檔案</p></div>
+      </section>
+    </div>
+
+    <style>
+      .us-hero{display:flex;align-items:flex-start;justify-content:space-between;gap:16px;flex-wrap:wrap;}
+      .us-hero input{padding:8px 12px;border:1px solid #e5e7eb;border-radius:8px;font-size:14px;min-width:220px;}
+      .us-grid{display:grid;grid-template-columns:320px 1fr;gap:16px;align-items:start;}
+      @media(max-width:820px){.us-grid{grid-template-columns:1fr;}}
+      .us-row{display:flex;align-items:center;gap:10px;padding:9px 10px;border-radius:8px;cursor:pointer;border:1px solid transparent;}
+      .us-row:hover{background:#f9fafb;border-color:#e5e7eb;}
+      .us-row.active{background:#FFFBEB;border-color:#FCC726;}
+      .us-row .av{width:34px;height:34px;border-radius:50%;background:#f3f4f6;display:flex;align-items:center;justify-content:center;font-size:13px;color:#6b7280;flex:0 0 auto;overflow:hidden;}
+      .us-row .av img{width:100%;height:100%;object-fit:cover;}
+      .us-row .nm{font-size:14px;color:#1f2937;}
+      .us-row .sub{font-size:11px;color:#9ca3af;}
+      .us-blocked{color:#b91c1c;font-size:11px;font-weight:700;}
+      .us-prof-head{display:flex;align-items:center;gap:14px;margin-bottom:16px;}
+      .us-prof-head .av{width:56px;height:56px;border-radius:50%;background:#f3f4f6;overflow:hidden;display:flex;align-items:center;justify-content:center;color:#6b7280;}
+      .us-prof-head .av img{width:100%;height:100%;object-fit:cover;}
+      .us-prof-head h2{margin:0;font-size:20px;}
+      .us-prof-head .meta{font-size:12px;color:#6b7280;margin-top:3px;}
+      .us-stats{display:grid;grid-template-columns:repeat(auto-fit,minmax(110px,1fr));gap:10px;margin:16px 0;}
+      .us-stat{border:1px solid #e5e7eb;border-radius:10px;padding:12px;background:#fafafa;}
+      .us-stat .v{font-size:22px;font-weight:700;color:#1f2937;font-variant-numeric:tabular-nums;}
+      .us-stat .k{font-size:11px;color:#6b7280;margin-top:3px;}
+      .us-sec-title{font-size:13px;font-weight:700;color:#1f2937;margin:18px 0 8px;}
+      .us-chip{display:inline-block;background:#f3f4f6;border-radius:20px;padding:4px 11px;font-size:12px;color:#374151;margin:0 6px 6px 0;}
+      .us-tl{border-left:2px solid #e5e7eb;padding-left:14px;margin-top:8px;}
+      .us-tl-item{position:relative;padding:6px 0;font-size:13px;}
+      .us-tl-item .k{font-weight:600;color:#1f2937;}
+      .us-tl-item .l{color:#6b7280;}
+      .us-tl-item .t{color:#9ca3af;font-size:11px;}
+    </style>
+
+    <script>
+      (function(){
+        var $=function(id){return document.getElementById(id);};
+        function esc(s){return String(s==null?'':s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');}
+        function fmt(ts){if(!ts)return'';var d=new Date(ts);return isNaN(d.getTime())?'':d.toLocaleString('sv-SE',{timeZone:'Asia/Taipei'}).slice(0,16);}
+        function shortUid(u){return u?(u.slice(0,7)+'…'+u.slice(-4)):'';}
+        var KIND={follow:'加好友',unfollow:'封鎖了',message:'傳訊息給你',game_play:'玩了遊戲',restaurant_click:'點了餐廳',broadcast_click:'點了推播',liff:'今天吃什麼',invite_rewarded:'邀請成功'};
+        var curUid=null, timer=null;
+
+        function loadList(){
+          var s=$('us-search').value.trim();
+          fetch('/admin/users/api/list?limit=80&search='+encodeURIComponent(s)).then(function(r){return r.json();}).then(function(d){
+            var box=$('us-list');
+            if(!d.ok){box.innerHTML='<p class="muted">載入失敗</p>';return;}
+            if(!d.users.length){box.innerHTML='<p class="muted">沒有符合的用戶</p>';return;}
+            box.innerHTML='<div class="muted" style="font-size:12px;margin-bottom:8px;">共 '+d.total+' 人</div>'+d.users.map(function(u){
+              var nm=u.line_display_name||u.username||'（未命名）';
+              var av=u.line_display_name?esc(nm.slice(0,1)):'?';
+              return '<div class="us-row" data-uid="'+esc(u.line_user_id)+'"><div class="av">'+av+'</div>'+
+                '<div><div class="nm">'+esc(nm)+(u.blocked_at?' <span class="us-blocked">已封鎖</span>':'')+'</div>'+
+                '<div class="sub">'+esc(shortUid(u.line_user_id))+' · '+(fmt(u.created_at)||'—')+'</div></div></div>';
+            }).join('');
+            box.querySelectorAll('[data-uid]').forEach(function(el){el.addEventListener('click',function(){openProfile(el.getAttribute('data-uid'));});});
+          });
+        }
+
+        function openProfile(uid){
+          curUid=uid;
+          document.querySelectorAll('.us-row').forEach(function(r){r.classList.toggle('active',r.getAttribute('data-uid')===uid);});
+          var box=$('us-profile');box.innerHTML='<p class="muted">載入中…</p>';
+          fetch('/admin/users/api/profile/'+uid).then(function(r){return r.json();}).then(function(d){
+            if(!d.ok){box.innerHTML='<p class="muted">載入失敗：'+esc(d.error||'')+'</p>';return;}
+            var p=d.profile,c=d.counts;
+            var nm=p.line_display_name||p.username||'（未命名）';
+            var avatar=p.line_picture_url?'<img src="'+esc(p.line_picture_url)+'">':esc(nm.slice(0,1));
+            var h='<div class="us-prof-head"><div class="av">'+avatar+'</div><div>'+
+              '<h2>'+esc(nm)+(p.blocked_at?' <span class="us-blocked">已封鎖</span>':'')+'</h2>'+
+              '<div class="meta">'+esc(shortUid(p.line_user_id))+'</div>'+
+              '<div class="meta">加入：'+(fmt(p.created_at)||'未知')+(p.blocked_at?(' · 封鎖：'+fmt(p.blocked_at)):'')+'</div>'+
+              '</div></div>';
+            h+='<div class="us-stats">'+
+              stat(c.game_plays,'玩遊戲次數')+stat(c.prizes_won,'中獎次數')+stat(c.invites_rewarded,'成功邀請')+
+              stat(c.broadcast_clicks,'點推播')+stat(c.restaurant_clicks,'點餐廳')+stat(c.inbound_messages,'傳訊息')+
+              stat(c.liff_events,'今天吃什麼')+'</div>';
+            if(d.interest&&d.interest.length){
+              h+='<div class="us-sec-title">餐廳興趣（點過的）</div><div>'+d.interest.map(function(i){return '<span class="us-chip">'+esc(i.name)+' ×'+i.clicks+'</span>';}).join('')+'</div>';
+            }
+            if(d.lists&&d.lists.length){
+              h+='<div class="us-sec-title">在這些名單裡</div><div>'+d.lists.map(function(l){return '<span class="us-chip">'+esc(l.name)+'</span>';}).join('')+'</div>';
+            }
+            h+='<div class="us-sec-title">行為時間軸</div>';
+            if(!d.timeline||!d.timeline.length){h+='<p class="muted" style="font-size:13px;">尚無紀錄</p>';}
+            else{h+='<div class="us-tl">'+d.timeline.map(function(t){
+              return '<div class="us-tl-item"><span class="k">'+esc(KIND[t.kind]||t.kind)+'</span> <span class="l">'+esc((t.label||'').slice(0,60))+'</span><div class="t">'+fmt(t.at)+'</div></div>';
+            }).join('')+'</div>';}
+            box.innerHTML=h;
+          });
+        }
+        function stat(v,k){return '<div class="us-stat"><div class="v">'+(v||0)+'</div><div class="k">'+k+'</div></div>';}
+
+        $('us-search').addEventListener('input',function(){clearTimeout(timer);timer=setTimeout(loadList,250);});
+        loadList();
+      })();
+    </script>
+    `
+  })
+%>
