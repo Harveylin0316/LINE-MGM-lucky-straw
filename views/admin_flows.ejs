@@ -37,7 +37,9 @@
         <select id="fl-trigger-type">
           <option value="follow">有人加好友</option>
           <option value="list_join">被加進某名單</option>
-          <option value="event">發生某事件（玩今天吃什麼…）</option>
+          <option value="game_play">玩了活動遊戲 / 中獎</option>
+          <option value="broadcast_click">點了群發訊息的連結</option>
+          <option value="event">LIFF 事件（今天吃什麼…）</option>
           <option value="schedule">定時（每天/每週/每月）</option>
         </select>
       </div>
@@ -115,7 +117,7 @@
         var flow={name:'',re_enroll:false,trigger:{type:'follow',config:{}},steps:[]};
         var editingId=null;
 
-        var TRIGGER_LABEL={follow:'加好友',list_join:'加入名單',event:'事件',schedule:'定時'};
+        var TRIGGER_LABEL={follow:'加好友',list_join:'加入名單',event:'LIFF事件',schedule:'定時',game_play:'玩遊戲/中獎',broadcast_click:'點推播'};
 
         function loadOptions(cb){
           fetch('/admin/flows/api/options').then(function(r){return r.json();}).then(function(d){
@@ -201,6 +203,11 @@
           var t=flow.trigger.type;var c=flow.trigger.config||{};var box=$('fl-trigger-config');var h='';
           if(t==='list_join'){
             h='<div class="fl-field"><span>哪個名單</span><select id="tc-list">'+optionsHtml(OPT.lists,c.list_id,'請選名單')+'</select></div>';
+          }else if(t==='game_play'){
+            h='<div class="fl-field"><span>哪個活動</span><select id="tc-activity"><option value="">任一活動</option>'+OPT.activities.map(function(a){return '<option value="'+a.id+'"'+(String(c.activity_id)===String(a.id)?' selected':'')+'>'+esc(a.name)+'</option>';}).join('')+'</select></div>'+
+              '<label class="fl-check"><input type="checkbox" id="tc-prizeonly"'+(c.prize_only?' checked':'')+'> <span>只在中獎時觸發</span></label>';
+          }else if(t==='broadcast_click'){
+            h='<p class="muted" style="font-size:13px;margin:0 0 8px;">用戶點了任何一則群發訊息的連結時觸發。</p>';
           }else if(t==='event'){
             h='<div class="fl-field"><span>哪個事件發生時</span><select id="tc-event">'+eventOptionsHtml(c.event_name)+'</select></div>';
           }else if(t==='schedule'){
@@ -229,6 +236,8 @@
         function syncTrigger(){
           var t=flow.trigger.type;var c={};
           if(t==='list_join'){c.list_id=Number($('tc-list')&&$('tc-list').value)||null;}
+          else if(t==='game_play'){c.activity_id=Number($('tc-activity')&&$('tc-activity').value)||null;c.prize_only=!!($('tc-prizeonly')&&$('tc-prizeonly').checked);}
+          else if(t==='broadcast_click'){/* 無設定 */}
           else if(t==='event'){c.event_name=($('tc-event')&&$('tc-event').value)||'';}
           else if(t==='schedule'){
             c.freq=($('tc-freq')&&$('tc-freq').value)||'daily';

@@ -92,12 +92,11 @@ function createFlowEngine({ query, pool, linePush, buildLineMessages }) {
     }
   }
 
-  // ---------- 觸發：event（cron 掃 user_events） ----------
-  async function getEventCursor(flowId) {
+  // ---------- 觸發：掃描型來源共用 cursor（避免回灌歷史） ----------
+  async function getCursor(flowId, initMaxSql) {
     const rs = await query(`SELECT last_event_id FROM admin_flow_event_cursor WHERE flow_id = $1`, [flowId]);
     if (rs.rowCount > 0) return Number(rs.rows[0].last_event_id);
-    // 首次：cursor 設為目前最大 id，避免回灌歷史事件
-    const mx = await query(`SELECT COALESCE(MAX(id),0)::bigint AS m FROM user_events`);
+    const mx = await query(initMaxSql);
     const start = Number(mx.rows[0].m || 0);
     await query(
       `INSERT INTO admin_flow_event_cursor (flow_id, last_event_id) VALUES ($1, $2)
@@ -106,19 +105,18 @@ function createFlowEngine({ query, pool, linePush, buildLineMessages }) {
     );
     return start;
   }
-  async function setEventCursor(flowId, lastId) {
-    await query(
-      `UPDATE admin_flow_event_cursor SET last_event_id = $2, updated_at = now() WHERE flow_id = $1`,
-      [flowId, lastId]
-    );
+  async function setCursor(flowId, lastId) {
+    await query(`UPDATE admin_flow_event_cursor SET last_event_id = $2, updated_at = now() WHERE flow_id = $1`, [flowId, lastId]);
   }
+
+  // event：LIFF user_events（event_name）
   async function runEventTriggers() {
     const flows = await getActiveFlowsByTrigger('event');
     let enrolled = 0;
     for (const f of flows) {
       const eventName = f.trigger_config && f.trigger_config.event_name;
       if (!eventName) continue;
-      const cursor = await getEventCursor(f.id);
+      const cursor = await getCursor(f.id, `SELECT COALESCE(MAX(id),0)::bigint AS m FROM user_events`);
       const rs = await query(
         `SELECT id, line_id FROM user_events
          WHERE id > $1 AND event_name = $2 AND line_id IS NOT NULL AND BTRIM(line_id) <> ''
@@ -131,7 +129,57 @@ function createFlowEngine({ query, pool, linePush, buildLineMessages }) {
         const r = await enrollUser(f, row.line_id, { context: { trigger: 'event', event_name: eventName, event_id: Number(row.id) } });
         if (r.enrolled) enrolled++;
       }
-      if (maxId > cursor) await setEventCursor(f.id, maxId);
+      if (maxId > cursor) await setCursor(f.id, maxId);
+    }
+    return enrolled;
+  }
+
+  // game_play：玩了活動遊戲 / 中獎（activity_plays）
+  async function runGamePlayTriggers() {
+    const flows = await getActiveFlowsByTrigger('game_play');
+    let enrolled = 0;
+    for (const f of flows) {
+      const cfg = f.trigger_config || {};
+      const activityId = Number(cfg.activity_id) || null;
+      const prizeOnly = cfg.prize_only === true || cfg.prize_only === 'true';
+      const cursor = await getCursor(f.id, `SELECT COALESCE(MAX(id),0)::bigint AS m FROM activity_plays`);
+      const params = [cursor];
+      let sql = `SELECT id, line_user_id FROM activity_plays
+                 WHERE id > $1 AND line_user_id IS NOT NULL AND BTRIM(line_user_id) <> ''`;
+      if (activityId) { params.push(activityId); sql += ` AND activity_id = $${params.length}`; }
+      if (prizeOnly) { sql += ` AND prize_id IS NOT NULL`; }
+      sql += ` ORDER BY id ASC LIMIT 500`;
+      const rs = await query(sql, params);
+      let maxId = cursor;
+      for (const row of rs.rows) {
+        maxId = Math.max(maxId, Number(row.id));
+        const r = await enrollUser(f, row.line_user_id, { context: { trigger: 'game_play', play_id: Number(row.id) } });
+        if (r.enrolled) enrolled++;
+      }
+      if (maxId > cursor) await setCursor(f.id, maxId);
+    }
+    return enrolled;
+  }
+
+  // broadcast_click：點了推播連結（admin_broadcast_clicks）
+  async function runBroadcastClickTriggers() {
+    const flows = await getActiveFlowsByTrigger('broadcast_click');
+    let enrolled = 0;
+    for (const f of flows) {
+      const cursor = await getCursor(f.id, `SELECT COALESCE(MAX(id),0)::bigint AS m FROM admin_broadcast_clicks`);
+      const rs = await query(
+        `SELECT id, line_user_id FROM admin_broadcast_clicks
+         WHERE id > $1 AND line_user_id IS NOT NULL AND BTRIM(line_user_id) <> ''
+         ORDER BY id ASC LIMIT 500`,
+        [cursor]
+      );
+      let maxId = cursor;
+      for (const row of rs.rows) {
+        maxId = Math.max(maxId, Number(row.id));
+        const r = await enrollUser(f, row.line_user_id, { context: { trigger: 'broadcast_click', click_id: Number(row.id) } });
+        if (r.enrolled) enrolled++;
+      }
+      if (maxId > cursor) await setCursor(f.id, maxId);
     }
     return enrolled;
   }
@@ -369,7 +417,13 @@ function createFlowEngine({ query, pool, linePush, buildLineMessages }) {
   async function run() {
     const result = { scheduleEnrolled: 0, eventEnrolled: 0, advanced: 0 };
     try { result.scheduleEnrolled = await runScheduleTriggers(); } catch (e) { console.error('schedule trig err', e.message); }
-    try { result.eventEnrolled = await runEventTriggers(); } catch (e) { console.error('event trig err', e.message); }
+    try {
+      let ev = 0;
+      ev += await runEventTriggers();
+      ev += await runGamePlayTriggers();
+      ev += await runBroadcastClickTriggers();
+      result.eventEnrolled = ev;
+    } catch (e) { console.error('event trig err', e.message); }
     try { const a = await advanceDue({ limit: 100 }); result.advanced = a.processed; } catch (e) { console.error('advance err', e.message); }
     return result;
   }
@@ -379,6 +433,8 @@ function createFlowEngine({ query, pool, linePush, buildLineMessages }) {
     triggerFollow,
     triggerListJoin,
     runEventTriggers,
+    runGamePlayTriggers,
+    runBroadcastClickTriggers,
     runScheduleTriggers,
     advanceDue,
     run,

@@ -122,10 +122,11 @@ function registerAdminFlowsRoutes(app, deps) {
     if (!name) return { ok: false, error: 'name_required' };
     const trigger = body.trigger || {};
     const tType = trigger.type;
-    if (!['follow', 'list_join', 'event', 'schedule'].includes(tType)) return { ok: false, error: 'invalid_trigger_type' };
+    if (!['follow', 'list_join', 'event', 'schedule', 'game_play', 'broadcast_click'].includes(tType)) return { ok: false, error: 'invalid_trigger_type' };
     const tCfg = trigger.config || {};
     if (tType === 'list_join' && !(Number(tCfg.list_id) > 0)) return { ok: false, error: 'list_join_needs_list' };
     if (tType === 'event' && !String(tCfg.event_name || '').trim()) return { ok: false, error: 'event_needs_name' };
+    // game_play / broadcast_click：無必填設定（活動可選任一、推播點擊任意）
     if (tType === 'schedule') {
       if (!Number.isFinite(Number(tCfg.hour))) return { ok: false, error: 'schedule_needs_hour' };
     }
