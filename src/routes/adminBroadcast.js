@@ -35,6 +35,13 @@ const {
   fetchAudienceRecipients,
   MAX_RECIPIENTS_PER_BROADCAST
 } = require('../core/broadcastAudience');
+const { recordRestaurantClick } = require('../core/restaurantLinkParse');
+
+function escapeHtml(s) {
+  return String(s == null ? '' : s)
+    .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;').replace(/'/g, '&#39;');
+}
 
 const CHUNK_SIZE_DEFAULT = 50;
 const CHUNK_SIZE_MAX = 100;
@@ -123,6 +130,9 @@ function registerAdminBroadcastRoutes(app, deps) {
       }
       const target = String(recipient.email || '').trim();
       if (!target) return { result: 'skipped', error: 'missing_email' };
+      // 退訂保險：名單物化後才退訂的人也要擋（上游 audience 已先排除，這裡兜底）
+      const unsub = await query(`SELECT 1 FROM admin_email_unsubscribes WHERE LOWER(email) = LOWER($1) LIMIT 1`, [target]);
+      if (unsub.rowCount > 0) return { result: 'skipped', error: 'unsubscribed' };
       const built = buildEmailMessage(cfg, broadcast.email_subject, {
         heroImageBaseUrl: origin,
         broadcastId: broadcast.id,
@@ -1094,7 +1104,7 @@ function registerAdminBroadcastRoutes(app, deps) {
         await client.query('BEGIN');
         const claimRs = await client.query(
           `UPDATE admin_broadcast_recipients
-           SET status = 'sending'
+           SET status = 'sending', pushed_at = NOW()
            WHERE id IN (
              SELECT id FROM admin_broadcast_recipients
              WHERE broadcast_id = $1 AND status = 'pending'
@@ -1229,6 +1239,14 @@ function registerAdminBroadcastRoutes(app, deps) {
       return res.status(403).json({ ok: false, error: 'forbidden' });
     }
     try {
+      // Step 0: 回收卡住的 'sending'（前一輪送信中斷遺留），逾 10 分鐘退回 pending 重送
+      // 避免 broadcast 因殘留 'sending' 永遠無法結案（remaining 永不為 0）
+      await query(
+        `UPDATE admin_broadcast_recipients
+         SET status = 'pending', pushed_at = NULL
+         WHERE status = 'sending' AND (pushed_at IS NULL OR pushed_at < NOW() - INTERVAL '10 minutes')`
+      ).catch(e => console.error('sweep stuck sending failed:', e.message));
+
       // Step 1: 把到期的 scheduled 改 running
       const dueRs = await query(
         `UPDATE admin_broadcasts
@@ -1288,7 +1306,7 @@ function registerAdminBroadcastRoutes(app, deps) {
           await client.query('BEGIN');
           const claimRs = await client.query(
             `UPDATE admin_broadcast_recipients
-             SET status = 'sending'
+             SET status = 'sending', pushed_at = NOW()
              WHERE id IN (
                SELECT id FROM admin_broadcast_recipients
                WHERE broadcast_id = $1 AND status = 'pending'
@@ -1839,7 +1857,7 @@ button{width:100%;margin-top:16px;padding:14px;background:#FCC726;color:#1F2937;
 .card{max-width:480px;margin:0 auto;background:#fff;border-radius:16px;padding:48px 32px;box-shadow:0 1px 3px rgba(0,0,0,.04)}</style></head>
 <body><div class="card">
 <h2 style="margin:0 0 12px">已取消訂閱</h2>
-<p style="color:#4B5563">${email} 將不再收到 OpenRice 的推廣 Email。</p>
+<p style="color:#4B5563">${escapeHtml(email)} 將不再收到 OpenRice 的推廣 Email。</p>
 </div></body></html>`);
   });
 

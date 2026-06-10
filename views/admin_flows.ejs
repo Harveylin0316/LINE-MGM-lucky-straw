@@ -218,7 +218,7 @@
             h='<div class="fl-inline" style="margin-bottom:12px;">'+
               '<select id="tc-freq"><option value="daily"'+(c.freq==='daily'?' selected':'')+'>每天</option><option value="weekly"'+(c.freq==='weekly'?' selected':'')+'>每週</option><option value="monthly"'+(c.freq==='monthly'?' selected':'')+'>每月</option></select>'+
               '<span id="tc-dom-wrap" '+(c.freq==='monthly'?'':'hidden')+'>每月 <input type="number" id="tc-dom" min="1" max="28" value="'+(c.dom||1)+'"> 號</span>'+
-              '<span id="tc-dow-wrap" '+(c.freq==='weekly'?'':'hidden')+'>星期 <select id="tc-dow"><option value="1">一</option><option value="2">二</option><option value="3">三</option><option value="4">四</option><option value="5">五</option><option value="6">六</option><option value="0">日</option></select></span>'+
+              '<span id="tc-dow-wrap" '+(c.freq==='weekly'?'':'hidden')+'>星期 <select id="tc-dow">'+[[1,'一'],[2,'二'],[3,'三'],[4,'四'],[5,'五'],[6,'六'],[0,'日']].map(function(p){return '<option value="'+p[0]+'"'+((c.dow==null?1:Number(c.dow))===p[0]?' selected':'')+'>'+p[1]+'</option>';}).join('')+'</select></span>'+
               '<span>時間 <input type="number" id="tc-hour" min="0" max="23" value="'+(Number.isFinite(c.hour)?c.hour:11)+'">:<input type="number" id="tc-min" min="0" max="59" value="'+(Number.isFinite(c.minute)?c.minute:30)+'"></span>'+
               '</div>'+
               '<div class="fl-field"><span>發給誰</span><select id="tc-aud">'+
@@ -231,7 +231,7 @@
           }
           box.innerHTML=h;
           if(t==='schedule'){
-            $('tc-freq').addEventListener('change',function(){syncDom();flow.trigger.config.freq=this.value;renderTrigger();});
+            $('tc-freq').addEventListener('change',function(){syncTrigger();flow.trigger.config.freq=this.value;renderTrigger();});
             $('tc-aud').addEventListener('change',function(){var w=$('tc-aud-list-wrap');if(w)w.hidden=this.value!=='list';});
           }
         }
@@ -388,7 +388,7 @@
             }).catch(function(e){$('fl-save').disabled=false;$('fl-save-activate').disabled=false;$('fl-save-status').textContent='錯誤：'+e.message;});
         }
         function errMsg(code){
-          var m={name_required:'請填名稱',need_at_least_one_step:'至少要有一個步驟',need_at_least_one_action:'至少要有一個動作（發訊息或加入名單）',list_join_needs_list:'請選名單',event_needs_name:'請選事件',schedule_needs_hour:'請填時間',flow_has_no_steps:'流程沒有步驟'};
+          var m={name_required:'請填名稱',need_at_least_one_step:'至少要有一個步驟',need_at_least_one_action:'至少要有一個動作（發訊息或加入名單）',branch_must_be_last:'條件分支必須是流程的最後一步',branch_sub_only_send_wait:'分支內只能放發訊息或等待',send_needs_message:'發訊息步驟請選一則訊息',list_join_needs_list:'請選名單',event_needs_name:'請選事件',schedule_needs_hour:'請填時間',flow_has_no_steps:'流程沒有步驟'};
           return m[code]||code||'';
         }
         function backToList(){showEditor(false);loadList();}

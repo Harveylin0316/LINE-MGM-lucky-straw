@@ -1965,8 +1965,11 @@
         renderHeroStatus(true);
       }
       if (d.mode === 'flex_json') {
-        var jsonBtn = document.querySelector('.tab-btn[data-mode="flex_json"]');
-        if (jsonBtn) jsonBtn.click();
+        // 展開進階 JSON 區塊會觸發其 toggle handler，把 state.mode 設成 flex_json
+        var advBlock = document.getElementById('advanced-json-block');
+        if (advBlock && !advBlock.open) advBlock.open = true;
+        state.mode = 'flex_json';
+        if ($('pane-template')) $('pane-template').hidden = true;
       }
       var ds = $('draft-status-time');
       if (ds && d._t) {

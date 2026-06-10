@@ -164,10 +164,13 @@
                   Array.isArray(prizes) && prizes.length > 0
                     ? prizes
                         .map(
-                          p => `<label class="chip-checkbox">
-                            <input type="checkbox" name="prize_name" value="${p.name.replace(/"/g, '&quot;')}" />
-                            <span>${p.name}</span>
-                          </label>`
+                          p => {
+                            const nm = String(p.name == null ? '' : p.name).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+                            return `<label class="chip-checkbox">
+                            <input type="checkbox" name="prize_name" value="${nm}" />
+                            <span>${nm}</span>
+                          </label>`;
+                          }
                         )
                         .join('')
                     : '<span class="muted">目前沒有可選獎品</span>'
@@ -1760,7 +1763,7 @@
                 btn.disabled = false; btn.textContent = orig;
                 return;
               }
-              var msg = '推進完成：成功 ' + (data.ok || 0) + ' / 失敗 ' + (data.fail || 0) +
+              var msg = '推進完成：成功 ' + (data.ok_count || 0) + ' / 失敗 ' + (data.fail || 0) +
                 ' / 跳過 ' + (data.skip || 0) + ' / 剩 ' + (data.remaining || 0) + ' 筆';
               if (data.remaining === 0) {
                 msg += '\\n\\n整批完成！';

@@ -128,8 +128,10 @@ function createLineWebhookHandler({
             detail: String(rewardErr.message || rewardErr).slice(0, 800),
             eventTimestamp: event?.timestamp,
             rawEvent: event || {}
-          });
-          throw rewardErr;
+          }).catch(() => {});
+          // 不要 throw：否則整批 webhook 回 500 → LINE 重送整批 → 批內已成功的 follow
+          // 會重複觸發 enroll/推播。單一事件失敗就跳過，整體仍回 200。
+          continue;
         }
         const resultCode = rewardResult?.result || 'processed';
         let logDetail = null;

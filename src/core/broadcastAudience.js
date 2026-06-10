@@ -138,15 +138,16 @@ async function previewAudience(query, rawConditions, { channel = 'line' } = {}) 
     if (!conds.savedListId) {
       return { total: 0, sample: [], conditions: conds, error: 'Email 通道請選一份名單（需含 email 欄位）。' };
     }
+    const UNSUB = `AND NOT EXISTS (SELECT 1 FROM admin_email_unsubscribes ue WHERE LOWER(ue.email) = LOWER(BTRIM(m.email)))`;
     const total = await query(
-      `SELECT COUNT(*)::int AS n FROM admin_recipient_list_members
-       WHERE list_id = $1 AND email IS NOT NULL AND BTRIM(email) <> ''`,
+      `SELECT COUNT(*)::int AS n FROM admin_recipient_list_members m
+       WHERE m.list_id = $1 AND m.email IS NOT NULL AND BTRIM(m.email) <> '' ${UNSUB}`,
       [conds.savedListId]
     );
     const sampleRs = await query(
       `SELECT m.id, m.email, m.display_name
        FROM admin_recipient_list_members m
-       WHERE m.list_id = $1 AND m.email IS NOT NULL AND BTRIM(m.email) <> ''
+       WHERE m.list_id = $1 AND m.email IS NOT NULL AND BTRIM(m.email) <> '' ${UNSUB}
        ORDER BY m.id ASC
        LIMIT $2`,
       [conds.savedListId, PREVIEW_SAMPLE_LIMIT]
@@ -215,6 +216,7 @@ async function fetchAudienceRecipients(query, rawConditions, { limit = MAX_RECIP
        FROM admin_recipient_list_members m
        LEFT JOIN users u ON u.line_user_id = m.line_user_id
        WHERE m.list_id = $1 AND m.email IS NOT NULL AND BTRIM(m.email) <> ''
+         AND NOT EXISTS (SELECT 1 FROM admin_email_unsubscribes ue WHERE LOWER(ue.email) = LOWER(BTRIM(m.email)))
        ORDER BY m.id ASC
        LIMIT $2`,
       [conds.savedListId, cappedLimit]

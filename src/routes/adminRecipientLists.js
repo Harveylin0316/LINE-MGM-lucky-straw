@@ -157,7 +157,6 @@ function registerAdminRecipientListsRoutes(app, deps) {
           );
           const existing = new Set(existsRs.rows.map(r => r.line_user_id));
           const toInsert = validUids.filter(uid => !existing.has(uid));
-          newUidsForTrigger = toInsert;
           existedUids = validUids.length - toInsert.length;
           if (toInsert.length > 0) {
             const BATCH = 500;
@@ -174,10 +173,12 @@ function registerAdminRecipientListsRoutes(app, deps) {
                 `INSERT INTO admin_recipient_list_members (list_id, line_user_id)
                  VALUES ${values.join(', ')}
                  ON CONFLICT DO NOTHING
-                 RETURNING id`,
+                 RETURNING line_user_id`,
                 params
               );
               insertedUids += insRs.rowCount;
+              // 只對「本交易真正插入成功」的 uid 觸發 list_join（避免並發重疊請求重複觸發）
+              for (const row of insRs.rows) newUidsForTrigger.push(row.line_user_id);
             }
           }
         }

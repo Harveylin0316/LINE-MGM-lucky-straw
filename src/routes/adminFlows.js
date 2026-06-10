@@ -173,6 +173,26 @@ function registerAdminFlowsRoutes(app, deps) {
       return (list || []).some(s => s.type === 'send' || s.type === 'add_to_list' || (s.type === 'branch' && (hasAction(s.yes) || hasAction(s.no))));
     }
     if (!hasAction(steps)) return { ok: false, error: 'need_at_least_one_action' };
+    // branch 只能是主序列最後一步（flattenSteps 遇 branch 會 break，後面的步驟會被丟棄）
+    const branchIdx = steps.findIndex(s => s && s.type === 'branch');
+    if (branchIdx !== -1 && branchIdx !== steps.length - 1) return { ok: false, error: 'branch_must_be_last' };
+    // branch 的 yes/no 內只允許 send/wait（與 flatten/unflatten 假設一致）
+    for (const s of steps) {
+      if (s && s.type === 'branch') {
+        const subOk = list => (list || []).every(x => x && (x.type === 'send' || x.type === 'wait'));
+        if (!subOk(s.yes) || !subOk(s.no)) return { ok: false, error: 'branch_sub_only_send_wait' };
+      }
+    }
+    // 所有 send 步驟（含 branch 內）都必須綁訊息，否則執行時會靜默跳過
+    let sendMissing = false;
+    (function eachSend(list) {
+      (list || []).forEach(s => {
+        if (!s) return;
+        if (s.type === 'send') { if (!(Number(s.message_id) > 0)) sendMissing = true; }
+        else if (s.type === 'branch') { eachSend(s.yes); eachSend(s.no); }
+      });
+    })(steps);
+    if (sendMissing) return { ok: false, error: 'send_needs_message' };
     return { ok: true, name, trigger: { type: tType, config: tCfg }, steps, re_enroll: !!body.re_enroll };
   }
 

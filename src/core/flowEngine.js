@@ -61,11 +61,16 @@ function createFlowEngine({ query, pool, linePush, buildLineMessages }) {
     }
     const entry = await getEntryNode(flow.id);
     if (!entry) return { enrolled: false, reason: 'no_entry_node' };
-    await query(
+    // 原子去重：靠 partial unique index (flow_id, line_user_id) WHERE status='active'
+    // 防止並發 follow/webhook 重送造成同一用戶重複 active 報名（→ 重複推播）
+    const ins = await query(
       `INSERT INTO admin_flow_enrollments (flow_id, line_user_id, user_id, current_node_key, status, next_run_at, context)
-       VALUES ($1, $2, $3, $4, 'active', now(), $5::jsonb)`,
+       VALUES ($1, $2, $3, $4, 'active', now(), $5::jsonb)
+       ON CONFLICT (flow_id, line_user_id) WHERE status = 'active' DO NOTHING
+       RETURNING id`,
       [flow.id, luid, opts.userId || null, entry.node_key, JSON.stringify(opts.context || {})]
     );
+    if (ins.rowCount === 0) return { enrolled: false, reason: 'already_active' };
     return { enrolled: true };
   }
 
@@ -307,7 +312,7 @@ function createFlowEngine({ query, pool, linePush, buildLineMessages }) {
   function wrapCtaUri(node, fromUrl, toUrl) {
     if (!node || typeof node !== 'object') return;
     if (Array.isArray(node)) { node.forEach(n => wrapCtaUri(n, fromUrl, toUrl)); return; }
-    if (node.action && node.action.type === 'uri' && node.action.uri === fromUrl) {
+    if (node.action && node.action.type === 'uri' && String(node.action.uri).trim() === String(fromUrl).trim()) {
       node.action.uri = toUrl;
     }
     Object.keys(node).forEach(k => { const v = node[k]; if (v && typeof v === 'object') wrapCtaUri(v, fromUrl, toUrl); });
@@ -414,6 +419,12 @@ function createFlowEngine({ query, pool, linePush, buildLineMessages }) {
           lastMsgId = msgId || lastMsgId;
           lastSentAt = new Date();
           nodeKey = node.next_key || null;
+          // 送出後立即落地進度，避免崩潰/逾時後從本 send 重跑（重發已送訊息）
+          await query(
+            `UPDATE admin_flow_enrollments SET current_node_key = $2, last_message_id = $3,
+                    last_message_sent_at = $4, updated_at = now() WHERE id = $1`,
+            [en.id, nodeKey, lastMsgId, lastSentAt.toISOString()]
+          ).catch(e => console.error('flow send progress persist failed:', e.message));
           continue;
         }
         if (node.type === 'add_to_list') {
