@@ -511,7 +511,7 @@ registerAdminMessagesRoutes(app, {
   buildLineMessages: buildLineMessagesForLib
 });
 
-registerAdminFlowsRoutes(app, { flowEngine, authCore });
+registerAdminFlowsRoutes(app, { query, pool, flowEngine, authCore });
 
 registerAdminHubRoutes(app, { authCore });
 

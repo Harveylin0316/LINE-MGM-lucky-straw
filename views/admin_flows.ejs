@@ -1,0 +1,382 @@
+<%-
+  include('layout', {
+    user: user,
+    isAdmin: isAdmin,
+    bodyClass: bodyClass,
+    body: `
+    <section class="card fl-hero">
+      <div class="fl-hero-inner">
+        <div>
+          <h1>自動化流程</h1>
+          <p class="muted" style="margin-top:6px;">設計「觸發 → 一連串動作」的自動流程。每個發訊息步驟可選訊息庫的訊息。目前發送通道為 LINE。</p>
+        </div>
+        <button type="button" class="fl-primary-btn" id="fl-new">＋ 新增流程</button>
+      </div>
+    </section>
+
+    <section class="card" id="fl-list-card">
+      <div id="fl-list"><p class="muted">載入中…</p></div>
+    </section>
+
+    <section class="card" id="fl-editor" hidden>
+      <div class="fl-edit-head">
+        <button type="button" class="fl-link" id="fl-back">← 返回列表</button>
+        <span id="fl-edit-status" class="muted" style="font-size:13px;"></span>
+      </div>
+
+      <div class="fl-field"><span>流程名稱</span>
+        <input id="fl-name" maxlength="200" placeholder="例：新好友歡迎流程" />
+      </div>
+
+      <div class="fl-section-title">1. 什麼時候觸發</div>
+      <div class="fl-field"><span>觸發條件</span>
+        <select id="fl-trigger-type">
+          <option value="follow">有人加好友</option>
+          <option value="list_join">被加進某名單</option>
+          <option value="event">發生某事件（玩今天吃什麼…）</option>
+          <option value="schedule">定時（每天/每週/每月）</option>
+        </select>
+      </div>
+      <div id="fl-trigger-config"></div>
+      <label class="fl-check"><input type="checkbox" id="fl-reenroll" /> <span>允許同一人重複進入此流程（預設只進一次）</span></label>
+
+      <div class="fl-section-title">2. 依序做這些事</div>
+      <div id="fl-steps"></div>
+      <div class="fl-add-row">
+        <button type="button" class="fl-add-btn" data-add="send">＋ 發訊息</button>
+        <button type="button" class="fl-add-btn" data-add="wait">＋ 等待</button>
+        <button type="button" class="fl-add-btn" data-add="branch">＋ 條件分支</button>
+      </div>
+
+      <div class="fl-actions">
+        <button type="button" class="fl-primary-btn" id="fl-save">儲存</button>
+        <button type="button" class="fl-secondary-btn" id="fl-save-activate">儲存並啟用</button>
+        <span id="fl-save-status" class="muted" style="font-size:13px;"></span>
+      </div>
+    </section>
+
+    <style>
+      .fl-hero-inner{display:flex;align-items:flex-start;justify-content:space-between;gap:16px;}
+      .fl-primary-btn{padding:9px 16px;background:#FCC726;color:#1f2937;font-weight:700;border:0;border-radius:8px;cursor:pointer;font-size:14px;}
+      .fl-secondary-btn{padding:9px 16px;background:#fff;color:#374151;border:1px solid #e5e7eb;border-radius:8px;cursor:pointer;font-size:14px;}
+      .fl-link{background:none;border:0;color:#6b7280;cursor:pointer;font-size:13px;padding:0;}
+      .fl-link:hover{color:#1f2937;text-decoration:underline;}
+      .fl-table{width:100%;border-collapse:collapse;font-size:14px;}
+      .fl-table th,.fl-table td{text-align:left;padding:10px 12px;border-bottom:1px solid #e5e7eb;}
+      .fl-table th{border-bottom:1px solid #1f2937;font-weight:700;}
+      .fl-badge{display:inline-block;padding:2px 9px;border-radius:20px;font-size:12px;font-weight:600;}
+      .fl-badge.active{background:#dcfce7;color:#15803d;}
+      .fl-badge.draft{background:#f3f4f6;color:#6b7280;}
+      .fl-badge.paused{background:#fef3c7;color:#92400e;}
+      .fl-table .ops{display:flex;gap:6px;flex-wrap:wrap;}
+      .fl-table .ops button{padding:5px 10px;border:1px solid #e5e7eb;background:#fff;border-radius:6px;cursor:pointer;font-size:12px;color:#374151;}
+      .fl-table .ops button.del{color:#b91c1c;}
+      .fl-table .ops button:hover{border-color:#1f2937;}
+      .fl-edit-head{display:flex;align-items:center;justify-content:space-between;margin-bottom:18px;}
+      .fl-field{display:flex;flex-direction:column;gap:5px;margin-bottom:14px;font-size:13px;color:#374151;max-width:520px;}
+      .fl-field span{font-weight:600;}
+      .fl-field input,.fl-field select{padding:9px 11px;border:1px solid #e5e7eb;border-radius:7px;font-size:14px;font-family:inherit;}
+      .fl-check{display:flex;align-items:center;gap:8px;font-size:13px;color:#374151;margin:6px 0 4px;}
+      .fl-section-title{font-size:15px;font-weight:700;color:#1f2937;margin:24px 0 12px;padding-top:14px;border-top:1px solid #e5e7eb;}
+      .fl-step{border:1px solid #e5e7eb;border-radius:10px;padding:12px 14px;margin-bottom:10px;background:#fff;}
+      .fl-step-head{display:flex;align-items:center;justify-content:space-between;margin-bottom:8px;}
+      .fl-step-tag{font-size:12px;font-weight:700;color:#fff;background:#1f2937;border-radius:6px;padding:2px 9px;}
+      .fl-step-tag.wait{background:#6b7280;}
+      .fl-step-tag.branch{background:#1d4ed8;}
+      .fl-step-ops{display:flex;gap:6px;}
+      .fl-step-ops button{border:1px solid #e5e7eb;background:#fff;border-radius:5px;cursor:pointer;font-size:12px;padding:3px 8px;color:#374151;}
+      .fl-step-ops button:hover{border-color:#1f2937;}
+      .fl-inline{display:flex;align-items:center;gap:8px;flex-wrap:wrap;font-size:14px;}
+      .fl-inline select,.fl-inline input{padding:7px 9px;border:1px solid #e5e7eb;border-radius:6px;font-size:14px;font-family:inherit;}
+      .fl-inline input[type=number]{width:80px;}
+      .fl-branch-cols{display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-top:10px;}
+      .fl-branch-col{border:1px solid #e5e7eb;border-radius:8px;padding:10px;background:#f9fafb;}
+      .fl-branch-col .lbl{font-size:12px;font-weight:700;margin-bottom:8px;}
+      .fl-branch-col .lbl.yes{color:#15803d;}
+      .fl-branch-col .lbl.no{color:#b91c1c;}
+      .fl-sub-add{margin-top:6px;display:flex;gap:6px;}
+      .fl-sub-add button{font-size:12px;padding:4px 8px;border:1px dashed #d1d5db;background:#fff;border-radius:6px;cursor:pointer;color:#6b7280;}
+      .fl-actions{margin-top:24px;padding-top:16px;border-top:1px solid #e5e7eb;display:flex;align-items:center;gap:12px;}
+      .fl-add-row{display:flex;gap:8px;margin-top:6px;}
+      .fl-add-btn{padding:8px 14px;border:1px dashed #d1d5db;background:#fff;border-radius:8px;cursor:pointer;font-size:13px;color:#374151;}
+      .fl-add-btn:hover{border-color:#1f2937;color:#1f2937;}
+    </style>
+
+    <script>
+      (function(){
+        var $=function(id){return document.getElementById(id);};
+        function esc(s){return String(s==null?'':s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');}
+        function fmt(ts){if(!ts)return'';var d=new Date(ts);return isNaN(d.getTime())?'':d.toLocaleString('sv-SE',{timeZone:'Asia/Taipei'}).slice(0,16);}
+        var OPT={messages:[],lists:[],activities:[],events:[]};
+        var flow={name:'',re_enroll:false,trigger:{type:'follow',config:{}},steps:[]};
+        var editingId=null;
+
+        var TRIGGER_LABEL={follow:'加好友',list_join:'加入名單',event:'事件',schedule:'定時'};
+
+        function loadOptions(cb){
+          fetch('/admin/flows/api/options').then(function(r){return r.json();}).then(function(d){
+            if(d.ok){OPT.messages=d.messages||[];OPT.lists=d.lists||[];OPT.activities=d.activities||[];OPT.events=d.events||[];}
+            if(cb)cb();
+          });
+        }
+
+        // ---------- 列表 ----------
+        function loadList(){
+          fetch('/admin/flows/api/list').then(function(r){return r.json();}).then(function(d){
+            var box=$('fl-list');
+            if(!d.ok){box.innerHTML='<p class="muted">載入失敗</p>';return;}
+            if(!d.flows.length){box.innerHTML='<p class="muted">還沒有流程。點右上「新增流程」建立第一個。</p>';return;}
+            var rows=d.flows.map(function(f){
+              return '<tr><td><strong>'+esc(f.name)+'</strong></td>'+
+                '<td>'+esc(TRIGGER_LABEL[f.trigger_type]||f.trigger_type)+'</td>'+
+                '<td><span class="fl-badge '+f.status+'">'+(f.status==='active'?'啟用中':f.status==='paused'?'已暫停':'草稿')+'</span></td>'+
+                '<td>'+f.active_count+' 進行中 / '+f.total_count+' 累計</td>'+
+                '<td><div class="ops">'+
+                  '<button data-edit="'+f.id+'">編輯</button>'+
+                  (f.status==='active'?'<button data-status="paused" data-id="'+f.id+'">暫停</button>':'<button data-status="active" data-id="'+f.id+'">啟用</button>')+
+                  '<button class="del" data-del="'+f.id+'">刪除</button>'+
+                '</div></td></tr>';
+            }).join('');
+            box.innerHTML='<table class="fl-table"><thead><tr><th>名稱</th><th>觸發</th><th>狀態</th><th>進行中</th><th></th></tr></thead><tbody>'+rows+'</tbody></table>';
+            box.querySelectorAll('[data-edit]').forEach(function(b){b.addEventListener('click',function(){openEditor(b.getAttribute('data-edit'));});});
+            box.querySelectorAll('[data-del]').forEach(function(b){b.addEventListener('click',function(){delFlow(b.getAttribute('data-del'));});});
+            box.querySelectorAll('[data-status]').forEach(function(b){b.addEventListener('click',function(){setStatus(b.getAttribute('data-id'),b.getAttribute('data-status'));});});
+          });
+        }
+        function setStatus(id,status){
+          fetch('/admin/flows/api/'+id+'/status',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({status:status})})
+            .then(function(r){return r.json();}).then(function(d){
+              if(d.ok)loadList();else alert('失敗：'+(d.error||''));
+            });
+        }
+        function delFlow(id){
+          if(!confirm('確定刪除這個流程？進行中的人也會一起移除。'))return;
+          fetch('/admin/flows/api/'+id,{method:'DELETE'}).then(function(r){return r.json();}).then(function(d){
+            if(d.ok)loadList();else alert('刪除失敗');
+          });
+        }
+
+        // ---------- 編輯器 ----------
+        function showEditor(on){$('fl-list-card').hidden=on;$('fl-new').style.display=on?'none':'';$('fl-editor').hidden=!on;}
+        function openEditor(id){
+          editingId=id||null;
+          $('fl-save-status').textContent='';
+          if(id){
+            fetch('/admin/flows/api/'+id).then(function(r){return r.json();}).then(function(d){
+              if(!d.ok){alert('載入失敗');return;}
+              flow=d.flow;
+              if(!flow.trigger)flow.trigger={type:'follow',config:{}};
+              if(!Array.isArray(flow.steps))flow.steps=[];
+              renderEditor();showEditor(true);
+            });
+          }else{
+            flow={name:'',re_enroll:false,trigger:{type:'follow',config:{}},steps:[]};
+            renderEditor();showEditor(true);
+          }
+        }
+        function renderEditor(){
+          $('fl-name').value=flow.name||'';
+          $('fl-reenroll').checked=!!flow.re_enroll;
+          $('fl-trigger-type').value=flow.trigger.type||'follow';
+          renderTrigger();
+          renderSteps();
+        }
+
+        function optionsHtml(arr,val,placeholder){
+          var h='<option value="">'+(placeholder||'請選擇')+'</option>';
+          arr.forEach(function(o){h+='<option value="'+o.id+'"'+(String(val)===String(o.id)?' selected':'')+'>'+esc(o.name)+'</option>';});
+          return h;
+        }
+        function eventOptionsHtml(val){
+          var h='<option value="">請選擇事件</option>';
+          OPT.events.forEach(function(o){h+='<option value="'+esc(o.value)+'"'+(val===o.value?' selected':'')+'>'+esc(o.label)+'</option>';});
+          return h;
+        }
+
+        function renderTrigger(){
+          var t=flow.trigger.type;var c=flow.trigger.config||{};var box=$('fl-trigger-config');var h='';
+          if(t==='list_join'){
+            h='<div class="fl-field"><span>哪個名單</span><select id="tc-list">'+optionsHtml(OPT.lists,c.list_id,'請選名單')+'</select></div>';
+          }else if(t==='event'){
+            h='<div class="fl-field"><span>哪個事件發生時</span><select id="tc-event">'+eventOptionsHtml(c.event_name)+'</select></div>';
+          }else if(t==='schedule'){
+            h='<div class="fl-inline" style="margin-bottom:12px;">'+
+              '<select id="tc-freq"><option value="daily"'+(c.freq==='daily'?' selected':'')+'>每天</option><option value="weekly"'+(c.freq==='weekly'?' selected':'')+'>每週</option><option value="monthly"'+(c.freq==='monthly'?' selected':'')+'>每月</option></select>'+
+              '<span id="tc-dom-wrap" '+(c.freq==='monthly'?'':'hidden')+'>每月 <input type="number" id="tc-dom" min="1" max="28" value="'+(c.dom||1)+'"> 號</span>'+
+              '<span id="tc-dow-wrap" '+(c.freq==='weekly'?'':'hidden')+'>星期 <select id="tc-dow"><option value="1">一</option><option value="2">二</option><option value="3">三</option><option value="4">四</option><option value="5">五</option><option value="6">六</option><option value="0">日</option></select></span>'+
+              '<span>時間 <input type="number" id="tc-hour" min="0" max="23" value="'+(Number.isFinite(c.hour)?c.hour:11)+'">:<input type="number" id="tc-min" min="0" max="59" value="'+(Number.isFinite(c.minute)?c.minute:30)+'"></span>'+
+              '</div>'+
+              '<div class="fl-field"><span>發給誰</span><select id="tc-aud">'+
+                '<option value="all"'+(!c.audience||c.audience.type==='all'?' selected':'')+'>所有好友</option>'+
+                '<option value="list"'+(c.audience&&c.audience.type==='list'?' selected':'')+'>某個名單</option>'+
+              '</select></div>'+
+              '<div class="fl-field" id="tc-aud-list-wrap" '+(c.audience&&c.audience.type==='list'?'':'hidden')+'><span>名單</span><select id="tc-aud-list">'+optionsHtml(OPT.lists,c.audience&&c.audience.list_id,'請選名單')+'</select></div>';
+          }else{
+            h='<p class="muted" style="font-size:13px;margin:0 0 8px;">任何人加你 LINE 好友時觸發。</p>';
+          }
+          box.innerHTML=h;
+          if(t==='schedule'){
+            $('tc-freq').addEventListener('change',function(){syncDom();flow.trigger.config.freq=this.value;renderTrigger();});
+            $('tc-aud').addEventListener('change',function(){var w=$('tc-aud-list-wrap');if(w)w.hidden=this.value!=='list';});
+          }
+        }
+
+        // 把觸發設定的 DOM 讀回 state
+        function syncTrigger(){
+          var t=flow.trigger.type;var c={};
+          if(t==='list_join'){c.list_id=Number($('tc-list')&&$('tc-list').value)||null;}
+          else if(t==='event'){c.event_name=($('tc-event')&&$('tc-event').value)||'';}
+          else if(t==='schedule'){
+            c.freq=($('tc-freq')&&$('tc-freq').value)||'daily';
+            c.hour=Number($('tc-hour')&&$('tc-hour').value)||0;
+            c.minute=Number($('tc-min')&&$('tc-min').value)||0;
+            if(c.freq==='monthly')c.dom=Number($('tc-dom')&&$('tc-dom').value)||1;
+            if(c.freq==='weekly')c.dow=Number($('tc-dow')&&$('tc-dow').value);
+            var aud=($('tc-aud')&&$('tc-aud').value)||'all';
+            c.audience=aud==='list'?{type:'list',list_id:Number($('tc-aud-list')&&$('tc-aud-list').value)||null}:{type:'all'};
+          }
+          flow.trigger.config=c;
+        }
+
+        // ---------- 步驟 ----------
+        function sendStepHtml(step,path){
+          return '<div class="fl-inline"><span class="fl-step-tag">發訊息</span>'+
+            '<select data-field="message_id" data-path="'+path+'">'+optionsHtml(OPT.messages,step.message_id,'選一則訊息')+'</select></div>';
+        }
+        function waitStepHtml(step,path){
+          var u=step.unit||'days';
+          return '<div class="fl-inline"><span class="fl-step-tag wait">等待</span>'+
+            '<input type="number" min="0" data-field="amount" data-path="'+path+'" value="'+(step.amount||0)+'">'+
+            '<select data-field="unit" data-path="'+path+'">'+
+              '<option value="minutes"'+(u==='minutes'?' selected':'')+'>分鐘</option>'+
+              '<option value="hours"'+(u==='hours'?' selected':'')+'>小時</option>'+
+              '<option value="days"'+(u==='days'?' selected':'')+'>天</option>'+
+            '</select></div>';
+        }
+        function subStepInner(step,path){
+          if(step.type==='send')return sendStepHtml(step,path);
+          if(step.type==='wait')return waitStepHtml(step,path);
+          return '';
+        }
+        function branchCondHtml(cond,path){
+          cond=cond||{};var ty=cond.type||'event';
+          var h='<div class="fl-inline" style="margin-bottom:8px;"><span class="fl-step-tag branch">條件</span> 如果用戶 '+
+            '<select data-field="cond_type" data-path="'+path+'">'+
+              '<option value="event"'+(ty==='event'?' selected':'')+'>做了某事件</option>'+
+              '<option value="played"'+(ty==='played'?' selected':'')+'>玩了某活動</option>'+
+            '</select>';
+          if(ty==='event'){h+='<select data-field="cond_event" data-path="'+path+'">'+eventOptionsHtml(cond.event_name)+'</select>';}
+          else{h+='<select data-field="cond_activity" data-path="'+path+'"><option value="">任一活動</option>'+OPT.activities.map(function(a){return '<option value="'+a.id+'"'+(String(cond.activity_id)===String(a.id)?' selected':'')+'>'+esc(a.name)+'</option>';}).join('')+'</select>';}
+          h+='</div>';
+          return h;
+        }
+
+        function renderSteps(){
+          var box=$('fl-steps');var h='';
+          flow.steps.forEach(function(step,i){
+            h+='<div class="fl-step" data-step="'+i+'">';
+            h+='<div class="fl-step-head"><span></span><div class="fl-step-ops">';
+            if(i>0)h+='<button data-move="up" data-i="'+i+'">↑</button>';
+            if(i<flow.steps.length-1)h+='<button data-move="down" data-i="'+i+'">↓</button>';
+            h+='<button data-rm="'+i+'">移除</button></div></div>';
+            if(step.type==='send')h+=sendStepHtml(step,i+'');
+            else if(step.type==='wait')h+=waitStepHtml(step,i+'');
+            else if(step.type==='branch'){
+              h+=branchCondHtml(step.condition,i+'');
+              h+='<div class="fl-branch-cols">';
+              h+='<div class="fl-branch-col"><div class="lbl yes">符合 → 做</div>';
+              (step.yes||[]).forEach(function(s,j){h+='<div class="fl-step" style="margin-bottom:6px;">'+subStepInner(s,i+'.yes.'+j)+'<div class="fl-step-ops" style="margin-top:6px;"><button data-rm-sub="'+i+'.yes.'+j+'">移除</button></div></div>';});
+              h+='<div class="fl-sub-add"><button data-add-sub="'+i+'.yes.send">＋發訊息</button><button data-add-sub="'+i+'.yes.wait">＋等待</button></div></div>';
+              h+='<div class="fl-branch-col"><div class="lbl no">不符合 → 做</div>';
+              (step.no||[]).forEach(function(s,j){h+='<div class="fl-step" style="margin-bottom:6px;">'+subStepInner(s,i+'.no.'+j)+'<div class="fl-step-ops" style="margin-top:6px;"><button data-rm-sub="'+i+'.no.'+j+'">移除</button></div></div>';});
+              h+='<div class="fl-sub-add"><button data-add-sub="'+i+'.no.send">＋發訊息</button><button data-add-sub="'+i+'.no.wait">＋等待</button></div></div>';
+              h+='</div>';
+            }
+            h+='</div>';
+          });
+          if(!flow.steps.length)h='<p class="muted" style="font-size:13px;">還沒有步驟。用下面的按鈕加第一步（通常先「發訊息」）。</p>';
+          box.innerHTML=h;
+          // wire
+          box.querySelectorAll('[data-rm]').forEach(function(b){b.addEventListener('click',function(){syncSteps();flow.steps.splice(Number(b.getAttribute('data-rm')),1);renderSteps();});});
+          box.querySelectorAll('[data-move]').forEach(function(b){b.addEventListener('click',function(){syncSteps();var i=Number(b.getAttribute('data-i'));var dir=b.getAttribute('data-move')==='up'?-1:1;var j=i+dir;if(j<0||j>=flow.steps.length)return;var tmp=flow.steps[i];flow.steps[i]=flow.steps[j];flow.steps[j]=tmp;renderSteps();});});
+          box.querySelectorAll('[data-rm-sub]').forEach(function(b){b.addEventListener('click',function(){syncSteps();var p=b.getAttribute('data-rm-sub').split('.');flow.steps[Number(p[0])][p[1]].splice(Number(p[2]),1);renderSteps();});});
+          box.querySelectorAll('[data-add-sub]').forEach(function(b){b.addEventListener('click',function(){syncSteps();var p=b.getAttribute('data-add-sub').split('.');var st=flow.steps[Number(p[0])];if(!st[p[1]])st[p[1]]=[];st[p[1]].push(p[2]==='send'?{type:'send',message_id:null}:{type:'wait',amount:1,unit:'days'});renderSteps();});});
+          box.querySelectorAll('[data-field="cond_type"]').forEach(function(s){s.addEventListener('change',function(){syncSteps();var i=Number(s.getAttribute('data-path'));flow.steps[i].condition={type:s.value};renderSteps();});});
+        }
+
+        // 把步驟 DOM 讀回 state
+        function syncSteps(){
+          var box=$('fl-steps');
+          box.querySelectorAll('[data-field]').forEach(function(el){
+            var field=el.getAttribute('data-field');var path=el.getAttribute('data-path');var parts=path.split('.');
+            var target;
+            if(parts.length===1)target=flow.steps[Number(parts[0])];
+            else target=flow.steps[Number(parts[0])][parts[1]][Number(parts[2])];
+            if(!target)return;
+            if(field==='message_id')target.message_id=Number(el.value)||null;
+            else if(field==='amount')target.amount=Number(el.value)||0;
+            else if(field==='unit')target.unit=el.value;
+            else if(field==='cond_type'){target.condition=target.condition||{};target.condition.type=el.value;}
+            else if(field==='cond_event'){target.condition=target.condition||{};target.condition.type='event';target.condition.event_name=el.value;}
+            else if(field==='cond_activity'){target.condition=target.condition||{};target.condition.type='played';target.condition.activity_id=Number(el.value)||null;}
+          });
+        }
+
+        document.querySelectorAll('[data-add]').forEach(function(b){
+          b.addEventListener('click',function(){
+            syncSteps();
+            var t=b.getAttribute('data-add');
+            if(t==='send')flow.steps.push({type:'send',message_id:null});
+            else if(t==='wait')flow.steps.push({type:'wait',amount:1,unit:'days'});
+            else if(t==='branch')flow.steps.push({type:'branch',condition:{type:'event'},yes:[],no:[]});
+            renderSteps();
+          });
+        });
+
+        function collectFlow(){
+          syncTrigger();syncSteps();
+          return {
+            name:$('fl-name').value.trim(),
+            re_enroll:$('fl-reenroll').checked,
+            trigger:flow.trigger,
+            steps:flow.steps
+          };
+        }
+        function save(activate){
+          var payload=collectFlow();
+          if(!payload.name){$('fl-save-status').textContent='請填流程名稱';return;}
+          $('fl-save').disabled=true;$('fl-save-activate').disabled=true;$('fl-save-status').textContent='儲存中…';
+          var url=editingId?('/admin/flows/api/'+editingId):'/admin/flows/api';
+          var method=editingId?'PUT':'POST';
+          fetch(url,{method:method,headers:{'Content-Type':'application/json'},body:JSON.stringify(payload)})
+            .then(function(r){return r.json();}).then(function(d){
+              $('fl-save').disabled=false;$('fl-save-activate').disabled=false;
+              if(!d.ok){$('fl-save-status').textContent='失敗：'+errMsg(d.error)+(d.detail?'（'+d.detail+'）':'');return;}
+              var newId=editingId||d.id;
+              if(activate){
+                fetch('/admin/flows/api/'+newId+'/status',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({status:'active'})})
+                  .then(function(r){return r.json();}).then(function(d2){
+                    if(!d2.ok){$('fl-save-status').textContent='已儲存，但啟用失敗：'+errMsg(d2.error);return;}
+                    backToList();
+                  });
+              }else{backToList();}
+            }).catch(function(e){$('fl-save').disabled=false;$('fl-save-activate').disabled=false;$('fl-save-status').textContent='錯誤：'+e.message;});
+        }
+        function errMsg(code){
+          var m={name_required:'請填名稱',need_at_least_one_step:'至少要有一個步驟',need_at_least_one_send:'至少要有一個發訊息步驟',list_join_needs_list:'請選名單',event_needs_name:'請選事件',schedule_needs_hour:'請填時間',flow_has_no_steps:'流程沒有步驟'};
+          return m[code]||code||'';
+        }
+        function backToList(){showEditor(false);loadList();}
+
+        $('fl-new').addEventListener('click',function(){openEditor(null);});
+        $('fl-back').addEventListener('click',backToList);
+        $('fl-save').addEventListener('click',function(){save(false);});
+        $('fl-save-activate').addEventListener('click',function(){save(true);});
+        $('fl-trigger-type').addEventListener('change',function(){syncTrigger();flow.trigger={type:this.value,config:{}};renderTrigger();});
+
+        loadOptions(function(){loadList();});
+      })();
+    </script>
+    `
+  })
+%>
