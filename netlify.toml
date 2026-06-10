@@ -20,6 +20,10 @@
 [functions."scheduled-monthly-leaderboard"]
   schedule = "30 3 1 * *"
 
+# 每 5 分鐘推進自動化流程引擎
+[functions."scheduled-flow-runner"]
+  schedule = "*/5 * * * *"
+
 [[redirects]]
   from = "/style.css"
   to = "/style.css"

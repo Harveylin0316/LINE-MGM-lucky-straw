@@ -17,7 +17,7 @@
  */
 
 function registerAdminRecipientListsRoutes(app, deps) {
-  const { query, pool, authCore } = deps;
+  const { query, pool, authCore, flowEngine = null } = deps;
   const { requireAdmin } = authCore;
 
   function safeJson(res, status, errCode, opts = {}) {
@@ -145,6 +145,7 @@ function registerAdminRecipientListsRoutes(app, deps) {
       let insertedEmails = 0;
       let existedUids = 0;
       let existedEmails = 0;
+      let newUidsForTrigger = [];
       try {
         await client.query('BEGIN');
         // ----- LINE UID -----
@@ -156,6 +157,7 @@ function registerAdminRecipientListsRoutes(app, deps) {
           );
           const existing = new Set(existsRs.rows.map(r => r.line_user_id));
           const toInsert = validUids.filter(uid => !existing.has(uid));
+          newUidsForTrigger = toInsert;
           existedUids = validUids.length - toInsert.length;
           if (toInsert.length > 0) {
             const BATCH = 500;
@@ -222,6 +224,16 @@ function registerAdminRecipientListsRoutes(app, deps) {
           [id]
         );
         await client.query('COMMIT');
+
+        // 自動化流程：對新加入的 LINE 成員觸發 list_join-flows（非阻塞）
+        if (flowEngine && typeof flowEngine.triggerListJoin === 'function' && newUidsForTrigger.length > 0) {
+          Promise.resolve().then(async function () {
+            for (const uid of newUidsForTrigger) {
+              await flowEngine.triggerListJoin(id, uid, null);
+            }
+          }).catch(function (e) { console.error('flow list_join trigger failed:', e.message); });
+        }
+
         res.json({
           ok: true,
           submitted_uids: rawIds.length,

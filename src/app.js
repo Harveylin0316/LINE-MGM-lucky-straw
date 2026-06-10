@@ -20,6 +20,8 @@ const { registerAdminD0Routes } = require('./routes/adminD0');
 const d0Welcome = require('./core/d0WelcomeMessage');
 const { registerAdminMessagesRoutes } = require('./routes/adminMessages');
 const { buildLineMessages: buildLineMessagesForLib } = require('./core/broadcastTemplates');
+const { registerAdminFlowsRoutes } = require('./routes/adminFlows');
+const { createFlowEngine } = require('./core/flowEngine');
 const { registerAdminHubRoutes } = require('./routes/adminHub');
 const { registerAdminLiffAnalyticsRoutes } = require('./routes/adminLiffAnalytics');
 const { registerAdminActivitiesRoutes } = require('./routes/adminActivities');
@@ -269,6 +271,13 @@ const linePush = createLinePushService({
 
 const emailProvider = createEmailProvider({ query });
 
+const flowEngine = createFlowEngine({
+  query,
+  pool,
+  linePush,
+  buildLineMessages: buildLineMessagesForLib
+});
+
 let initError = null;
 const initPromise = initDb({
   query,
@@ -387,7 +396,8 @@ app.post(
     inviteFriendsPerDraw: LIFF_INVITE_FRIENDS_PER_DRAW,
     linePushImageBaseCandidates: LINE_PUSH_IMAGE_BASE_CANDIDATES,
     liffLotteryPushUrl: LIFF_LOTTERY_PUSH_URL,
-    linePush
+    linePush,
+    flowEngine
   })
 );
 app.use(express.json());
@@ -501,6 +511,8 @@ registerAdminMessagesRoutes(app, {
   buildLineMessages: buildLineMessagesForLib
 });
 
+registerAdminFlowsRoutes(app, { flowEngine, authCore });
+
 registerAdminHubRoutes(app, { authCore });
 
 registerAdminLiffAnalyticsRoutes(app, { query, authCore });
@@ -509,7 +521,7 @@ registerAdminActivitiesRoutes(app, { query, pool, authCore });
 
 registerGamesRoutes(app, { query, pool });
 
-registerAdminRecipientListsRoutes(app, { query, pool, authCore });
+registerAdminRecipientListsRoutes(app, { query, pool, authCore, flowEngine });
 
 registerLiffRoutes(app, {
   query,

@@ -17,7 +17,8 @@ function createLineWebhookHandler({
   inviteFriendsPerDraw,
   linePushImageBaseCandidates = [],
   liffLotteryPushUrl = '',
-  linePush
+  linePush,
+  flowEngine = null
 }) {
   const friendsPerDraw = Math.max(1, Number.isFinite(Number(inviteFriendsPerDraw)) ? Number(inviteFriendsPerDraw) : 2);
   async function appendWebhookEventLog(payload) {
@@ -163,6 +164,12 @@ function createLineWebhookHandler({
 
         // D0 歡迎訊息：所有新好友都發（不分有沒有被邀請），每人一次、非阻塞
         await maybeSendD0Welcome(lineUserId);
+
+        // 自動化流程：觸發 follow-flows（非阻塞）
+        if (flowEngine && typeof flowEngine.triggerFollow === 'function') {
+          Promise.resolve().then(function () { return flowEngine.triggerFollow(lineUserId, null); })
+            .catch(function (e) { console.error('flow follow trigger failed:', e.message); });
+        }
 
         if (rewardResult?.result === 'rewarded' && linePush && typeof linePush.pushLineMessages === 'function') {
           Promise.resolve()
