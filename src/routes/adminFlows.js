@@ -21,6 +21,8 @@
  *   分支限制在主序列，yes/no 內只放 send/wait（中版，員工好懂）。
  */
 
+const { recordRestaurantClick } = require('../core/restaurantLinkParse');
+
 const KNOWN_EVENTS = [
   { value: 'app_open', label: '開啟今天吃什麼' },
   { value: 'submit_draw', label: '抽了一次餐廳' },
@@ -52,6 +54,13 @@ function registerAdminFlowsRoutes(app, deps) {
          SELECT $1, e.line_user_id, $2, $3 FROM admin_flow_enrollments e WHERE e.id = $1`,
         [eid, mid, target]
       ).catch(err => console.error('flow click log failed:', err.message));
+      // 記餐廳興趣（從連結反推餐廳）— best-effort
+      query(`SELECT line_user_id FROM admin_flow_enrollments WHERE id = $1`, [eid])
+        .then(r => {
+          const luid = r.rows[0] && r.rows[0].line_user_id;
+          if (luid) return recordRestaurantClick(query, { lineUserId: luid, url: target, source: 'flow' });
+        })
+        .catch(err => console.error('restaurant click (flow) failed:', err.message));
       return res.redirect(302, target);
     } catch (err) {
       console.error('flow click redirect error:', err && err.message);
@@ -149,7 +158,7 @@ function registerAdminFlowsRoutes(app, deps) {
     if (!name) return { ok: false, error: 'name_required' };
     const trigger = body.trigger || {};
     const tType = trigger.type;
-    if (!['follow', 'list_join', 'event', 'schedule', 'game_play', 'broadcast_click'].includes(tType)) return { ok: false, error: 'invalid_trigger_type' };
+    if (!['follow', 'list_join', 'event', 'schedule', 'game_play', 'broadcast_click', 'restaurant_click'].includes(tType)) return { ok: false, error: 'invalid_trigger_type' };
     const tCfg = trigger.config || {};
     if (tType === 'list_join' && !(Number(tCfg.list_id) > 0)) return { ok: false, error: 'list_join_needs_list' };
     if (tType === 'event' && !String(tCfg.event_name || '').trim()) return { ok: false, error: 'event_needs_name' };

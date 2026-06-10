@@ -161,6 +161,31 @@ function createFlowEngine({ query, pool, linePush, buildLineMessages }) {
     return enrolled;
   }
 
+  // restaurant_click：點了訊息裡的餐廳連結（user_restaurant_clicks）
+  async function runRestaurantClickTriggers() {
+    const flows = await getActiveFlowsByTrigger('restaurant_click');
+    let enrolled = 0;
+    for (const f of flows) {
+      const cursor = await getCursor(f.id, `SELECT COALESCE(MAX(id),0)::bigint AS m FROM user_restaurant_clicks`);
+      const rs = await query(
+        `SELECT id, line_user_id, restaurant_query, poi_id FROM user_restaurant_clicks
+         WHERE id > $1 AND line_user_id IS NOT NULL AND BTRIM(line_user_id) <> ''
+         ORDER BY id ASC LIMIT 500`,
+        [cursor]
+      );
+      let maxId = cursor;
+      for (const row of rs.rows) {
+        maxId = Math.max(maxId, Number(row.id));
+        const r = await enrollUser(f, row.line_user_id, {
+          context: { trigger: 'restaurant_click', restaurant: row.restaurant_query || row.poi_id || null, click_id: Number(row.id) }
+        });
+        if (r.enrolled) enrolled++;
+      }
+      if (maxId > cursor) await setCursor(f.id, maxId);
+    }
+    return enrolled;
+  }
+
   // broadcast_click：點了推播連結（admin_broadcast_clicks）
   async function runBroadcastClickTriggers() {
     const flows = await getActiveFlowsByTrigger('broadcast_click');
@@ -477,6 +502,7 @@ function createFlowEngine({ query, pool, linePush, buildLineMessages }) {
       ev += await runEventTriggers();
       ev += await runGamePlayTriggers();
       ev += await runBroadcastClickTriggers();
+      ev += await runRestaurantClickTriggers();
       result.eventEnrolled = ev;
     } catch (e) { console.error('event trig err', e.message); }
     try { const a = await advanceDue({ limit: 100 }); result.advanced = a.processed; } catch (e) { console.error('advance err', e.message); }
@@ -490,6 +516,7 @@ function createFlowEngine({ query, pool, linePush, buildLineMessages }) {
     runEventTriggers,
     runGamePlayTriggers,
     runBroadcastClickTriggers,
+    runRestaurantClickTriggers,
     runScheduleTriggers,
     advanceDue,
     run,

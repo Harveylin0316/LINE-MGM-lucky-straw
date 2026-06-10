@@ -39,6 +39,7 @@
           <option value="list_join">被加進某名單</option>
           <option value="game_play">玩了活動遊戲 / 中獎</option>
           <option value="broadcast_click">點了群發訊息的連結</option>
+          <option value="restaurant_click">點了訊息裡的餐廳連結</option>
           <option value="event">LIFF 事件（今天吃什麼…）</option>
           <option value="schedule">定時（每天/每週/每月）</option>
         </select>
@@ -118,7 +119,7 @@
         var flow={name:'',re_enroll:false,trigger:{type:'follow',config:{}},steps:[]};
         var editingId=null;
 
-        var TRIGGER_LABEL={follow:'加好友',list_join:'加入名單',event:'LIFF事件',schedule:'定時',game_play:'玩遊戲/中獎',broadcast_click:'點推播'};
+        var TRIGGER_LABEL={follow:'加好友',list_join:'加入名單',event:'LIFF事件',schedule:'定時',game_play:'玩遊戲/中獎',broadcast_click:'點推播',restaurant_click:'點餐廳連結'};
 
         function loadOptions(cb){
           fetch('/admin/flows/api/options').then(function(r){return r.json();}).then(function(d){
@@ -209,6 +210,8 @@
               '<label class="fl-check"><input type="checkbox" id="tc-prizeonly"'+(c.prize_only?' checked':'')+'> <span>只在中獎時觸發</span></label>';
           }else if(t==='broadcast_click'){
             h='<p class="muted" style="font-size:13px;margin:0 0 8px;">用戶點了任何一則群發訊息的連結時觸發。</p>';
+          }else if(t==='restaurant_click'){
+            h='<p class="muted" style="font-size:13px;margin:0 0 8px;">用戶點了訊息裡的「餐廳連結」時觸發（系統自動從連結認出是餐廳）。適合做「看了餐廳 → 跟進推薦」。</p>';
           }else if(t==='event'){
             h='<div class="fl-field"><span>哪個事件發生時</span><select id="tc-event">'+eventOptionsHtml(c.event_name)+'</select></div>';
           }else if(t==='schedule'){

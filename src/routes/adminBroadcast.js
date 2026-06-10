@@ -268,6 +268,13 @@ function registerAdminBroadcastRoutes(app, deps) {
           variant
         ]
       ).catch(err => console.error('click log (rid) failed:', err.message));
+      // 記餐廳興趣（從連結反推餐廳）— best-effort
+      query(`SELECT line_user_id FROM admin_broadcast_recipients WHERE id = $1 AND broadcast_id = $2`, [recipientId, broadcastId])
+        .then(r => {
+          const luid = r.rows[0] && r.rows[0].line_user_id;
+          if (luid) return recordRestaurantClick(query, { lineUserId: luid, url: targetUrl, source: 'broadcast' });
+        })
+        .catch(err => console.error('restaurant click (broadcast) failed:', err.message));
       return res.redirect(302, targetUrl);
     } catch (err) {
       console.error('redirect (rid) error:', err.message);
