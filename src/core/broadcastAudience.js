@@ -20,11 +20,22 @@ const PREVIEW_SAMPLE_LIMIT = 10;
 function normalizeConditions(raw) {
   const safe = raw && typeof raw === 'object' ? raw : {};
   const out = {
+    allMembers: false,
+    joinedWithinDays: null,
     prizeFilter: null,
     inviteCompletedMin: null,
     drewInCampaign: null,
     savedListId: null
   };
+
+  if (safe.allMembers === true || safe.allMembers === 'true') {
+    out.allMembers = true;
+  }
+
+  const jwd = Number(safe.joinedWithinDays);
+  if (Number.isInteger(jwd) && jwd > 0 && jwd <= 3650) {
+    out.joinedWithinDays = jwd;
+  }
 
   if (safe.prizeFilter && typeof safe.prizeFilter === 'object') {
     const mode = ['any', 'all', 'none'].includes(safe.prizeFilter.mode) ? safe.prizeFilter.mode : 'any';
@@ -55,6 +66,8 @@ function normalizeConditions(raw) {
 
 function hasAnyCondition(conds) {
   return Boolean(
+    conds.allMembers ||
+    conds.joinedWithinDays !== null ||
     conds.savedListId ||
     conds.prizeFilter ||
     conds.inviteCompletedMin !== null ||
@@ -69,6 +82,16 @@ function buildWhere(conds) {
     "BTRIM(u.line_user_id) <> ''",
     "u.is_admin = false"
   ];
+
+  // allMembers = 全部會員（不套用其他行為條件，但加入時間仍可疊加）
+  if (conds.joinedWithinDays !== null) {
+    params.push(conds.joinedWithinDays);
+    where.push(`u.created_at >= now() - ($${params.length}::int * interval '1 day')`);
+  }
+  // allMembers 為 true 時，跳過後面的行為條件（prize/invite/drew）
+  if (conds.allMembers) {
+    return { whereSql: where.join(' AND '), params };
+  }
 
   if (conds.prizeFilter) {
     params.push(conds.prizeFilter.prizeNames);

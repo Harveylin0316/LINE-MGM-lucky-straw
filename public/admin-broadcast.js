@@ -141,6 +141,16 @@
       var listId = parseInt(sel, 10);
       return Number.isInteger(listId) && listId > 0 ? { savedListId: listId } : {};
     }
+    // 加入時間（不限/1/7/30/90）
+    var joinedWithinDays = null;
+    var jw = $('joined-within') ? $('joined-within').value : '';
+    if (jw) { var jwn = parseInt(jw, 10); if (Number.isInteger(jwn) && jwn > 0) joinedWithinDays = jwn; }
+
+    // 全部會員：忽略行為條件，但保留加入時間
+    if ($('all-members') && $('all-members').checked) {
+      return { allMembers: true, joinedWithinDays: joinedWithinDays };
+    }
+
     // conditions（預設）
     var prizeNames = $$('input[name="prize_name"]:checked').map(function (el) { return el.value; });
     var prizeFilter = null;
@@ -160,8 +170,28 @@
     var drewInCampaign = null;
     if (drewRaw === 'true') drewInCampaign = true;
     else if (drewRaw === 'false') drewInCampaign = false;
-    return { prizeFilter: prizeFilter, inviteCompletedMin: inviteCompletedMin, drewInCampaign: drewInCampaign };
+    return { joinedWithinDays: joinedWithinDays, prizeFilter: prizeFilter, inviteCompletedMin: inviteCompletedMin, drewInCampaign: drewInCampaign };
   }
+
+  // 全部會員 toggle：勾選時把行為條件變灰、重置預覽
+  (function wireAllMembers() {
+    var amEl = $('all-members');
+    var jwEl = $('joined-within');
+    function refresh() {
+      var on = amEl && amEl.checked;
+      var bc = $('behavior-conditions');
+      if (bc) { bc.style.opacity = on ? '0.4' : '1'; bc.style.pointerEvents = on ? 'none' : 'auto'; }
+      state.audiencePreviewedTotal = null;
+      var st = $('audience-status'); if (st) st.textContent = '尚未預覽';
+      updateSendButton();
+    }
+    if (amEl) amEl.addEventListener('change', refresh);
+    if (jwEl) jwEl.addEventListener('change', function () {
+      state.audiencePreviewedTotal = null;
+      var st = $('audience-status'); if (st) st.textContent = '尚未預覽';
+      updateSendButton();
+    });
+  })();
 
   // ------------------------------------------------------------------
   // 3. audience preview

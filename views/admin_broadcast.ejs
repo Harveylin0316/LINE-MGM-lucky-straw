@@ -139,7 +139,25 @@
 
             <div class="audience-pane" id="audience-pane-conditions">
 
-            <div class="broadcast-field">
+            <div class="broadcast-field" style="background:#FFFBEB;border:1px solid #FDE68A;border-radius:8px;padding:12px;">
+              <label class="broadcast-inline-field" style="font-weight:600;">
+                <input type="checkbox" id="all-members" />
+                <span>發送給全部會員</span>
+              </label>
+              <div class="muted" style="font-size:12px;margin-top:4px;">勾選後忽略下方的獎品/邀請/刮獎條件（可搭配「加入時間」一起用）。</div>
+              <div class="broadcast-inline-field" style="margin-top:10px;">
+                <span>加入時間</span>
+                <select id="joined-within" style="width:160px;">
+                  <option value="">不限</option>
+                  <option value="1">1 天內加入</option>
+                  <option value="7">7 天內加入</option>
+                  <option value="30">30 天內加入</option>
+                  <option value="90">90 天內加入</option>
+                </select>
+              </div>
+            </div>
+
+            <div class="broadcast-field" id="behavior-conditions">
               <div class="broadcast-field-label">中過獎品（可多選）</div>
               <div class="prize-checkbox-list">
                 ${
