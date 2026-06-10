@@ -1,7 +1,6 @@
 const crypto = require('crypto');
 const { applyInviteFollowReward } = require('../core/inviteReward');
 const { buildInviteRewardPushMessages } = require('../core/inviteRewardPushMessages');
-const d0Welcome = require('../core/d0WelcomeMessage');
 
 function safeEqualBase64(a, b) {
   const left = Buffer.from(a || '', 'utf8');
@@ -40,32 +39,6 @@ function createLineWebhookHandler({
         payload.rawEvent ? JSON.stringify(payload.rawEvent) : JSON.stringify({})
       ]
     );
-  }
-
-  // D0 歡迎訊息：每個 line_user_id 一生只發一次（INSERT ON CONFLICT 當去重鎖）
-  // gated by env D0_WELCOME_ENABLED=1；非阻塞、best-effort。
-  async function maybeSendD0Welcome(lineUserId) {
-    if (!d0Welcome.isEnabled()) return;
-    if (!lineUserId) return;
-    if (!linePush || typeof linePush.pushLineMessages !== 'function') return;
-    let firstTime = false;
-    try {
-      const ins = await pool.query(
-        `INSERT INTO d0_welcome_sends (line_user_id) VALUES ($1)
-         ON CONFLICT (line_user_id) DO NOTHING
-         RETURNING line_user_id`,
-        [lineUserId]
-      );
-      firstTime = ins.rowCount === 1;
-    } catch (err) {
-      console.error('d0 dedup insert failed:', err.message);
-      return; // 去重失敗就不發，避免重複轟炸
-    }
-    if (!firstTime) return;
-    const flex = d0Welcome.buildD0WelcomeMessage();
-    Promise.resolve()
-      .then(() => linePush.pushLineMessages(lineUserId, [flex], { pushType: 'd0_welcome' }))
-      .catch(err => console.error('d0 welcome push failed:', err.message));
   }
 
   async function rewardInviteForFollow(lineUserId, eventTimestamp) {
@@ -162,10 +135,7 @@ function createLineWebhookHandler({
           rawEvent: event || {}
         });
 
-        // D0 歡迎訊息：所有新好友都發（不分有沒有被邀請），每人一次、非阻塞
-        await maybeSendD0Welcome(lineUserId);
-
-        // 自動化流程：觸發 follow-flows（非阻塞）
+        // 自動化流程：觸發 follow-flows（取代舊的寫死 D0；歡迎訊息改由流程系統發）
         if (flowEngine && typeof flowEngine.triggerFollow === 'function') {
           Promise.resolve().then(function () { return flowEngine.triggerFollow(lineUserId, null); })
             .catch(function (e) { console.error('flow follow trigger failed:', e.message); });

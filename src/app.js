@@ -16,8 +16,6 @@ const { registerLiffRoutes } = require('./routes/liff');
 const { registerAdminBroadcastRoutes } = require('./routes/adminBroadcast');
 const { registerAdminLeaderboardRoutes } = require('./routes/adminLeaderboard');
 const bookingLeaderboard = require('./core/bookingLeaderboard');
-const { registerAdminD0Routes } = require('./routes/adminD0');
-const d0Welcome = require('./core/d0WelcomeMessage');
 const { registerAdminMessagesRoutes } = require('./routes/adminMessages');
 const { buildLineMessages: buildLineMessagesForLib } = require('./core/broadcastTemplates');
 const { registerAdminFlowsRoutes } = require('./routes/adminFlows');
@@ -495,14 +493,6 @@ registerAdminLeaderboardRoutes(app, {
   lineChannelAccessToken: LINE_CHANNEL_ACCESS_TOKEN,
   bookingLeaderboard,
   resolvePublicSiteOrigin
-});
-
-registerAdminD0Routes(app, {
-  query,
-  authCore,
-  linePush,
-  lineChannelAccessToken: LINE_CHANNEL_ACCESS_TOKEN,
-  d0Welcome
 });
 
 registerAdminMessagesRoutes(app, {
