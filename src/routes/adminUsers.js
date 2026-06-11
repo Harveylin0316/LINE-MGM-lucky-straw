@@ -57,7 +57,7 @@ function registerAdminUsersRoutes(app, deps) {
     if (!/^U[0-9a-f]{32}$/i.test(luid)) return jsonErr(res, 400, 'invalid_line_user_id');
     try {
       const uRs = await query(
-        `SELECT id, line_user_id, line_display_name, line_picture_url, username, email,
+        `SELECT id, line_user_id, line_display_name, line_picture_url, username,
                 created_at, blocked_at, invite_code, draws_left, extra_draws
          FROM users WHERE line_user_id = $1`,
         [luid]
@@ -65,15 +65,11 @@ function registerAdminUsersRoutes(app, deps) {
       const profile = uRs.rows[0] || { line_user_id: luid };
       const userId = profile.id || null;
 
-      // RFM 增益：用 lineId（優先）或 email 對應外部 RFM 檔案
+      // RFM 增益：OA users 表沒有 email，故僅以 lineId 配對外部 RFM 檔案
       const rfmRs = await query(
-        `SELECT rfm_user_id, recency, frequency, monetary_est, email, phone, updated_at,
-                (line_user_id = $1) AS matched_by_line
-         FROM rfm_profiles
-         WHERE line_user_id = $1
-            OR ($2 <> '' AND email IS NOT NULL AND LOWER(email) = LOWER($2))
-         ORDER BY (line_user_id = $1) DESC LIMIT 1`,
-        [luid, String(profile.email || '')]
+        `SELECT rfm_user_id, recency, frequency, monetary_est, email, phone, updated_at, true AS matched_by_line
+         FROM rfm_profiles WHERE line_user_id = $1 LIMIT 1`,
+        [luid]
       );
       const rfm = rfmRs.rows[0] || null;
 

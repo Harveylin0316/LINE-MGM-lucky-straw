@@ -6,6 +6,17 @@
     <title>OpenRice LINE CRM 後台</title>
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <link rel="stylesheet" href="/style.css" />
+    <style>
+      .navgrp { position: relative; display: inline-block; }
+      .navgrp-btn { cursor: pointer; border: 0; background: none; font: inherit; display: inline-flex; align-items: center; gap: 5px; }
+      .navgrp-caret { font-size: 10px; opacity: .65; }
+      .navgrp-menu { position: absolute; top: 100%; right: 0; margin-top: 8px; background: #fff; border: 1px solid #ECECEE; border-radius: 12px; box-shadow: 0 10px 30px rgba(0,0,0,.14); min-width: 170px; padding: 6px; display: none; z-index: 100; }
+      .navgrp:hover .navgrp-menu, .navgrp:focus-within .navgrp-menu { display: block; }
+      .navgrp-menu a { display: block; padding: 10px 12px; border-radius: 8px; color: #374151; text-decoration: none; font-size: 14px; white-space: nowrap; }
+      .navgrp-menu a:hover { background: #F9FAFB; }
+      .navgrp-menu a.active { background: #FFFBEB; color: #1f2937; font-weight: 700; }
+      .navgrp-btn.has-active { color: #FCC726; }
+    </style>
   </head>
   <body class="<%= typeof bodyClass === 'string' && bodyClass.trim() ? bodyClass.trim() : '' %>">
     <header class="topbar<%= typeof bodyClass === 'string' && String(bodyClass).includes('admin-shell') ? ' topbar--admin' : '' %>">
@@ -21,16 +32,31 @@
           <% if (user) { %>
           <span class="welcome">嗨，<%= user %></span>
           <% if (isAdmin) { %>
-          <a href="/admin/broadcast" class="nav-item">群發訊息</a>
-          <a href="/admin/messages" class="nav-item">訊息庫</a>
-          <a href="/admin/flows" class="nav-item">自動化流程</a>
-          <a href="/admin/recipient-lists" class="nav-item">名單庫</a>
-          <a href="/admin/users" class="nav-item">用戶檔案</a>
-          <a href="/admin/rfm" class="nav-item">RFM 資料層</a>
-          <a href="/admin/referrals" class="nav-item">邀請成效</a>
-          <a href="/admin/activities" class="nav-item">活動管理</a>
-          <a href="/admin/liff/random-rice" class="nav-item">LIFF 數據分析</a>
-          <a href="/admin/campaigns/spring" class="nav-item">春日饗里活動</a>
+          <div class="navgrp">
+            <button type="button" class="nav-item navgrp-btn">訊息 <span class="navgrp-caret">▾</span></button>
+            <div class="navgrp-menu">
+              <a href="/admin/broadcast">群發訊息</a>
+              <a href="/admin/messages">訊息庫</a>
+              <a href="/admin/flows">自動化流程</a>
+            </div>
+          </div>
+          <div class="navgrp">
+            <button type="button" class="nav-item navgrp-btn">名單與用戶 <span class="navgrp-caret">▾</span></button>
+            <div class="navgrp-menu">
+              <a href="/admin/recipient-lists">名單庫</a>
+              <a href="/admin/users">用戶檔案</a>
+              <a href="/admin/rfm">RFM 資料層</a>
+            </div>
+          </div>
+          <div class="navgrp">
+            <button type="button" class="nav-item navgrp-btn">活動 <span class="navgrp-caret">▾</span></button>
+            <div class="navgrp-menu">
+              <a href="/admin/activities">活動管理</a>
+              <a href="/admin/referrals">邀請成效</a>
+              <a href="/admin/campaigns/spring">春日饗里活動</a>
+              <a href="/admin/liff/random-rice">LIFF 數據分析</a>
+            </div>
+          </div>
           <% } %>
           <form action="/logout" method="post" class="inline-form topbar-logout">
             <button type="submit">登出</button>
@@ -44,6 +70,20 @@
     <main class="container">
       <%- body %>
     </main>
+    <script>
+      (function () {
+        var p = location.pathname;
+        document.querySelectorAll('.navgrp').forEach(function (g) {
+          var btn = g.querySelector('.navgrp-btn');
+          var has = false;
+          g.querySelectorAll('.navgrp-menu a').forEach(function (a) {
+            var h = a.getAttribute('href');
+            if (h && (p === h || p.indexOf(h + '/') === 0)) { a.classList.add('active'); has = true; }
+          });
+          if (has && btn) btn.classList.add('has-active');
+        });
+      })();
+    </script>
   </body>
 </html>
 

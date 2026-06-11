@@ -81,8 +81,6 @@ function registerAdminRfmRoutes(app, deps) {
           (SELECT COUNT(*)::int FROM rfm_profiles WHERE line_user_id IS NOT NULL AND line_user_id <> '') AS with_lineid,
           (SELECT COUNT(*)::int FROM rfm_profiles r WHERE EXISTS (
              SELECT 1 FROM users u WHERE u.line_user_id = r.line_user_id AND u.is_admin = false)) AS matched_oa_by_line,
-          (SELECT COUNT(*)::int FROM rfm_profiles r WHERE r.email IS NOT NULL AND r.email <> '' AND EXISTS (
-             SELECT 1 FROM users u WHERE LOWER(u.email) = LOWER(r.email) AND u.is_admin = false)) AS matched_oa_by_email,
           (SELECT COUNT(*)::int FROM rfm_profiles WHERE email IS NOT NULL AND email <> '') AS with_email,
           (SELECT COUNT(*)::int FROM rfm_profiles WHERE phone IS NOT NULL AND phone <> '') AS with_phone,
           (SELECT COUNT(*)::int FROM rfm_profiles WHERE recency <= 30) AS r_le30,
