@@ -31,6 +31,8 @@
       .rf-stat.warn{background:#FEF2F2;border-color:#FCA5A5;}
       .rf-stat.warn .v{color:#b91c1c;}
       .rf-callout{background:#FFFBEB;border:1px solid #FCC726;border-radius:10px;padding:12px 14px;font-size:13px;color:#92400e;line-height:1.7;margin-top:14px;}
+      .rf-toggle{margin-top:14px;padding:8px 14px;background:#fff;border:1px solid #ECECEE;border-radius:8px;font-size:13px;font-weight:600;color:#374151;cursor:pointer;}
+      .rf-toggle:hover{border-color:#1f2937;}
       .rf-table{width:100%;border-collapse:collapse;font-size:13px;margin-top:8px;}
       .rf-table th,.rf-table td{padding:9px 12px;border-bottom:1px solid #F3F4F6;text-align:left;}
       .rf-table th{background:#FAFAFA;font-size:11px;color:#6B6B70;font-weight:600;text-transform:uppercase;letter-spacing:.04em;}
@@ -59,16 +61,24 @@
             legacyHtml+='<div class="rf-callout"><strong>注意：</strong>有 '+s.success_unrewarded+' 個被邀請的人「其實已經加你 OA」，但舊機制沒把獎勵發給邀請人（卡在 pending）。也就是這檔邀請活動其實成功帶進了 '+s.success+' 個好友，只是發獎流程漏掉了大部分。</div>';
           }
           if(d.legacy&&d.legacy.length){
-            legacyHtml+='<table class="rf-table"><thead><tr><th></th><th>邀請人</th><th style="text-align:right;">邀請數</th><th style="text-align:right;">真實成功</th><th style="text-align:right;">已發獎勵</th></tr></thead><tbody>'+
+            legacyHtml+='<button type="button" id="rf-legacy-toggle" class="rf-toggle">展開排行榜（'+d.legacy.length+' 位邀請人）</button>'+
+              '<div id="rf-legacy-table" hidden><table class="rf-table"><thead><tr><th></th><th>邀請人</th><th style="text-align:right;">邀請數</th><th style="text-align:right;">真實成功</th><th style="text-align:right;">已發獎勵</th></tr></thead><tbody>'+
               d.legacy.map(function(r,i){
                 return '<tr><td class="rf-rank">'+(i+1)+'</td>'+
                   '<td>'+esc(r.inviter_name)+'<br><span class="muted" style="font-size:11px;">'+esc(shortUid(r.inviter_line))+'</span></td>'+
                   '<td class="num">'+r.invites+'</td>'+
                   '<td class="num"><strong>'+r.success+'</strong></td>'+
                   '<td class="num">'+r.rewarded+'</td></tr>';
-              }).join('')+'</tbody></table>';
+              }).join('')+'</tbody></table></div>';
           }else{legacyHtml+='<p class="muted" style="font-size:13px;">尚無邀請紀錄。</p>';}
           $('rf-legacy').innerHTML=legacyHtml;
+          var lt=document.getElementById('rf-legacy-toggle');
+          if(lt)lt.addEventListener('click',function(){
+            var t=document.getElementById('rf-legacy-table');
+            if(!t)return;
+            t.hidden=!t.hidden;
+            lt.textContent=(t.hidden?'展開':'收合')+'排行榜（'+d.legacy.length+' 位邀請人）';
+          });
 
           // 活動邀請：先列有開 MGM 的活動，再放各自排行
           var box=$('rf-activity');var h='';
