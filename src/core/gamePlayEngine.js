@@ -10,10 +10,25 @@
  *
  * 共用邏輯確保所有遊戲類型「中獎邏輯一致」「資料一致」「未來可重用 helper」
  */
+const { verifyOaFollower } = require('./oaFollower');
 
 async function selectPrizeAndRecord(opts) {
   const { pool, activitySlug, gameType, lineUserId, lineDisplayName, req } = opts;
   if (!lineUserId) return { error: { status: 400, code: 'missing_line_user_id' } };
+
+  // require_follow_oa：先在交易外用 LINE API 確認是否加 OA 好友（不佔用 DB 連線）
+  try {
+    const preChk = await pool.query(
+      `SELECT require_follow_oa FROM activities WHERE slug = $1 AND game_type = $2 LIMIT 1`,
+      [activitySlug, gameType]
+    );
+    if (preChk.rows[0] && preChk.rows[0].require_follow_oa) {
+      const f = await verifyOaFollower(lineUserId);
+      if (f === false) {
+        return { error: { status: 403, code: 'must_follow_oa', detail: '請先加入官方帳號好友才能參加。' } };
+      }
+    }
+  } catch (e) { console.error('require_follow_oa precheck error:', e && e.message); }
 
   const client = await pool.connect();
   try {
@@ -126,6 +141,17 @@ async function selectPrizeAndRecord(opts) {
     if (prizes.length === 0) {
       await client.query('ROLLBACK');
       return { error: { status: 503, code: 'no_prize_available', detail: '所有獎品都已抽完。' } };
+    }
+
+    // 併發防護：取得獎品列鎖（FOR UPDATE）後複查遊玩數，避免併發 /play 超領
+    // （所有 play 都鎖同一批 activity_prizes 列 → 同活動同用戶會被序列化）
+    const { rows: reCount } = await client.query(
+      'SELECT COUNT(*) AS c FROM activity_plays WHERE activity_id = $1 AND line_user_id = $2',
+      [a.id, lineUserId]
+    );
+    if (Number(reCount[0].c) >= totalQuota) {
+      await client.query('ROLLBACK');
+      return { error: { status: 429, code: 'quota_exhausted', detail: '次數已用完。' } };
     }
 
     // 5) 加權隨機
@@ -264,6 +290,11 @@ async function registerReferral({ query, activitySlug, gameType, inviterId, invi
   const a = act[0];
   if (!a.referral_bonus_per || a.referral_bonus_per <= 0) {
     return { error: { status: 400, code: 'mgm_disabled', detail: '此活動未啟用邀請機制' } };
+  }
+  // 只認「真實加 OA 好友的被邀者」：擋偽造假 id 灌配額、確保邀請真的長 OA、獎勵對應真實獲客
+  const invFollows = await verifyOaFollower(inviteeId);
+  if (invFollows === false) {
+    return { error: { status: 400, code: 'invitee_not_follower', detail: '被邀請的人要先加官方帳號好友，邀請才算成功。' } };
   }
   const ins = await query(
     `INSERT INTO activity_referrals (activity_id, inviter_line_user_id, invitee_line_user_id)
