@@ -369,6 +369,7 @@
 
       var drawing = false;
       var profile = null;
+      var idToken = null;
       var liffReady = false;
 
       async function initLiff() {
@@ -386,6 +387,7 @@
         if (!liff.isInClient()) throw new Error('請在 LINE App 內打開');
         if (!liff.isLoggedIn()) { liff.login(); return new Promise(function () {}); }
         profile = await liff.getProfile();
+        try { idToken = liff.getIDToken(); } catch (e) {}
       }
 
       async function maybeRegisterReferral() {
@@ -395,7 +397,7 @@
           if (!inviter || !profile || !profile.userId || inviter === profile.userId) return;
           await fetch('/api/games/fortune/' + encodeURIComponent(slug) + '/referral', {
             method: 'POST', headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ line_user_id: profile.userId, inviter_line_user_id: inviter })
+            body: JSON.stringify({ line_user_id: profile.userId, inviter_line_user_id: inviter, id_token: idToken })
           });
           var url = new URL(location.href);
           url.searchParams.delete('ref');
@@ -407,7 +409,7 @@
         try {
           if (!profile || !profile.userId) return;
           var resp = await fetch('/api/games/fortune/' + encodeURIComponent(slug) +
-            '/meta?line_user_id=' + encodeURIComponent(profile.userId)).then(function (r) { return r.json(); });
+            '/meta?line_user_id=' + encodeURIComponent(profile.userId) + '&id_token=' + encodeURIComponent(idToken || '')).then(function (r) { return r.json(); });
           if (!resp.ok || !resp.quota) return;
           renderQuota(resp.quota);
         } catch (e) { console.warn('quota fetch failed:', e); }
@@ -456,7 +458,7 @@
         try {
           var resp = await fetch('/api/games/fortune/' + encodeURIComponent(slug) + '/play', {
             method: 'POST', headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ line_user_id: profile.userId, line_display_name: profile.displayName || null })
+            body: JSON.stringify({ line_user_id: profile.userId, line_display_name: profile.displayName || null, id_token: idToken })
           }).then(function (r) { return r.json(); });
 
           if (!resp.ok) {

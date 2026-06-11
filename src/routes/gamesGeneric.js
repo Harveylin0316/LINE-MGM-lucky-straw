@@ -18,10 +18,34 @@
 const {
   selectPrizeAndRecord, computeUserQuota, registerReferral
 } = require('../core/gamePlayEngine');
+const { verifyLiffIdToken, channelIdFromLiffId } = require('../core/liffAuth');
 
 function registerGameType(app, deps, opts) {
   const { query, pool } = deps;
   const { gameType, viewName, defaultLiffId } = opts;
+
+  // LIFF id token 驗證探針（階段一：驗證但不強制，只記錄結果，確認可行後再切強制）
+  // fire-and-forget：絕不阻塞或讓既有遊戲失敗。
+  async function probeLiffToken(endpoint, slug, bodyUid, idToken) {
+    if (!idToken) return;
+    try {
+      let channelId = channelIdFromLiffId(defaultLiffId);
+      try {
+        const r = await query(`SELECT liff_id_override FROM activities WHERE slug = $1 AND game_type = $2 LIMIT 1`, [slug, gameType]);
+        const ov = r.rows[0] && r.rows[0].liff_id_override;
+        if (ov && String(ov).trim()) channelId = channelIdFromLiffId(ov);
+      } catch (e) { /* ignore */ }
+      const v = await verifyLiffIdToken(idToken, channelId);
+      const verified = !!v.ok;
+      const matches = !!(verified && v.sub && bodyUid && v.sub === bodyUid);
+      await query(
+        `INSERT INTO liff_token_probe (endpoint, game_type, slug, body_line_user_id, token_present, verified, verified_sub, sub_matches, channel_id, detail)
+         VALUES ($1,$2,$3,$4,true,$5,$6,$7,$8,$9)`,
+        [endpoint, gameType, slug, bodyUid || null, verified, v.sub || null, matches, channelId || null,
+         (v.reason || 'ok') + (v.detail ? (' ' + v.detail) : '') + (v.status ? (' http' + v.status) : '')]
+      );
+    } catch (e) { console.error('probeLiffToken failed:', e && e.message); }
+  }
 
   // ----- 頁面 -----
   app.get('/games/' + gameType + '/:slug', async (req, res) => {
@@ -66,6 +90,7 @@ function registerGameType(app, deps, opts) {
     try {
       const slug = String(req.params.slug || '').trim();
       const lineUserId = String(req.query.line_user_id || '').trim();
+      probeLiffToken('meta', slug, lineUserId, String(req.query.id_token || '').trim());
       const { rows: act } = await query(
         `SELECT id, slug, name, description, status, start_at, end_at,
                 cover_image_url, daily_plays_per_user, require_follow_oa,
@@ -97,6 +122,7 @@ function registerGameType(app, deps, opts) {
     const slug = String(req.params.slug || '').trim();
     const lineUserId = String((req.body || {}).line_user_id || '').trim();
     const lineDisplayName = String((req.body || {}).line_display_name || '').trim() || null;
+    probeLiffToken('play', slug, lineUserId, String((req.body || {}).id_token || '').trim());
     const result = await selectPrizeAndRecord({
       pool, activitySlug: slug, gameType, lineUserId, lineDisplayName, req
     });
@@ -117,6 +143,7 @@ function registerGameType(app, deps, opts) {
     const slug = String(req.params.slug || '').trim();
     const inviteeId = String((req.body || {}).line_user_id || '').trim();
     const inviterId = String((req.body || {}).inviter_line_user_id || '').trim();
+    probeLiffToken('referral', slug, inviteeId, String((req.body || {}).id_token || '').trim());
     const result = await registerReferral({
       query, activitySlug: slug, gameType, inviterId, inviteeId
     });
