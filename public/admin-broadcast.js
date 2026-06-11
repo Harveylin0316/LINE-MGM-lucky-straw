@@ -30,7 +30,8 @@
     currentBroadcastId: null,
     sending: false,
     sendMode: 'immediate',  // 'immediate' | 'scheduled'
-    abTestEnabled: false
+    abTestEnabled: false,
+    themeColor: null        // 主題底色：目前被當作「深色主題」的 backgroundColor 值
   };
 
   // ------------------------------------------------------------------
@@ -49,6 +50,7 @@
       state.messagePreviewed = false;
       updateSendButton();
       saveDraft();
+      syncThemeColorBar();
       schedulePreview();
     });
   }
@@ -483,6 +485,17 @@
     var el = $(id);
     if (el) el.addEventListener('input', schedulePreview);
   });
+
+  // 主題底色取色器：一鍵換深色區塊底色
+  (function () {
+    var input = $('theme-bg-color');
+    var resetBtn = $('theme-bg-reset');
+    if (input) input.addEventListener('input', function (e) { applyThemeColor(e.target.value); });
+    if (resetBtn) resetBtn.addEventListener('click', function () {
+      applyThemeColor('#1F2937');
+      if (input) input.value = '#1f2937';
+    });
+  })();
 
   // ------------------------------------------------------------------
   // 7. render Flex mock (支援 bubble 跟 carousel，含 header/hero/body/footer)
@@ -972,6 +985,80 @@
       return '#' + m[1].split('').map(function (x) { return x + x; }).join('');
     }
     return c.toLowerCase();
+  }
+
+  // ===== 主題底色：一鍵換掉所有深色區塊的 backgroundColor（不動文字色）=====
+  function colorIsDark(hex) {
+    var m = /^#([0-9a-f]{6})$/i.exec(hex || '');
+    if (!m) return false;
+    var n = parseInt(m[1], 16);
+    var r = (n >> 16) & 255, g = (n >> 8) & 255, b = n & 255;
+    var lum = (0.2126 * r + 0.7152 * g + 0.0722 * b) / 255;
+    return lum < 0.45;
+  }
+  function collectBgColors(node, acc) {
+    if (Array.isArray(node)) { node.forEach(function (x) { collectBgColors(x, acc); }); return; }
+    if (!node || typeof node !== 'object') return;
+    if (typeof node.backgroundColor === 'string') {
+      var k = node.backgroundColor.toLowerCase();
+      acc[k] = (acc[k] || 0) + 1;
+    }
+    Object.keys(node).forEach(function (key) {
+      if (node[key] && typeof node[key] === 'object') collectBgColors(node[key], acc);
+    });
+  }
+  // 找出最常用的「深色」backgroundColor 當作主題色（沒有則回 null）
+  function detectThemeDark(flex) {
+    var acc = {};
+    collectBgColors(flex, acc);
+    var best = null, bestCount = 0;
+    Object.keys(acc).forEach(function (hex) {
+      if (colorIsDark(hex) && acc[hex] > bestCount) { best = hex; bestCount = acc[hex]; }
+    });
+    return best;
+  }
+  // 只改 backgroundColor，絕不動 color（按鈕深字才不會壞）
+  function deepReplaceBgColor(node, fromHex, toHex) {
+    if (Array.isArray(node)) { node.forEach(function (x) { deepReplaceBgColor(x, fromHex, toHex); }); return; }
+    if (!node || typeof node !== 'object') return;
+    if (typeof node.backgroundColor === 'string' && node.backgroundColor.toLowerCase() === fromHex.toLowerCase()) {
+      node.backgroundColor = toHex;
+    }
+    Object.keys(node).forEach(function (key) {
+      if (node[key] && typeof node[key] === 'object') deepReplaceBgColor(node[key], fromHex, toHex);
+    });
+  }
+  // 模板載入後：偵測目前主題深色、設定取色器、決定是否顯示這條 bar
+  function syncThemeColorBar() {
+    var input = $('theme-bg-color');
+    var bar = $('theme-color-bar');
+    if (!input) return;
+    var ta = $('flex-json');
+    var dark = null;
+    if (state.mode === 'flex_json' && ta) {
+      try { dark = detectThemeDark(JSON.parse(ta.value)); } catch (e) {}
+    }
+    if (dark) {
+      input.value = normalizeHexColor(dark, '#1f2937');
+      state.themeColor = input.value;
+      if (bar) bar.hidden = false;
+    } else {
+      state.themeColor = null;
+      if (bar) bar.hidden = true;
+    }
+  }
+  // 套用新主題色：把目前主題色的所有 backgroundColor 換成 newVal
+  function applyThemeColor(newVal) {
+    var ta = $('flex-json');
+    if (!ta) return;
+    var from = state.themeColor || '#1F2937';
+    var flex;
+    try { flex = JSON.parse(ta.value); } catch (e) { return; }
+    deepReplaceBgColor(flex, from, newVal);
+    ta.value = JSON.stringify(flex, null, 2);
+    state.themeColor = newVal;
+    saveDraft();
+    schedulePreview();
   }
 
   function hideTextFormatToolbar() {
@@ -1612,6 +1699,7 @@
       // 觸發圖片+URL 助手 scan + 預覽
       setTimeout(function () {
         scanJsonImagesAndUrls();
+        syncThemeColorBar();
         schedulePreview();
       }, 100);
       return;

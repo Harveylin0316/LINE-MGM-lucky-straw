@@ -535,6 +535,20 @@
             </span>
           </div>
           <p class="muted" style="font-size:12px;margin-top:4px;">編輯時自動更新 · 模擬 LINE 行動裝置卡片視覺</p>
+          <div class="theme-color-bar" id="theme-color-bar" hidden>
+            <span class="tcb-label">主題底色</span>
+            <input type="color" id="theme-bg-color" value="#1f2937" title="一鍵更換所有深色區塊的底色（不影響文字顏色）" />
+            <button type="button" class="tcb-reset" id="theme-bg-reset">回預設</button>
+            <span class="tcb-hint">一鍵換掉所有深色區塊的底色，文字色不動</span>
+          </div>
+          <style>
+            .theme-color-bar { display:flex; align-items:center; gap:8px; margin:10px 0 4px; padding:8px 10px; background:#FAFAFA; border:1px solid #ECECEE; border-radius:8px; flex-wrap:wrap; }
+            .theme-color-bar .tcb-label { font-size:12px; font-weight:600; color:#1f2937; }
+            .theme-color-bar input[type=color] { width:36px; height:26px; border:1px solid #ddd; border-radius:6px; padding:0; cursor:pointer; background:none; }
+            .theme-color-bar .tcb-reset { font-size:11px; padding:4px 9px; border:1px solid #ECECEE; background:#fff; border-radius:6px; cursor:pointer; color:#374151; }
+            .theme-color-bar .tcb-reset:hover { border-color:#1f2937; }
+            .theme-color-bar .tcb-hint { font-size:11px; color:#9ca3af; }
+          </style>
           <div id="msg-preview-wrap" class="line-mock-wrap">
             <div id="msg-preview" class="line-mock empty">尚未有訊息內容。從上方挑一個模板，或直接編輯下方表單。</div>
           </div>
