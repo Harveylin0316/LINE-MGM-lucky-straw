@@ -24,27 +24,38 @@ function registerGameType(app, deps, opts) {
   const { query, pool } = deps;
   const { gameType, viewName, defaultLiffId } = opts;
 
-  // LIFF id token 驗證探針（階段一：驗證但不強制，只記錄結果，確認可行後再切強制）
-  // fire-and-forget：絕不阻塞或讓既有遊戲失敗。
-  async function probeLiffToken(endpoint, slug, bodyUid, idToken) {
-    if (!idToken) return;
+  // LIFF id token 驗證 + 紀錄探針。回傳 { pass, reject? }。
+  // 強制模式（預設開，可用環境變數 LIFF_TOKEN_ENFORCE=0 關閉）：
+  //   無 token / 驗證失敗 / sub≠前端送的 userId → pass=false（擋冒用）。
+  // /meta 為唯讀（不檢查 pass，只記探針），避免擋住頁面載入。
+  async function verifyGameIdentity(endpoint, slug, bodyUid, idToken) {
+    const enforce = process.env.LIFF_TOKEN_ENFORCE !== '0';
+    if (!idToken) {
+      return enforce
+        ? { pass: false, reject: { status: 401, code: 'token_required', detail: '登入憑證遺失，請關閉後從 LINE 重新開啟此頁。' } }
+        : { pass: true };
+    }
+    let channelId = channelIdFromLiffId(defaultLiffId);
     try {
-      let channelId = channelIdFromLiffId(defaultLiffId);
-      try {
-        const r = await query(`SELECT liff_id_override FROM activities WHERE slug = $1 AND game_type = $2 LIMIT 1`, [slug, gameType]);
-        const ov = r.rows[0] && r.rows[0].liff_id_override;
-        if (ov && String(ov).trim()) channelId = channelIdFromLiffId(ov);
-      } catch (e) { /* ignore */ }
-      const v = await verifyLiffIdToken(idToken, channelId);
-      const verified = !!v.ok;
-      const matches = !!(verified && v.sub && bodyUid && v.sub === bodyUid);
-      await query(
-        `INSERT INTO liff_token_probe (endpoint, game_type, slug, body_line_user_id, token_present, verified, verified_sub, sub_matches, channel_id, detail)
-         VALUES ($1,$2,$3,$4,true,$5,$6,$7,$8,$9)`,
-        [endpoint, gameType, slug, bodyUid || null, verified, v.sub || null, matches, channelId || null,
-         (v.reason || 'ok') + (v.detail ? (' ' + v.detail) : '') + (v.status ? (' http' + v.status) : '')]
-      );
-    } catch (e) { console.error('probeLiffToken failed:', e && e.message); }
+      const r = await query(`SELECT liff_id_override FROM activities WHERE slug = $1 AND game_type = $2 LIMIT 1`, [slug, gameType]);
+      const ov = r.rows[0] && r.rows[0].liff_id_override;
+      if (ov && String(ov).trim()) channelId = channelIdFromLiffId(ov);
+    } catch (e) { /* ignore */ }
+    let v;
+    try { v = await verifyLiffIdToken(idToken, channelId); }
+    catch (e) { v = { ok: false, reason: 'error', detail: String(e && e.message || e).slice(0, 100) }; }
+    const verified = !!v.ok;
+    const matches = !!(verified && v.sub && bodyUid && v.sub === bodyUid);
+    query(
+      `INSERT INTO liff_token_probe (endpoint, game_type, slug, body_line_user_id, token_present, verified, verified_sub, sub_matches, channel_id, detail)
+       VALUES ($1,$2,$3,$4,true,$5,$6,$7,$8,$9)`,
+      [endpoint, gameType, slug, bodyUid || null, verified, v.sub || null, matches, channelId || null,
+       (v.reason || 'ok') + (v.detail ? (' ' + v.detail) : '') + (v.status ? (' http' + v.status) : '')]
+    ).catch(e => console.error('probe insert failed:', e && e.message));
+    if (!enforce) return { pass: true };
+    if (!verified) return { pass: false, reject: { status: 401, code: 'token_invalid', detail: '身分驗證失敗，請重新開啟頁面。' } };
+    if (!matches) return { pass: false, reject: { status: 403, code: 'identity_mismatch', detail: '身分不符，無法進行。' } };
+    return { pass: true };
   }
 
   // ----- 頁面 -----
@@ -90,7 +101,7 @@ function registerGameType(app, deps, opts) {
     try {
       const slug = String(req.params.slug || '').trim();
       const lineUserId = String(req.query.line_user_id || '').trim();
-      probeLiffToken('meta', slug, lineUserId, String(req.query.id_token || '').trim());
+      verifyGameIdentity('meta', slug, lineUserId, String(req.query.id_token || '').trim()); // 唯讀：只記探針，不擋
       const { rows: act } = await query(
         `SELECT id, slug, name, description, status, start_at, end_at,
                 cover_image_url, daily_plays_per_user, require_follow_oa,
@@ -122,7 +133,8 @@ function registerGameType(app, deps, opts) {
     const slug = String(req.params.slug || '').trim();
     const lineUserId = String((req.body || {}).line_user_id || '').trim();
     const lineDisplayName = String((req.body || {}).line_display_name || '').trim() || null;
-    probeLiffToken('play', slug, lineUserId, String((req.body || {}).id_token || '').trim());
+    const idCheck = await verifyGameIdentity('play', slug, lineUserId, String((req.body || {}).id_token || '').trim());
+    if (!idCheck.pass) return res.status(idCheck.reject.status).json({ ok: false, error: idCheck.reject.code, detail: idCheck.reject.detail });
     const result = await selectPrizeAndRecord({
       pool, activitySlug: slug, gameType, lineUserId, lineDisplayName, req
     });
@@ -143,7 +155,8 @@ function registerGameType(app, deps, opts) {
     const slug = String(req.params.slug || '').trim();
     const inviteeId = String((req.body || {}).line_user_id || '').trim();
     const inviterId = String((req.body || {}).inviter_line_user_id || '').trim();
-    probeLiffToken('referral', slug, inviteeId, String((req.body || {}).id_token || '').trim());
+    const idCheck = await verifyGameIdentity('referral', slug, inviteeId, String((req.body || {}).id_token || '').trim());
+    if (!idCheck.pass) return res.status(idCheck.reject.status).json({ ok: false, error: idCheck.reject.code, detail: idCheck.reject.detail });
     const result = await registerReferral({
       query, activitySlug: slug, gameType, inviterId, inviteeId
     });
