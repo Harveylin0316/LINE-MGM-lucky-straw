@@ -461,8 +461,8 @@
             '<div class="ab-preview-card" id="ab-preview-a"></div>' +
             '<div style="margin:14px 0 6px;font-size:12px;font-weight:600;color:#1d4ed8;">版本 B</div>' +
             '<div class="ab-preview-card" id="ab-preview-b"></div>';
-          renderFlexMock(dataA.messages[0], $('ab-preview-a'));
-          renderFlexMock(dataB.messages[0], $('ab-preview-b'));
+          renderFlexMock(dataA.messages[0], $('ab-preview-a'), true);
+          renderFlexMock(dataB.messages[0], $('ab-preview-b'), false);
         } else {
           renderFlexMock(dataA.messages[0], previewEl);
         }
@@ -486,12 +486,26 @@
     if (el) el.addEventListener('input', schedulePreview);
   });
 
-  // 配色盤的色塊在 renderColorPalette() 內各自綁定 input 事件，這裡不需額外 wiring。
+  // 配色盤的色塊在 renderColorPalette() 內各自綁定 input 事件。
+  // 另：手動編輯 #flex-json 時 debounce 重建配色盤（避免色塊殘留舊色 / 漏新色）。
+  (function () {
+    var fj = $('flex-json');
+    if (!fj) return;
+    var paletteTimer = null;
+    fj.addEventListener('input', function () {
+      clearTimeout(paletteTimer);
+      paletteTimer = setTimeout(renderColorPalette, 600);
+    });
+  })();
 
   // ------------------------------------------------------------------
   // 7. render Flex mock (支援 bubble 跟 carousel，含 header/hero/body/footer)
   // ------------------------------------------------------------------
-  function renderFlexMock(flexMsg, container) {
+  // 渲染預覽時是否啟用 WYSIWYG 編輯。A/B 的版本 B 卡設 false，
+  // 否則點 B 卡編輯會把改動寫進版本 A 的 #flex-json（靜默損壞 A）。
+  var renderingEditable = true;
+  function renderFlexMock(flexMsg, container, editable) {
+    renderingEditable = (editable !== false);
     container.classList.remove('empty');
     container.innerHTML = '';
     if (!flexMsg || flexMsg.type !== 'flex' || !flexMsg.contents) {
@@ -614,13 +628,15 @@
       if (c.wrap) t.style.whiteSpace = 'pre-wrap';
       if (c.flex !== undefined) t.style.flex = String(c.flex);
       t.textContent = String(c.text || '');
-      // WYSIWYG：text 可直接編輯 + focus 顯示 floating toolbar
-      t.contentEditable = 'true';
-      t.dataset.editPath = JSON.stringify(path.concat(['text']));
-      t.classList.add('lm-editable');
-      t.addEventListener('input', onPreviewTextEdit);
-      t.addEventListener('keydown', preventEditorEnter);
-      t.addEventListener('focus', function () { showTextFormatToolbar(t); });
+      // WYSIWYG：text 可直接編輯 + focus 顯示 floating toolbar（非編輯預覽則純顯示）
+      if (renderingEditable) {
+        t.contentEditable = 'true';
+        t.dataset.editPath = JSON.stringify(path.concat(['text']));
+        t.classList.add('lm-editable');
+        t.addEventListener('input', onPreviewTextEdit);
+        t.addEventListener('keydown', preventEditorEnter);
+        t.addEventListener('focus', function () { showTextFormatToolbar(t); });
+      }
       parent.appendChild(t);
       return;
     }
@@ -656,7 +672,7 @@
     if (c.type === 'box' && c.action && c.action.type === 'uri') {
       // CTA 模擬：黃底深字 — 改用 div 而非 a，避免 click 跳轉 + 支援 contenteditable
       var btn = document.createElement('div');
-      btn.className = 'lm-cta lm-editable';
+      btn.className = 'lm-cta' + (renderingEditable ? ' lm-editable' : '');
       btn.setAttribute('role', 'button');
       if (c.backgroundColor) btn.style.background = c.backgroundColor;
       if (c.margin) btn.style.marginTop = mapFlexSpacing(c.margin);
@@ -675,7 +691,7 @@
       }
       btn.textContent = label || (c.action.label || 'OPEN');
       // WYSIWYG：CTA 文字可直接編輯（改第一個 text child）
-      if (labelIdx >= 0) {
+      if (labelIdx >= 0 && renderingEditable) {
         btn.contentEditable = 'true';
         btn.dataset.editPath = JSON.stringify(path.concat(['contents', labelIdx, 'text']));
         btn.addEventListener('input', onPreviewTextEdit);
@@ -715,6 +731,7 @@
 
   // 元件控制列（↑ ↓ ✕）：給 image / CTA / 內嵌 box 加 hover-able 控制鈕組
   function attachDeleteButton(el, componentPath, label) {
+    if (!renderingEditable) return; // 非編輯預覽（如 A/B 的 B 卡）不掛刪除/移動控制
     attachComponentControls(el, componentPath, label);
   }
 
@@ -983,13 +1000,22 @@
   }
 
   // ===== 配色盤：列出整張卡用到的所有顏色，任一可改、全域套用 =====
-  // 收集所有顏色：key = 小寫 hex，value = { bg, text, border }
+  // 只接受 3 或 6 碼 HEX，統一展開成 6 碼小寫（#fff 與 #ffffff 視為同色，4/5/8 碼一律排除）
+  function expandHex(hex) {
+    if (typeof hex !== 'string') return '';
+    var m = /^#([0-9a-f]{3}|[0-9a-f]{6})$/i.exec(hex);
+    if (!m) return '';
+    var h = m[1];
+    if (h.length === 3) h = h.split('').map(function (x) { return x + x; }).join('');
+    return '#' + h.toLowerCase();
+  }
+  // 收集所有顏色：key = 展開後 6 碼 hex，value = { bg, text, border }
   function collectAllColors(node, acc) {
     if (Array.isArray(node)) { node.forEach(function (x) { collectAllColors(x, acc); }); return; }
     if (!node || typeof node !== 'object') return;
     function note(val, kind) {
-      if (typeof val !== 'string' || !/^#[0-9a-f]{3,6}$/i.test(val)) return;
-      var k = val.toLowerCase();
+      var k = expandHex(val);
+      if (!k) return;
       acc[k] = acc[k] || { bg: 0, text: 0, border: 0 };
       acc[k][kind]++;
     }
@@ -1006,8 +1032,10 @@
   function deepReplaceAnyColor(node, fromHex, toHex) {
     if (Array.isArray(node)) { node.forEach(function (x) { deepReplaceAnyColor(x, fromHex, toHex); }); return; }
     if (!node || typeof node !== 'object') return;
+    var from6 = expandHex(fromHex);
     ['backgroundColor', 'color', 'borderColor'].forEach(function (prop) {
-      if (typeof node[prop] === 'string' && node[prop].toLowerCase() === fromHex.toLowerCase()) {
+      // 用展開後的 6 碼比對，#fff 也能對到 #ffffff
+      if (typeof node[prop] === 'string' && from6 && expandHex(node[prop]) === from6) {
         node[prop] = toHex;
       }
     });
