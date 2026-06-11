@@ -12,6 +12,8 @@
       .navgrp-btn:hover, .navgrp:hover .navgrp-btn, .navgrp:focus-within .navgrp-btn { color: #ffffff; }
       .navgrp-caret { font-size: 10px; opacity: .65; }
       .navgrp-menu { position: absolute; top: 100%; right: 0; margin-top: 8px; background: #fff; border: 1px solid #ECECEE; border-radius: 12px; box-shadow: 0 10px 30px rgba(0,0,0,.14); min-width: 170px; padding: 6px; display: none; z-index: 100; }
+      /* 透明橋接：填滿按鈕與選單間的空隙，滑鼠移過去 hover 不會中斷 */
+      .navgrp-menu::before { content: ''; position: absolute; top: -12px; left: 0; right: 0; height: 12px; }
       .navgrp:hover .navgrp-menu, .navgrp:focus-within .navgrp-menu { display: block; }
       .navgrp-menu a { display: block; padding: 10px 12px; border-radius: 8px; color: #374151; text-decoration: none; font-size: 14px; white-space: nowrap; }
       .navgrp-menu a:hover { background: #F9FAFB; }
