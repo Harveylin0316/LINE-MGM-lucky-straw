@@ -12,7 +12,13 @@
         </div>
         <a href="/admin/broadcast?msglib=1" class="msg-primary-btn" id="btn-new-msg">＋ 新增訊息</a>
       </div>
-      <div id="msg-count" class="muted" style="margin-top:10px;font-size:13px;"></div>
+      <div style="margin-top:12px;display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap;">
+        <div id="msg-count" class="muted" style="font-size:13px;"></div>
+        <div style="display:flex;gap:8px;">
+          <button type="button" class="msg-toggle-all" id="btn-collapse-all">全部收合</button>
+          <button type="button" class="msg-toggle-all" id="btn-expand-all">全部展開</button>
+        </div>
+      </div>
     </section>
 
     <div id="msg-list"><p class="muted" style="padding:20px;">載入中…</p></div>
@@ -23,13 +29,23 @@
       .msg-gallery{column-count:3;column-gap:18px;}
       @media(max-width:1100px){.msg-gallery{column-count:2;}}
       @media(max-width:680px){.msg-gallery{column-count:1;}}
+      .msg-toggle-all{padding:7px 12px;background:#fff;border:1px solid #ECECEE;border-radius:7px;font-size:12.5px;cursor:pointer;color:#374151;font-weight:600;}
+      .msg-toggle-all:hover{border-color:#1f2937;}
       .msg-card{break-inside:avoid;margin-bottom:18px;border:1px solid #ECECEE;border-radius:16px;overflow:hidden;background:#fff;display:inline-block;width:100%;}
       .msg-card:hover{box-shadow:0 6px 20px rgba(0,0,0,.08);border-color:#e5e7eb;}
+      .msg-cardhead{display:flex;align-items:center;gap:8px;padding:12px 14px;border-bottom:1px solid #F3F4F6;}
+      .msg-cardhead .nm{font-size:14.5px;font-weight:700;color:#1f2937;flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
+      .msg-toggle{flex:0 0 auto;border:1px solid #ECECEE;background:#fff;border-radius:6px;font-size:12px;color:#6B6B70;cursor:pointer;padding:4px 9px;font-weight:600;}
+      .msg-toggle:hover{border-color:#1f2937;color:#1f2937;}
+      .msg-badge{font-size:10px;font-weight:700;letter-spacing:.04em;color:#6B6B70;background:#F3F4F6;border-radius:5px;padding:2px 6px;flex:0 0 auto;}
       .msg-stage{background:#E9EDF2;padding:18px 16px;display:flex;justify-content:center;}
       .msg-info{padding:14px 16px 16px;}
-      .msg-info .nm{font-size:15px;font-weight:700;color:#1f2937;display:flex;align-items:center;gap:8px;}
-      .msg-badge{font-size:10px;font-weight:700;letter-spacing:.04em;color:#6B6B70;background:#F3F4F6;border-radius:5px;padding:2px 6px;}
-      .msg-info .desc{font-size:12.5px;color:#6b7280;margin-top:6px;line-height:1.6;}
+      .msg-info .desc{font-size:12.5px;color:#6b7280;line-height:1.6;}
+      .msg-actions{margin-top:12px;}
+      /* 收合狀態：只留 標題列 + 動作 */
+      .msg-card.collapsed .msg-stage{display:none;}
+      .msg-card.collapsed .msg-info .desc{display:none;}
+      .msg-card.collapsed .msg-actions{margin-top:0;}
       .msg-actions{display:flex;gap:8px;margin-top:12px;}
       .msg-actions a,.msg-actions button{flex:1;padding:8px;border:1px solid #ECECEE;background:#fff;border-radius:8px;cursor:pointer;font-size:13px;color:#374151;text-align:center;text-decoration:none;font-weight:600;}
       .msg-actions button.del{color:#b91c1c;flex:0 0 auto;padding:8px 12px;}
@@ -156,16 +172,27 @@
           }catch(e){stage.textContent='（預覽失敗）';}
         }
 
+        function setCard(div,collapsed){
+          div.classList.toggle('collapsed',collapsed);
+          if(div._tog)div._tog.textContent=collapsed?'展開':'收合';
+        }
         function card(m){
           var div=document.createElement('div');div.className='msg-card';
+          // 標題列（一直顯示）：名稱 + 通道 + 收合鈕
+          var head=document.createElement('div');head.className='msg-cardhead';
+          var nm=document.createElement('div');nm.className='nm';nm.textContent=m.name||'';
+          var badge=document.createElement('span');badge.className='msg-badge';badge.textContent=(m.channel||'line').toUpperCase();
+          var tog=document.createElement('button');tog.type='button';tog.className='msg-toggle';tog.textContent='收合';
+          tog.addEventListener('click',function(){setCard(div,!div.classList.contains('collapsed'));});
+          head.appendChild(nm);head.appendChild(badge);head.appendChild(tog);
+          div.appendChild(head);
+          div._tog=tog;
+          // 預覽（可收合）
           var stage=document.createElement('div');stage.className='msg-stage';
           renderPreview(stage,m.message_config);
           div.appendChild(stage);
+          // 說明 + 動作
           var info=document.createElement('div');info.className='msg-info';
-          var nm=document.createElement('div');nm.className='nm';
-          nm.appendChild(document.createTextNode(m.name||''));
-          var badge=document.createElement('span');badge.className='msg-badge';badge.textContent=(m.channel||'line').toUpperCase();nm.appendChild(badge);
-          info.appendChild(nm);
           if(m.description){var de=document.createElement('div');de.className='desc';de.textContent=m.description;info.appendChild(de);}
           var acts=document.createElement('div');acts.className='msg-actions';
           acts.innerHTML='<a href="/admin/broadcast?msglib=1&mid='+m.id+'">編輯</a>'+
@@ -185,8 +212,17 @@
             box.className='msg-gallery';box.innerHTML='';
             d.messages.forEach(function(m){box.appendChild(card(m));});
             box.querySelectorAll('[data-del]').forEach(function(b){b.addEventListener('click',function(){delMsg(b.getAttribute('data-del'));});});
+            // 套用記住的收合偏好（預設展開）
+            if(getPref())setAll(true);
           }).catch(function(e){var box=$('msg-list');if(box)box.innerHTML='<p class="muted" style="padding:20px;">載入失敗，請重新整理</p>';});
         }
+        function setAll(collapsed){
+          document.querySelectorAll('#msg-list .msg-card').forEach(function(div){setCard(div,collapsed);});
+        }
+        function getPref(){try{return localStorage.getItem('msglib_collapsed')==='1';}catch(e){return false;}}
+        function setPref(v){try{localStorage.setItem('msglib_collapsed',v?'1':'0');}catch(e){}}
+        $('btn-collapse-all').addEventListener('click',function(){setAll(true);setPref(true);});
+        $('btn-expand-all').addEventListener('click',function(){setAll(false);setPref(false);});
         function delMsg(id){
           if(!window.confirm('確定刪除這則訊息？若被流程引用會擋下不刪。'))return;
           fetch('/admin/messages/api/'+id,{method:'DELETE'}).then(function(r){return r.json();}).then(function(d){
