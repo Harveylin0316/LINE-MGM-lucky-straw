@@ -8,60 +8,192 @@
       <div class="msg-hero-inner">
         <div>
           <h1>訊息庫</h1>
-          <p class="muted" style="margin-top:6px;">設計一次、存起來，之後在「群發訊息」或自動化流程都能直接選用。編輯時用的是跟群發一樣的編輯器（可在預覽上改字、加減區塊、加刪圖片）。</p>
+          <p class="muted" style="margin-top:6px;">每張卡就是這則訊息在 LINE 裡長的樣子。點「編輯」用跟群發一樣的編輯器改字、換圖、改連結。</p>
         </div>
         <a href="/admin/broadcast?msglib=1" class="msg-primary-btn" id="btn-new-msg">＋ 新增訊息</a>
       </div>
+      <div id="msg-count" class="muted" style="margin-top:10px;font-size:13px;"></div>
     </section>
 
-    <section class="card">
-      <div id="msg-list" class="msg-grid"><p class="muted">載入中…</p></div>
-    </section>
+    <div id="msg-list"><p class="muted" style="padding:20px;">載入中…</p></div>
 
     <style>
-      .msg-hero-inner{display:flex;align-items:flex-start;justify-content:space-between;gap:16px;}
+      .msg-hero-inner{display:flex;align-items:flex-start;justify-content:space-between;gap:16px;flex-wrap:wrap;}
       .msg-primary-btn{padding:9px 16px;background:#FCC726;color:#1f2937;font-weight:700;border:0;border-radius:8px;cursor:pointer;font-size:14px;text-decoration:none;display:inline-block;}
-      .msg-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(260px,1fr));gap:14px;}
-      .msg-item{border:1px solid #e5e7eb;border-radius:12px;padding:16px;background:#fff;display:flex;flex-direction:column;gap:8px;}
-      .msg-item:hover{border-color:#1f2937;}
-      .msg-item h4{margin:0;font-size:15px;color:#1f2937;}
-      .msg-item .desc{font-size:13px;color:#6b7280;min-height:18px;}
-      .msg-item .meta{font-size:12px;color:#9ca3af;}
-      .msg-item .row{display:flex;gap:8px;margin-top:4px;}
-      .msg-item .row a,.msg-item .row button{flex:1;padding:7px;border:1px solid #e5e7eb;background:#fff;border-radius:6px;cursor:pointer;font-size:13px;color:#374151;text-align:center;text-decoration:none;}
-      .msg-item .row button.del{color:#b91c1c;}
-      .msg-item .row a:hover,.msg-item .row button:hover{border-color:#1f2937;}
+      .msg-gallery{column-count:3;column-gap:18px;}
+      @media(max-width:1100px){.msg-gallery{column-count:2;}}
+      @media(max-width:680px){.msg-gallery{column-count:1;}}
+      .msg-card{break-inside:avoid;margin-bottom:18px;border:1px solid #ECECEE;border-radius:16px;overflow:hidden;background:#fff;display:inline-block;width:100%;}
+      .msg-card:hover{box-shadow:0 6px 20px rgba(0,0,0,.08);border-color:#e5e7eb;}
+      .msg-stage{background:#E9EDF2;padding:18px 16px;display:flex;justify-content:center;}
+      .msg-info{padding:14px 16px 16px;}
+      .msg-info .nm{font-size:15px;font-weight:700;color:#1f2937;display:flex;align-items:center;gap:8px;}
+      .msg-badge{font-size:10px;font-weight:700;letter-spacing:.04em;color:#6B6B70;background:#F3F4F6;border-radius:5px;padding:2px 6px;}
+      .msg-info .desc{font-size:12.5px;color:#6b7280;margin-top:6px;line-height:1.6;}
+      .msg-actions{display:flex;gap:8px;margin-top:12px;}
+      .msg-actions a,.msg-actions button{flex:1;padding:8px;border:1px solid #ECECEE;background:#fff;border-radius:8px;cursor:pointer;font-size:13px;color:#374151;text-align:center;text-decoration:none;font-weight:600;}
+      .msg-actions button.del{color:#b91c1c;flex:0 0 auto;padding:8px 12px;}
+      .msg-actions a:hover,.msg-actions button:hover{border-color:#1f2937;}
+
+      /* ---- LINE bubble mock（唯讀） ---- */
+      .lm{width:100%;max-width:300px;background:#fff;border-radius:18px;overflow:hidden;box-shadow:0 1px 4px rgba(0,0,0,.12);font-family:-apple-system,BlinkMacSystemFont,'PingFang TC','Noto Sans TC',sans-serif;}
+      .lm *{box-sizing:border-box;}
+      .lm-sec{}
+      .lm-hero img{display:block;width:100%;}
+      .lm-hero-ph{width:100%;aspect-ratio:20/13;background:#F3F4F6 repeating-linear-gradient(45deg,#F3F4F6,#F3F4F6 10px,#ECECEE 10px,#ECECEE 20px);display:flex;align-items:center;justify-content:center;color:#9ca3af;font-size:12px;}
+      .lm-txt{font-size:14px;color:#1F2937;line-height:1.5;word-break:break-word;}
+      .lm-sep{border:0;border-top:1px solid #ECECEE;margin:0;}
+      .lm-carousel{display:flex;gap:10px;overflow-x:auto;padding-bottom:6px;}
+      .lm-carousel .lm{flex:0 0 240px;max-width:240px;}
+      .lm-cara-tag{font-size:11px;color:#6b7280;margin-bottom:8px;text-align:center;}
     </style>
 
     <script>
       (function(){
         var $=function(id){return document.getElementById(id);};
         function esc(s){return String(s==null?'':s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');}
-        function fmt(ts){if(!ts)return'';var d=new Date(ts);return isNaN(d.getTime())?'':d.toLocaleString('sv-SE',{timeZone:'Asia/Taipei'}).slice(0,16);}
+        var SZ={xxs:'10px',xs:'12px',sm:'13px',md:'15px',lg:'17px',xl:'20px',xxl:'24px','3xl':'30px'};
+        var SP={none:'0px',xs:'4px',sm:'8px',md:'12px',lg:'16px',xl:'20px',xxl:'24px'};
+        function sz(v){return SZ[v]||'14px';}
+        function sp(v){return SP[v]!=null?SP[v]:'0px';}
+
+        // 把一個 Flex component 變成 DOM（唯讀）
+        function renderComp(c){
+          if(!c||typeof c!=='object')return null;
+          if(c.type==='text'){
+            var t=document.createElement('div');t.className='lm-txt';
+            t.textContent=String(c.text==null?'':c.text);
+            if(c.color)t.style.color=c.color;
+            if(c.size)t.style.fontSize=sz(c.size);
+            if(c.weight==='bold')t.style.fontWeight='700';
+            if(c.align==='center')t.style.textAlign='center';
+            else if(c.align==='end')t.style.textAlign='right';
+            if(c.margin)t.style.marginTop=sp(c.margin);
+            if(c.lineSpacing)t.style.lineHeight='1.6';
+            if(c.flex!=null)t.style.flex=String(c.flex);
+            if(c.wrap===false){t.style.whiteSpace='nowrap';t.style.overflow='hidden';t.style.textOverflow='ellipsis';}
+            return t;
+          }
+          if(c.type==='separator'){
+            var hr=document.createElement('hr');hr.className='lm-sep';
+            if(c.color)hr.style.borderTopColor=c.color;
+            if(c.margin)hr.style.marginTop=sp(c.margin);
+            return hr;
+          }
+          if(c.type==='filler'){var f=document.createElement('div');f.style.flex=String(c.flex!=null?c.flex:1);return f;}
+          if(c.type==='image'){
+            if(c.url&&!/REPLACE_[A-Z0-9_]+/i.test(c.url)){var im=document.createElement('img');im.src=c.url;im.style.width='100%';im.style.display='block';return im;}
+            var ph=document.createElement('div');ph.className='lm-hero-ph';ph.textContent='圖片（編輯時替換）';return ph;
+          }
+          if(c.type==='box')return renderBox(c);
+          return null;
+        }
+
+        function renderBox(box){
+          var el=document.createElement('div');
+          var horiz=(box.layout==='horizontal'||box.layout==='baseline');
+          el.style.display='flex';
+          el.style.flexDirection=horiz?'row':'column';
+          if(box.layout==='baseline')el.style.alignItems='baseline';
+          if(box.alignItems)el.style.alignItems=box.alignItems==='center'?'center':box.alignItems;
+          if(box.justifyContent)el.style.justifyContent=box.justifyContent;
+          if(box.spacing)el.style.gap=sp(box.spacing);
+          if(box.backgroundColor)el.style.background=box.backgroundColor;
+          if(box.cornerRadius)el.style.borderRadius=/px$/.test(String(box.cornerRadius))?box.cornerRadius:'8px';
+          if(box.borderWidth&&box.borderColor)el.style.border=box.borderWidth+' solid '+box.borderColor;
+          if(box.margin)el.style.marginTop=sp(box.margin);
+          if(box.flex!=null)el.style.flex=String(box.flex);
+          if(box.width)el.style.width=box.width;
+          if(box.height)el.style.height=box.height;
+          if(box.paddingAll!=null)el.style.padding=sp(box.paddingAll);
+          if(box.paddingTop!=null)el.style.paddingTop=sp(box.paddingTop);
+          if(box.paddingBottom!=null)el.style.paddingBottom=sp(box.paddingBottom);
+          if(box.paddingStart!=null)el.style.paddingLeft=sp(box.paddingStart);
+          if(box.paddingEnd!=null)el.style.paddingRight=sp(box.paddingEnd);
+          if(box.action)el.style.cursor='pointer';
+          (box.contents||[]).forEach(function(c){var ch=renderComp(c);if(ch)el.appendChild(ch);});
+          return el;
+        }
+
+        function renderBubble(bubble){
+          var b=document.createElement('div');b.className='lm';
+          if(bubble.header){var h=renderBox(bubble.header);h.className=(h.className||'')+' lm-sec';b.appendChild(h);}
+          if(bubble.hero){var hero=document.createElement('div');hero.className='lm-hero';var c=renderComp(bubble.hero);if(c)hero.appendChild(c);b.appendChild(hero);}
+          if(bubble.body){b.appendChild(renderBox(bubble.body));}
+          if(bubble.footer){b.appendChild(renderBox(bubble.footer));}
+          return b;
+        }
+
+        // template 模式 → 仿一張 bubble
+        function renderTemplateMock(tpl){
+          var b=document.createElement('div');b.className='lm';
+          if(tpl.heroMediaId){var ph=document.createElement('div');ph.className='lm-hero-ph';ph.textContent='圖片（編輯時替換）';b.appendChild(ph);}
+          var body=document.createElement('div');body.style.padding='16px';body.style.display='flex';body.style.flexDirection='column';body.style.gap='8px';
+          if(tpl.title){var t=document.createElement('div');t.className='lm-txt';t.style.fontSize='19px';t.style.fontWeight='700';t.textContent=tpl.title;body.appendChild(t);}
+          if(tpl.subtitle){var s=document.createElement('div');s.className='lm-txt';s.style.fontSize='14px';s.style.color='#4B5563';s.style.whiteSpace='pre-wrap';s.textContent=tpl.subtitle;body.appendChild(s);}
+          if(tpl.couponCode){var cc=document.createElement('div');cc.className='lm-txt';cc.style.cssText='text-align:center;font-weight:700;border:1px solid #FCC726;background:#FFFBEB;border-radius:10px;padding:10px;margin-top:4px;';cc.textContent=tpl.couponCode;body.appendChild(cc);}
+          if(tpl.ctaLabel){var btn=document.createElement('div');btn.className='lm-txt';btn.style.cssText='text-align:center;font-weight:700;color:#1f2937;background:#FCC726;border-radius:12px;padding:12px;margin-top:6px;';btn.textContent=tpl.ctaLabel;body.appendChild(btn);}
+          if(tpl.disclaimer){var d=document.createElement('div');d.className='lm-txt';d.style.cssText='font-size:11px;color:#9ca3af;margin-top:2px;';d.textContent=tpl.disclaimer;body.appendChild(d);}
+          b.appendChild(body);
+          return b;
+        }
+
+        function renderPreview(stage,cfg){
+          stage.innerHTML='';
+          try{
+            if(cfg&&cfg.mode==='template'&&cfg.template){stage.appendChild(renderTemplateMock(cfg.template));return;}
+            var flex=cfg&&cfg.flex;
+            var contents=flex&&flex.contents;
+            if(!contents){stage.textContent='（無法預覽）';return;}
+            if(contents.type==='carousel'&&Array.isArray(contents.contents)){
+              var wrap=document.createElement('div');wrap.style.width='100%';
+              var tag=document.createElement('div');tag.className='lm-cara-tag';tag.textContent='多頁卡片 · 共 '+contents.contents.length+' 張（左右滑動）';wrap.appendChild(tag);
+              var row=document.createElement('div');row.className='lm-carousel';
+              contents.contents.forEach(function(bb){row.appendChild(renderBubble(bb));});
+              wrap.appendChild(row);stage.appendChild(wrap);return;
+            }
+            stage.appendChild(renderBubble(contents));
+          }catch(e){stage.textContent='（預覽失敗）';}
+        }
+
+        function card(m){
+          var div=document.createElement('div');div.className='msg-card';
+          var stage=document.createElement('div');stage.className='msg-stage';
+          renderPreview(stage,m.message_config);
+          div.appendChild(stage);
+          var info=document.createElement('div');info.className='msg-info';
+          var nm=document.createElement('div');nm.className='nm';
+          nm.appendChild(document.createTextNode(m.name||''));
+          var badge=document.createElement('span');badge.className='msg-badge';badge.textContent=(m.channel||'line').toUpperCase();nm.appendChild(badge);
+          info.appendChild(nm);
+          if(m.description){var de=document.createElement('div');de.className='desc';de.textContent=m.description;info.appendChild(de);}
+          var acts=document.createElement('div');acts.className='msg-actions';
+          acts.innerHTML='<a href="/admin/broadcast?msglib=1&mid='+m.id+'">編輯</a>'+
+            '<a href="/admin/broadcast?msglib=1&mid='+m.id+'&dup=1">複製</a>'+
+            '<button class="del" data-del="'+m.id+'">刪除</button>';
+          info.appendChild(acts);
+          div.appendChild(info);
+          return div;
+        }
 
         function loadList(){
           fetch('/admin/messages/api/list').then(function(r){return r.json();}).then(function(d){
             var box=$('msg-list');
-            if(!d.ok){box.innerHTML='<p class="muted">載入失敗：'+esc(d.error||'')+'</p>';return;}
-            if(!d.messages.length){box.innerHTML='<p class="muted">還沒有訊息。點右上「新增訊息」用編輯器建立第一則。</p>';return;}
-            box.innerHTML=d.messages.map(function(m){
-              return '<div class="msg-item"><h4>'+esc(m.name)+'</h4>'+
-                '<div class="desc">'+esc(m.description||'')+'</div>'+
-                '<div class="meta">'+esc(m.channel||'line').toUpperCase()+' · 更新 '+fmt(m.updated_at)+'</div>'+
-                '<div class="row">'+
-                  '<a href="/admin/broadcast?msglib=1&mid='+m.id+'">編輯</a>'+
-                  '<a href="/admin/broadcast?msglib=1&mid='+m.id+'&dup=1">複製</a>'+
-                  '<button class="del" data-del="'+m.id+'">刪除</button>'+
-                '</div></div>';
-            }).join('');
+            if(!d.ok){box.innerHTML='<p class="muted" style="padding:20px;">載入失敗：'+esc(d.error||'')+'</p>';return;}
+            if(!d.messages.length){box.innerHTML='<p class="muted" style="padding:20px;">還沒有訊息。點右上「新增訊息」用編輯器建立第一則。</p>';return;}
+            $('msg-count').textContent='共 '+d.messages.length+' 則樣板';
+            box.className='msg-gallery';box.innerHTML='';
+            d.messages.forEach(function(m){box.appendChild(card(m));});
             box.querySelectorAll('[data-del]').forEach(function(b){b.addEventListener('click',function(){delMsg(b.getAttribute('data-del'));});});
-          });
+          }).catch(function(e){var box=$('msg-list');if(box)box.innerHTML='<p class="muted" style="padding:20px;">載入失敗，請重新整理</p>';});
         }
         function delMsg(id){
-          if(!confirm('確定刪除這則訊息？流程若有引用會失效。'))return;
+          if(!window.confirm('確定刪除這則訊息？若被流程引用會擋下不刪。'))return;
           fetch('/admin/messages/api/'+id,{method:'DELETE'}).then(function(r){return r.json();}).then(function(d){
-            if(d.ok)loadList();else alert('刪除失敗：'+(d.error||''));
-          });
+            if(d.ok)loadList();
+            else if(d.error==='message_in_use')window.alert('這則訊息正被自動化流程使用中，請先在流程移除引用再刪除。');
+            else window.alert('刪除失敗：'+(d.error||''));
+          }).catch(function(e){window.alert('刪除失敗：'+e.message);});
         }
         loadList();
       })();

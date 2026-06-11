@@ -38,7 +38,7 @@ function registerAdminMessagesRoutes(app, deps) {
   app.get('/admin/messages/api/list', requireAdmin, async (_req, res) => {
     try {
       const rs = await query(
-        `SELECT id, name, description, channel, created_by, created_at, updated_at
+        `SELECT id, name, description, channel, message_config, created_by, created_at, updated_at
          FROM admin_message_templates
          ORDER BY id DESC`
       );
