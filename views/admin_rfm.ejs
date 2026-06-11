@@ -107,7 +107,7 @@
               stat(s.email_recent365,'有 email 且近 1 年',true)+
               '</div>';
             box.innerHTML=h;
-          });
+          }).catch(function(e){var box=$('rfm-stats');if(box)box.innerHTML='<p class="muted">載入失敗，請重新整理</p>';});
         }
         $('rfm-refresh').addEventListener('click',loadStats);
         loadStats();

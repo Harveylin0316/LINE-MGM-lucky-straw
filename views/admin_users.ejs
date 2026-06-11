@@ -75,7 +75,7 @@
                 '<div class="sub">'+esc(shortUid(u.line_user_id))+' · '+(fmt(u.created_at)||'—')+'</div></div></div>';
             }).join('');
             box.querySelectorAll('[data-uid]').forEach(function(el){el.addEventListener('click',function(){openProfile(el.getAttribute('data-uid'));});});
-          });
+          }).catch(function(e){var box=$('us-list');if(box)box.innerHTML='<p class="muted">載入失敗，請重新整理</p>';});
         }
 
         function openProfile(uid){
@@ -119,7 +119,7 @@
               return '<div class="us-tl-item"><span class="k">'+esc(KIND[t.kind]||t.kind)+'</span> <span class="l">'+esc((t.label||'').slice(0,60))+'</span><div class="t">'+fmt(t.at)+'</div></div>';
             }).join('')+'</div>';}
             box.innerHTML=h;
-          });
+          }).catch(function(e){var box=$('us-profile');if(box)box.innerHTML='<p class="muted">載入失敗：'+((e&&e.message)||e)+'</p>';});
         }
         function stat(v,k){return '<div class="us-stat"><div class="v">'+(v||0)+'</div><div class="k">'+k+'</div></div>';}
 

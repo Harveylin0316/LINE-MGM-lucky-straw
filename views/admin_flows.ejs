@@ -125,7 +125,7 @@
           fetch('/admin/flows/api/options').then(function(r){return r.json();}).then(function(d){
             if(d.ok){OPT.messages=d.messages||[];OPT.lists=d.lists||[];OPT.activities=d.activities||[];OPT.events=d.events||[];}
             if(cb)cb();
-          });
+          }).catch(function(){if(cb)cb();}); // 失敗也別卡死，下拉資料可稍後重抓
         }
 
         // ---------- 列表 ----------
@@ -149,6 +149,9 @@
             box.querySelectorAll('[data-edit]').forEach(function(b){b.addEventListener('click',function(){openEditor(b.getAttribute('data-edit'));});});
             box.querySelectorAll('[data-del]').forEach(function(b){b.addEventListener('click',function(){delFlow(b.getAttribute('data-del'));});});
             box.querySelectorAll('[data-status]').forEach(function(b){b.addEventListener('click',function(){setStatus(b.getAttribute('data-id'),b.getAttribute('data-status'));});});
+          }).catch(function(e){
+            var box=$('fl-list');
+            if(box)box.innerHTML='<p class="muted">載入失敗（'+((e&&e.message)||e)+'）。請重新整理頁面；若仍失敗，可能是登入逾時，請重新登入。</p>';
           });
         }
         function setStatus(id,status){
@@ -415,7 +418,9 @@
         $('fl-save-activate').addEventListener('click',function(){save(true);});
         $('fl-trigger-type').addEventListener('change',function(){syncTrigger();flow.trigger={type:this.value,config:{}};renderTrigger();});
 
-        loadOptions(function(){loadList();});
+        // 列表獨立載入（不依賴 options），options 失敗也不影響列表顯示
+        loadList();
+        loadOptions();
       })();
     </script>
     `
