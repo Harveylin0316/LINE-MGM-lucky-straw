@@ -283,8 +283,8 @@
       var addModal = $('add-modal');
       var currentAddType = 'line';
       function parseEmails(raw) {
-        return String(raw || '').split(/[\s,\n;]+/).map(function (s) { return s.trim().toLowerCase(); })
-          .filter(function (s) { return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(s); });
+        return String(raw || '').split(/[\\s,;]+/).map(function (s) { return s.trim().toLowerCase(); })
+          .filter(function (s) { return /^[^\\s@]+@[^\\s@]+\\.[^\\s@]+$/.test(s); });
       }
       function switchAddTab(type) {
         currentAddType = type;
