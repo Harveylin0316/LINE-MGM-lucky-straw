@@ -1,0 +1,102 @@
+<%-
+  include('layout', {
+    user: user,
+    isAdmin: isAdmin,
+    bodyClass: bodyClass,
+    body: `
+    <section class="card">
+      <h1>邀請成效</h1>
+      <p class="muted" style="margin-top:6px;line-height:1.7;">看誰成功邀到朋友，不用再下 SQL。<br>
+      「成功」＝被邀請的人現在是你的 OA 好友（真實口徑，不看舊的 pending 狀態）。</p>
+    </section>
+
+    <section class="card">
+      <h2 style="margin:0 0 4px;">春日活動（邀好友加刮次）</h2>
+      <p class="muted" style="font-size:13px;margin-bottom:14px;">舊的邀請機制（line_invites）。</p>
+      <div id="rf-summary" class="rf-stats"><p class="muted">載入中…</p></div>
+      <div id="rf-legacy" style="margin-top:16px;"></div>
+    </section>
+
+    <section class="card">
+      <h2 style="margin:0 0 4px;">活動邀請（新版 MGM）</h2>
+      <p class="muted" style="font-size:13px;margin-bottom:14px;">活動框架的邀請（activity_referrals）。之後開 MGM 活動的成效都會自動出現在這。</p>
+      <div id="rf-activity"><p class="muted">載入中…</p></div>
+    </section>
+
+    <style>
+      .rf-stats{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:10px;}
+      .rf-stat{border:1px solid #ECECEE;border-radius:10px;padding:14px;background:#FAFAFA;}
+      .rf-stat .v{font-size:24px;font-weight:700;color:#1f2937;font-variant-numeric:tabular-nums;}
+      .rf-stat .k{font-size:12px;color:#6B6B70;margin-top:4px;}
+      .rf-stat.warn{background:#FEF2F2;border-color:#FCA5A5;}
+      .rf-stat.warn .v{color:#b91c1c;}
+      .rf-callout{background:#FFFBEB;border:1px solid #FCC726;border-radius:10px;padding:12px 14px;font-size:13px;color:#92400e;line-height:1.7;margin-top:14px;}
+      .rf-table{width:100%;border-collapse:collapse;font-size:13px;margin-top:8px;}
+      .rf-table th,.rf-table td{padding:9px 12px;border-bottom:1px solid #F3F4F6;text-align:left;}
+      .rf-table th{background:#FAFAFA;font-size:11px;color:#6B6B70;font-weight:600;text-transform:uppercase;letter-spacing:.04em;}
+      .rf-table td.num{text-align:right;font-variant-numeric:tabular-nums;}
+      .rf-rank{color:#9ca3af;width:30px;}
+      .rf-act-block{border:1px solid #ECECEE;border-radius:10px;padding:14px;margin-bottom:12px;}
+      .rf-act-head{font-weight:700;color:#1f2937;font-size:14px;margin-bottom:6px;}
+    </style>
+
+    <script>
+      (function(){
+        var $=function(id){return document.getElementById(id);};
+        function esc(s){return String(s==null?'':s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');}
+        function shortUid(u){return u?(u.slice(0,7)+'…'+u.slice(-4)):'—';}
+        function stat(v,k,warn){return '<div class="rf-stat'+(warn?' warn':'')+'"><div class="v">'+(Number(v||0)).toLocaleString()+'</div><div class="k">'+k+'</div></div>';}
+
+        function render(d){
+          var s=d.summary||{};
+          $('rf-summary').innerHTML=
+            stat(s.total,'總邀請紀錄')+
+            stat(s.success,'真實加入（被邀者已是好友）')+
+            stat(s.rewarded,'系統已發獎勵')+
+            stat(s.success_unrewarded,'加入了卻沒發到獎勵',true);
+          var legacyHtml='';
+          if(s.success_unrewarded>0){
+            legacyHtml+='<div class="rf-callout"><strong>注意：</strong>有 '+s.success_unrewarded+' 個被邀請的人「其實已經加你 OA」，但舊機制沒把獎勵發給邀請人（卡在 pending）。也就是這檔邀請活動其實成功帶進了 '+s.success+' 個好友，只是發獎流程漏掉了大部分。</div>';
+          }
+          if(d.legacy&&d.legacy.length){
+            legacyHtml+='<table class="rf-table"><thead><tr><th></th><th>邀請人</th><th style="text-align:right;">邀請數</th><th style="text-align:right;">真實成功</th><th style="text-align:right;">已發獎勵</th></tr></thead><tbody>'+
+              d.legacy.map(function(r,i){
+                return '<tr><td class="rf-rank">'+(i+1)+'</td>'+
+                  '<td>'+esc(r.inviter_name)+'<br><span class="muted" style="font-size:11px;">'+esc(shortUid(r.inviter_line))+'</span></td>'+
+                  '<td class="num">'+r.invites+'</td>'+
+                  '<td class="num"><strong>'+r.success+'</strong></td>'+
+                  '<td class="num">'+r.rewarded+'</td></tr>';
+              }).join('')+'</tbody></table>';
+          }else{legacyHtml+='<p class="muted" style="font-size:13px;">尚無邀請紀錄。</p>';}
+          $('rf-legacy').innerHTML=legacyHtml;
+
+          // 活動邀請：先列有開 MGM 的活動，再放各自排行
+          var box=$('rf-activity');var h='';
+          if(d.mgmActivities&&d.mgmActivities.length){
+            h+='<p class="muted" style="font-size:13px;margin-bottom:10px;">已開啟邀請的活動：'+d.mgmActivities.map(function(a){return esc(a.name)+'（+'+a.referral_bonus_per+'次/人，上限+'+a.referral_bonus_max+'）';}).join('、')+'</p>';
+          }
+          if(d.activity&&d.activity.length){
+            // group by activity
+            var byAct={};d.activity.forEach(function(r){(byAct[r.activity_id]=byAct[r.activity_id]||{name:r.activity_name,rows:[]}).rows.push(r);});
+            Object.keys(byAct).forEach(function(aid){
+              var g=byAct[aid];
+              h+='<div class="rf-act-block"><div class="rf-act-head">'+esc(g.name)+'</div>'+
+                '<table class="rf-table"><thead><tr><th></th><th>邀請人</th><th style="text-align:right;">成功邀請數</th></tr></thead><tbody>'+
+                g.rows.map(function(r,i){return '<tr><td class="rf-rank">'+(i+1)+'</td><td>'+esc(r.inviter_name)+'<br><span class="muted" style="font-size:11px;">'+esc(shortUid(r.inviter_line))+'</span></td><td class="num"><strong>'+r.referrals+'</strong></td></tr>';}).join('')+
+                '</tbody></table></div>';
+            });
+          }else{
+            h+='<p class="muted" style="font-size:13px;">還沒有活動邀請資料。到「活動管理」開一個活動、把「每邀請 1 人 +N 次」設大於 0，就會啟用邀請；之後成效會出現在這裡。</p>';
+          }
+          box.innerHTML=h;
+        }
+
+        fetch('/admin/referrals/api/data').then(function(r){return r.json();}).then(function(d){
+          if(!d.ok){$('rf-summary').innerHTML='<p class="muted">載入失敗：'+esc(d.error||'')+'</p>';return;}
+          render(d);
+        }).catch(function(e){$('rf-summary').innerHTML='<p class="muted">載入失敗，請重新整理</p>';});
+      })();
+    </script>
+    `
+  })
+%>
