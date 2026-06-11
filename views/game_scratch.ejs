@@ -310,13 +310,13 @@
       function paintCover() {
         var rect = card.getBoundingClientRect();
         var dpr = window.devicePixelRatio || 1;
-        var w = Math.floor(rect.width);
-        var h = Math.floor(rect.height);
-        // physical canvas size = CSS size * dpr → 高解析度
-        canvas.width = Math.floor(w * dpr);
-        canvas.height = Math.floor(h * dpr);
-        canvas.style.width = w + 'px';
-        canvas.style.height = h + 'px';
+        var w = rect.width;   // 用真實尺寸，不要 floor（floor 在小數尺寸螢幕會留下露餡的縫）
+        var h = rect.height;
+        // 物理像素用 ceil 確保「至少」蓋滿；顯示尺寸交給 CSS（inset:0;width/height:100%）精準貼齊卡片
+        canvas.width = Math.ceil(w * dpr);
+        canvas.height = Math.ceil(h * dpr);
+        canvas.style.width = '100%';
+        canvas.style.height = '100%';
         // 只 setTransform 一次，scale(dpr, dpr) 之後所有座標都用「邏輯像素」(w, h)
         ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
         ctx.globalCompositeOperation = 'source-over';
@@ -326,7 +326,7 @@
         g.addColorStop(0.5, '#9CA3AD');
         g.addColorStop(1, '#7B8290');
         ctx.fillStyle = g;
-        ctx.fillRect(0, 0, w, h);
+        ctx.fillRect(-2, -2, w + 4, h + 4);   // 超刷邊界 2px，保證完全蓋住、不露出底下獎品
         // 細白點 pattern
         for (var i = 0; i < 140; i++) {
           ctx.fillStyle = 'rgba(255,255,255,' + (Math.random() * 0.18 + 0.04) + ')';
