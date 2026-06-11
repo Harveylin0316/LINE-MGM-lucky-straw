@@ -15,20 +15,7 @@ const { verifyOaFollower } = require('./oaFollower');
 async function selectPrizeAndRecord(opts) {
   const { pool, activitySlug, gameType, lineUserId, lineDisplayName, req } = opts;
   if (!lineUserId) return { error: { status: 400, code: 'missing_line_user_id' } };
-
-  // require_follow_oa：先在交易外用 LINE API 確認是否加 OA 好友（不佔用 DB 連線）
-  try {
-    const preChk = await pool.query(
-      `SELECT require_follow_oa FROM activities WHERE slug = $1 AND game_type = $2 LIMIT 1`,
-      [activitySlug, gameType]
-    );
-    if (preChk.rows[0] && preChk.rows[0].require_follow_oa) {
-      const f = await verifyOaFollower(lineUserId);
-      if (f === false) {
-        return { error: { status: 403, code: 'must_follow_oa', detail: '請先加入官方帳號好友才能參加。' } };
-      }
-    }
-  } catch (e) { console.error('require_follow_oa precheck error:', e && e.message); }
+  // 註：require_follow_oa 的好友驗證已移到 /play 路由，與 token 驗證「並行」執行（加速「準備中」）。
 
   const client = await pool.connect();
   try {

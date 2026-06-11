@@ -19,6 +19,7 @@ const {
   selectPrizeAndRecord, computeUserQuota, registerReferral
 } = require('../core/gamePlayEngine');
 const { verifyLiffIdToken, channelIdFromLiffId } = require('../core/liffAuth');
+const { verifyOaFollower } = require('../core/oaFollower');
 
 function registerGameType(app, deps, opts) {
   const { query, pool } = deps;
@@ -28,7 +29,7 @@ function registerGameType(app, deps, opts) {
   // 強制模式（預設開，可用環境變數 LIFF_TOKEN_ENFORCE=0 關閉）：
   //   無 token / 驗證失敗 / sub≠前端送的 userId → pass=false（擋冒用）。
   // /meta 為唯讀（不檢查 pass，只記探針），避免擋住頁面載入。
-  async function verifyGameIdentity(endpoint, slug, bodyUid, idToken) {
+  async function verifyGameIdentity(endpoint, slug, bodyUid, idToken, actRow) {
     const enforce = process.env.LIFF_TOKEN_ENFORCE !== '0';
     if (!idToken) {
       return enforce
@@ -37,8 +38,12 @@ function registerGameType(app, deps, opts) {
     }
     let channelId = channelIdFromLiffId(defaultLiffId);
     try {
-      const r = await query(`SELECT liff_id_override FROM activities WHERE slug = $1 AND game_type = $2 LIMIT 1`, [slug, gameType]);
-      const ov = r.rows[0] && r.rows[0].liff_id_override;
+      // actRow 已帶 liff_id_override 時直接用，省一次查詢；否則才查
+      let ov = actRow ? actRow.liff_id_override : undefined;
+      if (ov === undefined) {
+        const r = await query(`SELECT liff_id_override FROM activities WHERE slug = $1 AND game_type = $2 LIMIT 1`, [slug, gameType]);
+        ov = r.rows[0] && r.rows[0].liff_id_override;
+      }
       if (ov && String(ov).trim()) channelId = channelIdFromLiffId(ov);
     } catch (e) { /* ignore */ }
     let v;
@@ -133,8 +138,17 @@ function registerGameType(app, deps, opts) {
     const slug = String(req.params.slug || '').trim();
     const lineUserId = String((req.body || {}).line_user_id || '').trim();
     const lineDisplayName = String((req.body || {}).line_display_name || '').trim() || null;
-    const idCheck = await verifyGameIdentity('play', slug, lineUserId, String((req.body || {}).id_token || '').trim());
+    const idToken = String((req.body || {}).id_token || '').trim();
+    // 一次查活動旗標，再把「token 驗證」「加好友驗證」兩個 LINE API 並行跑（不要一個等一個 → 加速「準備中」）
+    let actRow = null;
+    try { actRow = (await query(`SELECT require_follow_oa, liff_id_override FROM activities WHERE slug = $1 AND game_type = $2 LIMIT 1`, [slug, gameType])).rows[0] || null; } catch (e) { /* ignore */ }
+    const needFollow = !!(actRow && actRow.require_follow_oa);
+    const [idCheck, followerOk] = await Promise.all([
+      verifyGameIdentity('play', slug, lineUserId, idToken, actRow),
+      needFollow ? verifyOaFollower(lineUserId) : Promise.resolve(true)
+    ]);
     if (!idCheck.pass) return res.status(idCheck.reject.status).json({ ok: false, error: idCheck.reject.code, detail: idCheck.reject.detail });
+    if (followerOk === false) return res.status(403).json({ ok: false, error: 'must_follow_oa', detail: '請先加入官方帳號好友才能參加。' });
     const result = await selectPrizeAndRecord({
       pool, activitySlug: slug, gameType, lineUserId, lineDisplayName, req
     });

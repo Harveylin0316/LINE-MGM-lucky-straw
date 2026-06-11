@@ -625,22 +625,15 @@
           await initLiff();
           liffReady = true;
           await maybeRegisterReferral();
-          // 拉 quota；如果還有次數才自動發第一張
-          var metaResp;
-          try {
-            metaResp = await fetch('/api/games/scratch/' + encodeURIComponent(slug) +
-              '/meta?line_user_id=' + encodeURIComponent(profile.userId) + '&id_token=' + encodeURIComponent(idToken || '')).then(function (r) { return r.json(); });
-          } catch (_e) {}
-          if (metaResp && metaResp.ok && metaResp.quota) {
-            renderQuota(metaResp.quota);
-            if (metaResp.quota.remaining <= 0) {
-              // 用完了：不發新卡、隱藏揭曉鈕（renderQuota 已處理）
-              return;
-            }
-          }
           statusEl.innerHTML = '哈囉，<span class="name">' + (profile.displayName || '') + '</span>';
           stageHint.textContent = '進行中';
-          // 還有剩 → 自動開始第一張
+          // meta（更新配額顯示）與 第一張卡「並行」，不再 meta 等完才發卡（縮短「準備中」）。
+          // 配額是否用完由 /play 自行把關，startNewCard 會妥善處理 quota_exhausted。
+          fetch('/api/games/scratch/' + encodeURIComponent(slug) +
+            '/meta?line_user_id=' + encodeURIComponent(profile.userId) + '&id_token=' + encodeURIComponent(idToken || ''))
+            .then(function (r) { return r.json(); })
+            .then(function (m) { if (m && m.ok && m.quota) renderQuota(m.quota); })
+            .catch(function () {});
           startNewCard();
         } catch (e) {
           statusEl.textContent = e.message || '初始化失敗';
