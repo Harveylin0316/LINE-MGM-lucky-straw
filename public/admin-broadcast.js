@@ -50,7 +50,7 @@
       state.messagePreviewed = false;
       updateSendButton();
       saveDraft();
-      syncThemeColorBar();
+      renderColorPalette();
       schedulePreview();
     });
   }
@@ -486,16 +486,7 @@
     if (el) el.addEventListener('input', schedulePreview);
   });
 
-  // 主題底色取色器：一鍵換深色區塊底色
-  (function () {
-    var input = $('theme-bg-color');
-    var resetBtn = $('theme-bg-reset');
-    if (input) input.addEventListener('input', function (e) { applyThemeColor(e.target.value); });
-    if (resetBtn) resetBtn.addEventListener('click', function () {
-      applyThemeColor('#1F2937');
-      if (input) input.value = '#1f2937';
-    });
-  })();
+  // 配色盤的色塊在 renderColorPalette() 內各自綁定 input 事件，這裡不需額外 wiring。
 
   // ------------------------------------------------------------------
   // 7. render Flex mock (支援 bubble 跟 carousel，含 header/hero/body/footer)
@@ -689,6 +680,8 @@
         btn.dataset.editPath = JSON.stringify(path.concat(['contents', labelIdx, 'text']));
         btn.addEventListener('input', onPreviewTextEdit);
         btn.addEventListener('keydown', preventEditorEnter);
+        // 點按鈕也要叫出格式工具列：色＝按鈕文字、框＝按鈕底色
+        btn.addEventListener('focus', function () { showTextFormatToolbar(btn); });
       }
       attachDeleteButton(btn, path, '按鈕');
       parent.appendChild(btn);
@@ -968,8 +961,10 @@
       else parentBox.backgroundColor = val;
       textarea.value = JSON.stringify(parsed, null, 2);
       saveDraft();
-      // DOM 即時 reflect 到 text 所在的 box 容器（.lm-box / .lm-body / .lm-header / .lm-footer）
-      var boxEl = currentEditingText.parentNode;
+      // DOM 即時 reflect：CTA 按鈕自己就是該 box，其餘抓父容器
+      var boxEl = currentEditingText.classList && currentEditingText.classList.contains('lm-cta')
+        ? currentEditingText
+        : currentEditingText.parentNode;
       if (boxEl) boxEl.style.background = val || '';
     } catch (e) {
       console.warn('handleBoxBgChange failed:', e && e.message);
@@ -987,78 +982,98 @@
     return c.toLowerCase();
   }
 
-  // ===== 主題底色：一鍵換掉所有深色區塊的 backgroundColor（不動文字色）=====
-  function colorIsDark(hex) {
-    var m = /^#([0-9a-f]{6})$/i.exec(hex || '');
-    if (!m) return false;
-    var n = parseInt(m[1], 16);
-    var r = (n >> 16) & 255, g = (n >> 8) & 255, b = n & 255;
-    var lum = (0.2126 * r + 0.7152 * g + 0.0722 * b) / 255;
-    return lum < 0.45;
-  }
-  function collectBgColors(node, acc) {
-    if (Array.isArray(node)) { node.forEach(function (x) { collectBgColors(x, acc); }); return; }
+  // ===== 配色盤：列出整張卡用到的所有顏色，任一可改、全域套用 =====
+  // 收集所有顏色：key = 小寫 hex，value = { bg, text, border }
+  function collectAllColors(node, acc) {
+    if (Array.isArray(node)) { node.forEach(function (x) { collectAllColors(x, acc); }); return; }
     if (!node || typeof node !== 'object') return;
-    if (typeof node.backgroundColor === 'string') {
-      var k = node.backgroundColor.toLowerCase();
-      acc[k] = (acc[k] || 0) + 1;
+    function note(val, kind) {
+      if (typeof val !== 'string' || !/^#[0-9a-f]{3,6}$/i.test(val)) return;
+      var k = val.toLowerCase();
+      acc[k] = acc[k] || { bg: 0, text: 0, border: 0 };
+      acc[k][kind]++;
     }
+    note(node.backgroundColor, 'bg');
+    note(node.borderColor, 'border');
+    // separator 的 color 視為框線色，其餘 color 視為文字色
+    if (node.type === 'separator') note(node.color, 'border');
+    else note(node.color, 'text');
     Object.keys(node).forEach(function (key) {
-      if (node[key] && typeof node[key] === 'object') collectBgColors(node[key], acc);
+      if (node[key] && typeof node[key] === 'object') collectAllColors(node[key], acc);
     });
   }
-  // 找出最常用的「深色」backgroundColor 當作主題色（沒有則回 null）
-  function detectThemeDark(flex) {
+  // 全域換色：所有等於 fromHex 的 backgroundColor / color / borderColor 換成 toHex
+  function deepReplaceAnyColor(node, fromHex, toHex) {
+    if (Array.isArray(node)) { node.forEach(function (x) { deepReplaceAnyColor(x, fromHex, toHex); }); return; }
+    if (!node || typeof node !== 'object') return;
+    ['backgroundColor', 'color', 'borderColor'].forEach(function (prop) {
+      if (typeof node[prop] === 'string' && node[prop].toLowerCase() === fromHex.toLowerCase()) {
+        node[prop] = toHex;
+      }
+    });
+    Object.keys(node).forEach(function (key) {
+      if (node[key] && typeof node[key] === 'object') deepReplaceAnyColor(node[key], fromHex, toHex);
+    });
+  }
+  function colorRoleLabel(roles) {
+    var parts = [];
+    if (roles.bg) parts.push('底色');
+    if (roles.text) parts.push('文字');
+    if (roles.border) parts.push('框線');
+    return parts.join('＋') || '顏色';
+  }
+  // 重建配色盤（模板載入 / 切到 flex_json 時呼叫）
+  function renderColorPalette() {
+    var box = $('color-palette-box');
+    var pal = $('color-palette');
+    if (!box || !pal) return;
+    var ta = $('flex-json');
     var acc = {};
-    collectBgColors(flex, acc);
-    var best = null, bestCount = 0;
-    Object.keys(acc).forEach(function (hex) {
-      if (colorIsDark(hex) && acc[hex] > bestCount) { best = hex; bestCount = acc[hex]; }
-    });
-    return best;
-  }
-  // 只改 backgroundColor，絕不動 color（按鈕深字才不會壞）
-  function deepReplaceBgColor(node, fromHex, toHex) {
-    if (Array.isArray(node)) { node.forEach(function (x) { deepReplaceBgColor(x, fromHex, toHex); }); return; }
-    if (!node || typeof node !== 'object') return;
-    if (typeof node.backgroundColor === 'string' && node.backgroundColor.toLowerCase() === fromHex.toLowerCase()) {
-      node.backgroundColor = toHex;
-    }
-    Object.keys(node).forEach(function (key) {
-      if (node[key] && typeof node[key] === 'object') deepReplaceBgColor(node[key], fromHex, toHex);
-    });
-  }
-  // 模板載入後：偵測目前主題深色、設定取色器、決定是否顯示這條 bar
-  function syncThemeColorBar() {
-    var input = $('theme-bg-color');
-    var bar = $('theme-color-bar');
-    if (!input) return;
-    var ta = $('flex-json');
-    var dark = null;
     if (state.mode === 'flex_json' && ta) {
-      try { dark = detectThemeDark(JSON.parse(ta.value)); } catch (e) {}
+      try { collectAllColors(JSON.parse(ta.value), acc); } catch (e) {}
     }
-    if (dark) {
-      input.value = normalizeHexColor(dark, '#1f2937');
-      state.themeColor = input.value;
-      if (bar) bar.hidden = false;
-    } else {
-      state.themeColor = null;
-      if (bar) bar.hidden = true;
-    }
-  }
-  // 套用新主題色：把目前主題色的所有 backgroundColor 換成 newVal
-  function applyThemeColor(newVal) {
-    var ta = $('flex-json');
-    if (!ta) return;
-    var from = state.themeColor || '#1F2937';
-    var flex;
-    try { flex = JSON.parse(ta.value); } catch (e) { return; }
-    deepReplaceBgColor(flex, from, newVal);
-    ta.value = JSON.stringify(flex, null, 2);
-    state.themeColor = newVal;
-    saveDraft();
-    schedulePreview();
+    var hexes = Object.keys(acc);
+    if (hexes.length === 0) { box.hidden = true; pal.innerHTML = ''; return; }
+    hexes.sort(function (a, b) {
+      return (acc[b].bg + acc[b].text + acc[b].border) - (acc[a].bg + acc[a].text + acc[a].border);
+    });
+    pal.innerHTML = '';
+    hexes.forEach(function (hex) {
+      var roles = acc[hex];
+      var total = roles.bg + roles.text + roles.border;
+      var sw = document.createElement('div');
+      sw.className = 'cp-swatch';
+      var inp = document.createElement('input');
+      inp.type = 'color';
+      inp.value = normalizeHexColor(hex, '#000000');
+      inp.dataset.color = inp.value;
+      var meta = document.createElement('div');
+      meta.className = 'cp-meta';
+      var role = document.createElement('span');
+      role.className = 'cp-role';
+      role.textContent = colorRoleLabel(roles);
+      var use = document.createElement('span');
+      use.className = 'cp-use';
+      use.textContent = '用在 ' + total + ' 處';
+      meta.appendChild(role);
+      meta.appendChild(use);
+      inp.addEventListener('input', function (e) {
+        var from = inp.dataset.color;
+        var to = e.target.value;
+        if (!from || from.toLowerCase() === to.toLowerCase()) return;
+        var flex;
+        try { flex = JSON.parse(ta.value); } catch (err) { return; }
+        deepReplaceAnyColor(flex, from, to);
+        ta.value = JSON.stringify(flex, null, 2);
+        inp.dataset.color = to;
+        saveDraft();
+        schedulePreview();
+      });
+      sw.appendChild(inp);
+      sw.appendChild(meta);
+      pal.appendChild(sw);
+    });
+    box.hidden = false;
   }
 
   function hideTextFormatToolbar() {
@@ -1699,7 +1714,7 @@
       // 觸發圖片+URL 助手 scan + 預覽
       setTimeout(function () {
         scanJsonImagesAndUrls();
-        syncThemeColorBar();
+        renderColorPalette();
         schedulePreview();
       }, 100);
       return;
