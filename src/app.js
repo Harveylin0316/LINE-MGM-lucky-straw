@@ -400,8 +400,9 @@ app.post(
     flowEngine
   })
 );
-app.use(express.json());
-app.use(express.urlencoded({ extended: false }));
+// 上限調高：RFM 名單分塊上傳一批可達數百 KB（預設 100KB 會 request entity too large）
+app.use(express.json({ limit: '8mb' }));
+app.use(express.urlencoded({ extended: false, limit: '2mb' }));
 app.use(cookieParser());
 app.use(
   helmet({
