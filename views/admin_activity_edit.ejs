@@ -55,7 +55,7 @@
           <input type="number" id="ae-ref-per" min="0" value="0" />
         </label>
         <label class="ae-field">
-          <span>透過邀請最多可加幾次（cap）</span>
+          <span>邀請加次數上限（設 0 ＝ 完全不會加次，邀請等於白邀）</span>
           <input type="number" id="ae-ref-max" min="0" value="0" />
         </label>
         <label class="ae-field">
@@ -119,6 +119,8 @@
 
     <section class="card">
       <h2>3. 活動連結</h2>
+
+      <div id="ae-link-status-banner"></div>
 
       <div class="ae-link-title">給用戶用（LIFF 分享短網址）</div>
       <p class="muted" style="font-size:12px;margin:4px 0 8px;">
@@ -280,6 +282,7 @@
             fillActivityForm(resp.activity);
             renderPrizes();
             updateLiffLink();
+            updateLinkStatusBanner();
           });
       }
 
@@ -299,9 +302,31 @@
         if (prev) prev.href = directUrl + '?preview=1';
       }
 
+      function updateLinkStatusBanner() {
+        var banner = $('ae-link-status-banner');
+        if (!banner) return;
+        var s = $('ae-status-select').value;
+        if (s === 'active') {
+          banner.setAttribute('style', 'margin:4px 0 12px;font-size:13px;color:#15803d;');
+          banner.textContent = '活動進行中，連結可正常使用。';
+        } else {
+          var label = ({draft:'草稿',paused:'暫停',ended:'已結束'})[s] || s;
+          banner.setAttribute('style', 'margin:4px 0 12px;padding:10px 12px;background:#FFFBEB;border:1px solid #FDE68A;border-radius:6px;font-size:13px;color:#92400E;');
+          banner.textContent = '目前狀態是『' + label + '』，用戶點這個連結會看不到活動。請把上方狀態改成『進行中』再按更新。';
+        }
+      }
+      $('ae-status-select').addEventListener('change', updateLinkStatusBanner);
+
       // ---- save activity ----
       $('ae-save').addEventListener('click', function () {
         var data = collectActivityForm();
+        if (data.referral_bonus_per > 0 && data.referral_bonus_max === 0) {
+          if (!confirm('邀請上限目前是 0，用戶邀了朋友也不會增加次數（等於白邀）。\\n\\n要自動把上限設成 10 再儲存嗎？')) {
+            return;
+          }
+          $('ae-ref-max').value = 10;
+          data.referral_bonus_max = 10;
+        }
         var statusEl = $('ae-save-status');
         statusEl.textContent = '儲存中…';
         var url = activityId ? '/admin/activities/api/' + activityId : '/admin/activities/api';
@@ -543,6 +568,7 @@
 
       // bootstrap
       loadActivity();
+      updateLinkStatusBanner();
       // 載入時也 render 預覽
       setTimeout(updateCoverPreview, 100);
     })();

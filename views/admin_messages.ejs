@@ -8,7 +8,7 @@
       <div class="msg-hero-inner">
         <div>
           <h1>訊息庫</h1>
-          <p class="muted" style="margin-top:6px;">每張卡就是這則訊息在 LINE 裡長的樣子。點「編輯」用跟群發一樣的編輯器改字、換圖、改連結。</p>
+          <p class="muted" style="margin-top:6px;">這裡存好的訊息會自動出現在『群發訊息』的模板區，也能在『自動化流程』裡指定發送。點卡片上的『用這則去群發』可直接拿去發。</p>
         </div>
         <a href="/admin/broadcast?msglib=1" class="msg-primary-btn" id="btn-new-msg">＋ 新增訊息</a>
       </div>
@@ -50,6 +50,8 @@
       .msg-actions a,.msg-actions button{flex:1;padding:8px;border:1px solid #ECECEE;background:#fff;border-radius:8px;cursor:pointer;font-size:13px;color:#374151;text-align:center;text-decoration:none;font-weight:600;}
       .msg-actions button.del{color:#b91c1c;flex:0 0 auto;padding:8px 12px;}
       .msg-actions a:hover,.msg-actions button:hover{border-color:#1f2937;}
+      .msg-actions a.msg-go-broadcast{background:#FCC726;border-color:#FCC726;color:#1F2937;font-weight:700;}
+      .msg-actions a.msg-go-broadcast:hover{border-color:#1f2937;}
 
       /* ---- LINE bubble mock（唯讀） ---- */
       .lm{width:100%;max-width:300px;background:#fff;border-radius:18px;overflow:hidden;box-shadow:0 1px 4px rgba(0,0,0,.12);font-family:-apple-system,BlinkMacSystemFont,'PingFang TC','Noto Sans TC',sans-serif;}
@@ -195,7 +197,8 @@
           var info=document.createElement('div');info.className='msg-info';
           if(m.description){var de=document.createElement('div');de.className='desc';de.textContent=m.description;info.appendChild(de);}
           var acts=document.createElement('div');acts.className='msg-actions';
-          acts.innerHTML='<a href="/admin/broadcast?msglib=1&mid='+m.id+'">編輯</a>'+
+          acts.innerHTML='<a class="msg-go-broadcast" href="/admin/broadcast?tpl='+m.id+'">用這則去群發</a>'+
+            '<a href="/admin/broadcast?msglib=1&mid='+m.id+'">編輯</a>'+
             '<a href="/admin/broadcast?msglib=1&mid='+m.id+'&dup=1">複製</a>'+
             '<button class="del" data-del="'+m.id+'">刪除</button>';
           info.appendChild(acts);
@@ -208,7 +211,7 @@
             var box=$('msg-list');
             if(!d.ok){box.innerHTML='<p class="muted" style="padding:20px;">載入失敗：'+esc(d.error||'')+'</p>';return;}
             if(!d.messages.length){box.innerHTML='<p class="muted" style="padding:20px;">還沒有訊息。點右上「新增訊息」用編輯器建立第一則。</p>';return;}
-            $('msg-count').textContent='共 '+d.messages.length+' 則樣板';
+            $('msg-count').textContent='共 '+d.messages.length+' 則訊息';
             box.className='msg-gallery';box.innerHTML='';
             d.messages.forEach(function(m){box.appendChild(card(m));});
             box.querySelectorAll('[data-del]').forEach(function(b){b.addEventListener('click',function(){delMsg(b.getAttribute('data-del'));});});

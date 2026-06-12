@@ -39,6 +39,7 @@
             <button type="button" class="nav-item navgrp-btn">訊息 <span class="navgrp-caret">▾</span></button>
             <div class="navgrp-menu">
               <a href="/admin/broadcast">群發訊息</a>
+              <a href="/admin/broadcast/history">發送紀錄</a>
               <a href="/admin/messages">訊息庫</a>
               <a href="/admin/flows">自動化流程</a>
             </div>
@@ -48,16 +49,17 @@
             <div class="navgrp-menu">
               <a href="/admin/recipient-lists">名單庫</a>
               <a href="/admin/users">用戶檔案</a>
-              <a href="/admin/rfm">RFM 資料層</a>
+              <a href="/admin/rfm">會員分級分析</a>
             </div>
           </div>
           <div class="navgrp">
             <button type="button" class="nav-item navgrp-btn">活動 <span class="navgrp-caret">▾</span></button>
             <div class="navgrp-menu">
               <a href="/admin/activities">活動管理</a>
+              <a href="/admin/prizes">獎項管理</a>
               <a href="/admin/referrals">邀請成效</a>
               <a href="/admin/campaigns/spring">春日饗里活動</a>
-              <a href="/admin/liff/random-rice">LIFF 數據分析</a>
+              <a href="/admin/liff/random-rice">活動頁面數據</a>
             </div>
           </div>
           <% } %>
@@ -65,7 +67,7 @@
             <button type="submit">登出</button>
           </form>
           <% } else { %>
-          <span class="topbar-guest-hint">管理入口為內部專用</span>
+          <a class="topbar-guest-hint" href="<%= typeof loginAction === 'string' && loginAction ? loginAction : '/admin/login' %>">內部員工請由此登入</a>
           <% } %>
         </nav>
       </div>

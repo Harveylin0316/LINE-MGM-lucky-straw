@@ -1673,6 +1673,9 @@
     return card;
   }
 
+  // ?tpl=<id> 自動套用模板（只在第一次載入模板列表時生效）
+  var tplParamPending = new URLSearchParams(location.search).get('tpl');
+
   function loadMessageTemplates() {
     var sel = $('template-select');
     var grid = $('template-grid');
@@ -1713,6 +1716,24 @@
           });
           grid.appendChild(card);
         });
+        // ?tpl=<id>：自動套用指定模板
+        if (tplParamPending) {
+          var tplId = tplParamPending;
+          tplParamPending = null;
+          var matched = null;
+          list.forEach(function (t) {
+            if (String(t.id) === String(tplId)) matched = t;
+          });
+          if (matched) {
+            sel.value = String(matched.id);
+            sel.dispatchEvent(new Event('change'));
+            $$('.template-card', grid).forEach(function (c) {
+              c.classList.toggle('active', c.getAttribute('data-id') === String(matched.id));
+            });
+            var tplStatusEl = $('msg-status');
+            if (tplStatusEl) tplStatusEl.textContent = '已帶入訊息庫的『' + matched.name + '』';
+          }
+        }
       })
       .catch(function () {
         grid.innerHTML = '';
@@ -1842,6 +1863,11 @@
   // ------------------------------------------------------------------
   // 8. send / process-chunk loop
   // ------------------------------------------------------------------
+  function sendingBeforeUnload(e) {
+    e.preventDefault();
+    e.returnValue = '';
+  }
+
   function updateSendButton() {
     var btn = $('btn-send');
     var ready =
@@ -1850,6 +1876,21 @@
       state.audiencePreviewedTotal > 0 &&
       state.messagePreviewed &&
       !state.sending;
+    // 按鈕文字：收件人預覽完成後顯示人數
+    var total = state.audiencePreviewedTotal;
+    if (total !== null && total > 0) {
+      btn.textContent = state.sendMode === 'scheduled'
+        ? '排程發送給 ' + total + ' 人'
+        : '正式送出給 ' + total + ' 人';
+    } else {
+      btn.textContent = state.sendMode === 'scheduled' ? '排程送出' : '立即送出';
+    }
+    // 送出期間掛 beforeunload，避免關頁中斷送出
+    if (state.sending) {
+      window.addEventListener('beforeunload', sendingBeforeUnload);
+    } else {
+      window.removeEventListener('beforeunload', sendingBeforeUnload);
+    }
     // 不真的 disable，click 仍能 fire 才能給 user 明確 hint
     if (ready) {
       btn.classList.remove('btn-needs-prep');
@@ -1872,6 +1913,21 @@
     if (!state.messagePreviewed) {
       return { ok: false, reason: '預覽尚未產生 — 請編輯訊息或從訊息模板選一個，等預覽顯示後再送', focusEl: 'msg-preview' };
     }
+    if (state.mode === 'flex_json') {
+      var phSource = ($('flex-json') ? $('flex-json').value : '');
+      if (state.abTestEnabled && $('b-flex-json')) phSource += '\n' + $('b-flex-json').value;
+      var phMatches = phSource.match(/REPLACE_[A-Z0-9_]+/g) || [];
+      var phSeen = {};
+      phMatches.forEach(function (p) { phSeen[p] = true; });
+      var phCount = Object.keys(phSeen).length;
+      if (phCount > 0) {
+        return {
+          ok: false,
+          reason: '訊息裡還有 ' + phCount + ' 個圖片或連結沒設定（會發出破圖或點不開的連結）。請到『圖片上傳助手』和『URL 填寫助手』完成設定',
+          focusEl: 'advanced-json-block'
+        };
+      }
+    }
     if (state.sendMode === 'scheduled') {
       var dtStr = $('schedule-datetime').value;
       if (!dtStr) return { ok: false, reason: '請選擇排程時間', focusEl: 'schedule-datetime' };
@@ -1889,7 +1945,7 @@
       if (!r.checked) return;
       state.sendMode = v;
       $('schedule-field').hidden = (v !== 'scheduled');
-      $('btn-send').textContent = v === 'scheduled' ? '排程送出' : '立即送出';
+      updateSendButton();
     });
   });
 
@@ -1911,7 +1967,7 @@
       var dtStr2 = $('schedule-datetime').value;
       confirmMsg = '將排程於「' + dtStr2.replace('T', ' ') + '」送給 ' + state.audiencePreviewedTotal + ' 人，確認？';
     } else {
-      confirmMsg = '將立即送 ' + state.audiencePreviewedTotal + ' 人。發出後無法回收，確認？';
+      confirmMsg = '確定發送給 ' + state.audiencePreviewedTotal + ' 位會員？送出後無法回收。\n\n（建議先用上方『發送測試』確認內容無誤）';
     }
     if (!confirm(confirmMsg)) return;
     state.sending = true;

@@ -92,6 +92,7 @@
           <button type="button" class="rl-secondary-btn" id="add-cancel">取消</button>
         </div>
         <div id="add-status" class="muted" style="font-size:12px;min-height:18px;margin-top:8px;"></div>
+        <button type="button" class="rl-secondary-btn" id="add-ack" hidden style="margin-top:8px;">知道了</button>
       </div>
     </div>
 
@@ -307,12 +308,14 @@
         $('add-counter').textContent = '已輸入 0 個 UID';
         $('add-email-counter').textContent = '已輸入 0 個 email';
         $('add-status').textContent = '';
+        $('add-ack').hidden = true;
         switchAddTab('line');
         addModal.hidden = false;
         setTimeout(function () { $('add-uids').focus(); }, 50);
       });
       $('add-close').addEventListener('click', function () { addModal.hidden = true; });
       $('add-cancel').addEventListener('click', function () { addModal.hidden = true; });
+      $('add-ack').addEventListener('click', function () { addModal.hidden = true; });
       $('add-uids').addEventListener('input', function () {
         $('add-counter').textContent = '已輸入 ' + parseUids($('add-uids').value).length + ' 個 UID';
       });
@@ -344,9 +347,16 @@
               $('add-status').textContent = '失敗：' + (d.detail || d.error);
               return;
             }
-            $('add-status').textContent = '新增 ' + (d.inserted || 0) + ' 筆 · 已存在 ' + (d.already_existed || 0) +
-              ((d.invalid_count || 0) > 0 ? ' · 無效 ' + d.invalid_count : '');
-            setTimeout(function () { addModal.hidden = true; loadMembers(); }, 1000);
+            var existed = d.already_existed || 0;
+            var invalid = d.invalid_count || 0;
+            $('add-status').textContent = '新增 ' + (d.inserted || 0) + ' 筆 · 已存在 ' + existed +
+              (invalid > 0 ? ' · 無效 ' + invalid : '');
+            if (existed > 0 || invalid > 0) {
+              $('add-ack').hidden = false;
+              loadMembers();
+            } else {
+              setTimeout(function () { addModal.hidden = true; loadMembers(); }, 2500);
+            }
           });
       });
 

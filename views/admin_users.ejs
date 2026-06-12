@@ -9,7 +9,7 @@
         <h1>用戶檔案</h1>
         <p class="muted" style="margin-top:6px;">看單一用戶在系統內的所有行為：加入/封鎖、玩遊戲、邀請、點擊、餐廳興趣、傳訊息、時間軸。</p>
       </div>
-      <input type="search" id="us-search" placeholder="搜尋 lineId / 顯示名…" />
+      <input type="search" id="us-search" placeholder="搜尋名字或 LINE 編號…" />
     </section>
 
     <div class="us-grid">
@@ -98,11 +98,10 @@
               stat(c.liff_events,'今天吃什麼')+'</div>';
             if(d.rfm){
               var rf=d.rfm;
-              var via=rf.matched_by_line?'lineId':'email';
-              h+='<div class="us-sec-title">RFM 檔案（外部名單對上，依 '+via+'）</div>'+
+              h+='<div class="us-sec-title">消費紀錄（來自會員名單，已用 LINE 帳號自動比對）</div>'+
                 '<div class="us-stats">'+
-                  stat((rf.recency==null?'—':rf.recency),'最近一次(天)')+
-                  stat((rf.frequency==null?'—':rf.frequency),'次數(F,參考)')+
+                  stat((rf.recency==null?'—':rf.recency),'距上次消費（天）')+
+                  stat((rf.frequency==null?'—':rf.frequency),'歷史消費（次）')+
                   '<div class="us-stat"><div class="v">'+(rf.monetary_est==null?'—':Math.round(rf.monetary_est).toLocaleString())+'</div><div class="k">預估價位帶*</div></div>'+
                 '</div>'+
                 '<p class="muted" style="font-size:11px;margin-top:4px;">*M 為餐廳客單價推算的預估價位帶，非真實消費金額</p>';

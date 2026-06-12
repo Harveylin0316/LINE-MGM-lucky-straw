@@ -63,7 +63,7 @@
                 let etaStr = '—';
                 if (sched) {
                   const diffMs = sched.getTime() - Date.now();
-                  if (diffMs < 0) etaStr = '<span style="color:#dc2626;">逾時待跑</span>';
+                  if (diffMs < 0) etaStr = '<span style="color:#dc2626;">已到時間，系統將在 5 分鐘內送出</span>';
                   else if (diffMs < 60000) etaStr = '< 1 分鐘';
                   else if (diffMs < 3600000) etaStr = Math.floor(diffMs / 60000) + ' 分鐘後';
                   else if (diffMs < 86400000) etaStr = Math.floor(diffMs / 3600000) + ' 小時後';
@@ -372,8 +372,9 @@
             </div>
 
             <details class="advanced-json-block" id="advanced-json-block">
-              <summary>進階模式：直接編輯 Flex JSON（給工程師用 / 內建模板會自動切到這裡）</summary>
+              <summary>這則訊息的內容設定（圖片與連結）</summary>
               <div class="broadcast-tab-pane" id="pane-flex-json">
+              <div style="background:#FFFBEB;color:#92400E;font-size:12px;padding:8px 10px;border-radius:8px;margin-bottom:10px;">想改文字？直接點右側預覽裡的文字就能修改。這區只需要用助手換圖片和連結。</div>
               <div id="json-image-helper" class="json-image-helper" hidden>
                 <div class="json-image-helper-head">
                   <span>圖片上傳助手（自動偵測 JSON 內 <code>REPLACE_*</code> 圖片位置）</span>

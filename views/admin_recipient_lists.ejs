@@ -57,9 +57,10 @@
             <input type="text" id="nl-desc" placeholder="用途備註" maxlength="500" />
           </label>
           <label class="rl-field rl-field-full">
-            <span>LINE userId 清單 *（一行一個 / 逗號 / 空格 都行）</span>
+            <span>LINE 用戶編號（每位好友的專屬編號）（可選，建立後也能再加入成員，一行一個 / 逗號 / 空格 都行）</span>
             <textarea id="nl-uids" rows="8" placeholder="U3eca22d67d352c4db1428decf3ebcf14&#10;U4eca22d67d352c4db1428decf3ebcf15&#10;..." style="font-family:ui-monospace,Menlo,monospace;font-size:12px;"></textarea>
-            <div id="nl-counter" class="muted" style="font-size:11px;">已輸入 0 個 UID</div>
+            <div id="nl-counter" class="muted" style="font-size:11px;">已輸入 0 位用戶</div>
+            <div class="muted" style="font-size:12px;">不知道編號？到『用戶檔案』頁點任一用戶即可複製，或切到 Email 分頁直接貼信箱。<a href="/admin/users" target="_blank" rel="noopener" style="color:#374151;text-decoration:underline;">前往用戶檔案</a></div>
           </label>
         </div>
         <div class="rl-modal-actions">
@@ -128,7 +129,7 @@
             '<td style="font-size:12px;color:#6B6B70;">' + fmtTime(l.updated_at) + '</td>' +
             '<td>' +
               '<a href="/admin/recipient-lists/' + l.id + '" class="rl-link-btn">檢視 / 編輯</a>' +
-              '<button type="button" class="rl-del-btn" data-id="' + l.id + '" data-name="' + esc(l.name) + '">刪除</button>' +
+              '<button type="button" class="rl-del-btn" data-id="' + l.id + '" data-name="' + esc(l.name) + '" data-total="' + (l.total || 0) + '">刪除</button>' +
             '</td>' +
           '</tr>';
         }).join('');
@@ -137,7 +138,11 @@
           btn.addEventListener('click', function () {
             var id = btn.getAttribute('data-id');
             var name = btn.getAttribute('data-name');
-            if (!confirm('刪除名單「' + name + '」？此動作無法復原。')) return;
+            var total = btn.getAttribute('data-total');
+            var msg = '確定刪除名單『' + name + '』' +
+              (total != null && total !== '' ? '（' + total + ' 位成員）' : '') +
+              '？\\n\\n若有排程群發或自動規則正在使用此名單，將會失效。';
+            if (!confirm(msg)) return;
             fetch('/admin/broadcast/recipient-lists/' + id, { method: 'DELETE' })
               .then(function (r) { return r.json(); })
               .then(function (d) {
@@ -166,7 +171,7 @@
         $('nl-name').value = '';
         $('nl-desc').value = '';
         $('nl-uids').value = '';
-        $('nl-counter').textContent = '已輸入 0 個 UID';
+        $('nl-counter').textContent = '已輸入 0 位用戶';
         $('nl-status').textContent = '';
         modal.hidden = false;
         setTimeout(function () { $('nl-name').focus(); }, 50);
@@ -178,7 +183,7 @@
 
       $('nl-uids').addEventListener('input', function () {
         var uids = parseUids($('nl-uids').value);
-        $('nl-counter').textContent = '已輸入 ' + uids.length + ' 個 UID';
+        $('nl-counter').textContent = '已輸入 ' + uids.length + ' 位用戶';
       });
 
       $('nl-save').addEventListener('click', function () {
@@ -186,7 +191,6 @@
         var desc = $('nl-desc').value.trim();
         var uids = parseUids($('nl-uids').value);
         if (!name) { $('nl-status').textContent = '請填寫名稱'; return; }
-        if (uids.length === 0) { $('nl-status').textContent = '請至少貼一個 UID'; return; }
         $('nl-status').textContent = '建立中⋯';
         $('nl-save').disabled = true;
         fetch('/admin/broadcast/recipient-lists', {

@@ -6,20 +6,20 @@
     body: `
     <section class="card">
       <h1>邀請成效</h1>
-      <p class="muted" style="margin-top:6px;line-height:1.7;">看誰成功邀到朋友，不用再下 SQL。<br>
-      「成功」＝被邀請的人現在是你的 OA 好友（真實口徑，不看舊的 pending 狀態）。</p>
+      <p class="muted" style="margin-top:6px;line-height:1.7;">看誰成功邀到朋友，不用再請工程師撈資料。<br>
+      「成功」＝被邀請的人現在是你的官方帳號好友（以實際好友狀態為準）。</p>
     </section>
 
     <section class="card">
       <h2 style="margin:0 0 4px;">春日活動（邀好友加刮次）</h2>
-      <p class="muted" style="font-size:13px;margin-bottom:14px;">舊的邀請機制（line_invites）。</p>
+      <p class="muted" style="font-size:13px;margin-bottom:14px;">舊版的邀請機制。</p>
       <div id="rf-summary" class="rf-stats"><p class="muted">載入中…</p></div>
       <div id="rf-legacy" style="margin-top:16px;"></div>
     </section>
 
     <section class="card">
       <h2 style="margin:0 0 4px;">活動邀請（新版 MGM）</h2>
-      <p class="muted" style="font-size:13px;margin-bottom:14px;">活動框架的邀請（activity_referrals）。之後開 MGM 活動的成效都會自動出現在這。</p>
+      <p class="muted" style="font-size:13px;margin-bottom:14px;">之後開新的邀請活動，成效都會自動出現在這裡。</p>
       <div id="rf-activity"><p class="muted">載入中…</p></div>
     </section>
 
@@ -58,7 +58,7 @@
             stat(s.success_unrewarded,'加入了卻沒發到獎勵',true);
           var legacyHtml='';
           if(s.success_unrewarded>0){
-            legacyHtml+='<div class="rf-callout"><strong>注意：</strong>有 '+s.success_unrewarded+' 個被邀請的人「其實已經加你 OA」，但舊機制沒把獎勵發給邀請人（卡在 pending）。也就是這檔邀請活動其實成功帶進了 '+s.success+' 個好友，只是發獎流程漏掉了大部分。</div>';
+            legacyHtml+='<div class="rf-callout"><strong>注意：</strong>有 '+s.success_unrewarded+' 個被邀請的人其實已經加了官方帳號，但舊機制沒把獎勵發給邀請人（獎勵卡在「等待中」沒發出去）。也就是這檔邀請活動其實成功帶進了 '+s.success+' 個好友，只是發獎流程漏掉了大部分。</div>';
           }
           if(d.legacy&&d.legacy.length){
             legacyHtml+='<button type="button" id="rf-legacy-toggle" class="rf-toggle">展開排行榜（'+d.legacy.length+' 位邀請人）</button>'+

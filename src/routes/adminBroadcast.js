@@ -601,9 +601,10 @@ function registerAdminBroadcastRoutes(app, deps) {
         seen.add(key);
         valid.push(s);
       }
-      if (valid.length === 0) {
+      // 允許建立空名單（建立後可再加入成員）；但若有提供 ID 卻全部格式錯誤，仍視為錯誤
+      if (valid.length === 0 && invalid.length > 0) {
         return safeJsonError(res, 400, 'no_valid_line_user_ids', {
-          detail: invalid.length > 0 ? '所有提供的 ID 都格式錯誤（需 U + 32 hex）' : '名單為空'
+          detail: '所有提供的 ID 都格式錯誤（需 U + 32 hex）'
         });
       }
       if (valid.length > 5000) {

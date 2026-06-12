@@ -106,7 +106,7 @@
                 '<td>' +
                   '<a href="/admin/activities/' + a.id + '/players" class="act-edit-btn">玩家</a>' +
                   '<a href="/admin/activities/' + a.id + '" class="act-edit-btn">編輯</a>' +
-                  '<button type="button" class="act-del-btn" data-id="' + a.id + '" data-name="' + escapeHtml(a.name) + '">刪除</button>' +
+                  '<button type="button" class="act-del-btn" data-id="' + a.id + '" data-name="' + escapeHtml(a.name) + '" data-status="' + escapeHtml(a.status) + '">刪除</button>' +
                 '</td>' +
               '</tr>';
             }).join('');
@@ -126,7 +126,8 @@
               btn.addEventListener('click', function () {
                 var id = btn.getAttribute('data-id');
                 var name = btn.getAttribute('data-name');
-                if (!confirm('確定刪除活動「' + name + '」？所有獎品池與遊玩紀錄都會一併刪除（不可恢復）。')) return;
+                var warn = btn.getAttribute('data-status') === 'active' ? '這個活動正在進行中！\\n\\n' : '';
+                if (!confirm(warn + '確定刪除活動「' + name + '」？所有獎品池與遊玩紀錄都會一併刪除（不可恢復）。')) return;
                 fetch('/admin/activities/api/' + id, { method: 'DELETE' })
                   .then(function (r) { return r.json(); })
                   .then(function (d) {

@@ -5,10 +5,10 @@
     bodyClass: bodyClass,
     body: `
     <section class="card">
-      <h1>RFM 資料層</h1>
+      <h1>會員分級分析</h1>
       <p class="muted" style="margin-top:6px;line-height:1.7;">
-        上傳外部 RFM 名單（JSON）。資料會以 RFM 會員 id 為錨點存起來，隨著 LINE 好友 / email 對得上，
-        系統自動把消費歷史接到對應的 OA 好友身上（在「用戶檔案」顯示）。<br>
+        上傳外部會員名單（JSON 檔，向資料團隊索取）。系統會自動把消費紀錄連到對應的 LINE 好友，在「用戶檔案」頁顯示。<br>
+        R ＝ 這位客人多久沒來、F ＝ 總共來過幾次、M ＝ 大概的消費價位。<br>
         <strong>注意：M（價位）是用餐廳客單價推算的「預估價位帶」，不是真實消費金額。</strong>
       </p>
       <div style="margin-top:14px;display:flex;align-items:center;gap:12px;flex-wrap:wrap;">
@@ -57,7 +57,7 @@
               parsed=data;
               prog.textContent='已讀取 '+data.length.toLocaleString()+' 筆，可上傳';
               uploadBtn.disabled=false;
-            }catch(e){prog.textContent='JSON 解析失敗：'+e.message;}
+            }catch(e){console.error(e.message);prog.textContent='這個檔案不是系統認得的名單格式。請確認是資料團隊匯出的 .json 檔。';}
           };
           reader.onerror=function(){prog.textContent='讀檔失敗';};
           reader.readAsText(f);
@@ -95,8 +95,8 @@
             var s=d.stats;
             var h='<div class="rfm-sub-title">規模與對應</div><div class="rfm-stat-grid">'+
               stat(s.total,'RFM 總筆數')+
-              stat(s.matched_oa_by_line,'已對上 OA 好友（lineId）',true)+
-              stat(s.with_lineid,'名單帶 lineId')+
+              stat(s.matched_oa_by_line,'已成功連到 LINE 好友',true)+
+              stat(s.with_lineid,'名單含 LINE 編號')+
               stat(s.with_email,'有 email')+
               stat(s.with_phone,'有 phone')+
               '</div>';

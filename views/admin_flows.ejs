@@ -40,7 +40,7 @@
           <option value="game_play">玩了活動遊戲 / 中獎</option>
           <option value="broadcast_click">點了群發訊息的連結</option>
           <option value="restaurant_click">點了訊息裡的餐廳連結</option>
-          <option value="event">LIFF 事件（今天吃什麼…）</option>
+          <option value="event">活動頁互動（用戶在活動頁做了某個動作）</option>
           <option value="schedule">定時（每天/每週/每月）</option>
         </select>
       </div>
@@ -118,8 +118,10 @@
         var OPT={messages:[],lists:[],activities:[],events:[]};
         var flow={name:'',re_enroll:false,trigger:{type:'follow',config:{}},steps:[]};
         var editingId=null;
+        var initialSnapshot='';
 
-        var TRIGGER_LABEL={follow:'加好友',list_join:'加入名單',event:'LIFF事件',schedule:'定時',game_play:'玩遊戲/中獎',broadcast_click:'點推播',restaurant_click:'點餐廳連結'};
+        var TRIGGER_LABEL={follow:'加好友',list_join:'加入名單',event:'活動頁互動',schedule:'定時',game_play:'玩遊戲/中獎',broadcast_click:'點推播',restaurant_click:'點餐廳連結'};
+        var ACTIVATE_WARN='啟用後此流程會立刻對真實用戶生效，符合觸發條件的人會真的收到 LINE 訊息（不是測試）。\\n\\n確定啟用？';
 
         function loadOptions(cb){
           fetch('/admin/flows/api/options').then(function(r){return r.json();}).then(function(d){
@@ -155,9 +157,10 @@
           });
         }
         function setStatus(id,status){
+          if(status==='active'&&!window.confirm(ACTIVATE_WARN))return;
           fetch('/admin/flows/api/'+id+'/status',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({status:status})})
             .then(function(r){return r.json();}).then(function(d){
-              if(d.ok)loadList();else alert('失敗：'+(d.error||''));
+              if(d.ok)loadList();else alert('失敗：'+errMsg(d.error));
             });
         }
         function delFlow(id){
@@ -179,10 +182,12 @@
               if(!flow.trigger)flow.trigger={type:'follow',config:{}};
               if(!Array.isArray(flow.steps))flow.steps=[];
               renderEditor();showEditor(true);
+              initialSnapshot=JSON.stringify(collectFlow());
             });
           }else{
             flow={name:'',re_enroll:false,trigger:{type:'follow',config:{}},steps:[]};
             renderEditor();showEditor(true);
+            initialSnapshot=JSON.stringify(collectFlow());
           }
         }
         function renderEditor(){
@@ -288,7 +293,7 @@
             '<select data-field="cond_type" data-path="'+path+'">'+
               '<option value="clicked"'+(ty==='clicked'?' selected':'')+'>點了上一則訊息的連結</option>'+
               '<option value="played"'+(ty==='played'?' selected':'')+'>玩了某活動</option>'+
-              '<option value="event"'+(ty==='event'?' selected':'')+'>做了某 LIFF 事件</option>'+
+              '<option value="event"'+(ty==='event'?' selected':'')+'>做了某個活動頁互動</option>'+
             '</select>';
           if(ty==='event'){h+='<select data-field="cond_event" data-path="'+path+'">'+eventOptionsHtml(cond.event_name)+'</select>';}
           else if(ty==='played'){h+='<select data-field="cond_activity" data-path="'+path+'"><option value="">任一活動</option>'+OPT.activities.map(function(a){return '<option value="'+a.id+'"'+(String(cond.activity_id)===String(a.id)?' selected':'')+'>'+esc(a.name)+'</option>';}).join('')+'</select>';}
@@ -380,6 +385,7 @@
             .then(function(r){return r.json();}).then(function(d){
               $('fl-save').disabled=false;$('fl-save-activate').disabled=false;
               if(!d.ok){$('fl-save-status').textContent='失敗：'+errMsg(d.error)+(d.detail?'（'+d.detail+'）':'');return;}
+              initialSnapshot=JSON.stringify(payload);
               var newId=editingId||d.id;
               if(activate){
                 fetch('/admin/flows/api/'+newId+'/status',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({status:'active'})})
@@ -391,10 +397,17 @@
             }).catch(function(e){$('fl-save').disabled=false;$('fl-save-activate').disabled=false;$('fl-save-status').textContent='錯誤：'+e.message;});
         }
         function errMsg(code){
-          var m={name_required:'請填名稱',need_at_least_one_step:'至少要有一個步驟',need_at_least_one_action:'至少要有一個動作（發訊息或加入名單）',branch_must_be_last:'條件分支必須是流程的最後一步',branch_sub_only_send_wait:'分支內只能放發訊息或等待',send_needs_message:'發訊息步驟請選一則訊息',list_join_needs_list:'請選名單',event_needs_name:'請選事件',schedule_needs_hour:'請填時間',flow_has_no_steps:'流程沒有步驟'};
+          var m={name_required:'請填名稱',need_at_least_one_step:'至少要有一個步驟',need_at_least_one_action:'至少要有一個動作（發訊息或加入名單）',branch_must_be_last:'條件分支必須是流程的最後一步',branch_sub_only_send_wait:'分支內只能放發訊息或等待',send_needs_message:'發訊息步驟請選一則訊息',list_join_needs_list:'請選名單',event_needs_name:'請選事件',schedule_needs_hour:'請填時間',flow_has_no_steps:'流程至少要有一個步驟才能啟用'};
           return m[code]||code||'';
         }
-        function backToList(){showEditor(false);loadList();}
+        function isDirty(){return !$('fl-editor').hidden&&initialSnapshot!==JSON.stringify(collectFlow());}
+        function backToList(){
+          if(isDirty()&&!window.confirm('你有尚未儲存的變更，離開後會全部消失。確定離開？'))return;
+          showEditor(false);loadList();
+        }
+        window.addEventListener('beforeunload',function(e){
+          if(isDirty()){e.preventDefault();e.returnValue='';}
+        });
 
         $('fl-run-now').addEventListener('click',function(){
           var warn='手動推進一次 會立刻執行整個自動化引擎（平常每 5 分鐘自動跑一次，這是手動提早觸發）。\\n\\n'+
@@ -407,7 +420,7 @@
           var s=$('fl-run-status');var btn=$('fl-run-now');btn.disabled=true;s.textContent='推進中…';
           fetch('/admin/flows/run-now',{method:'POST'}).then(function(r){return r.json();}).then(function(d){
             btn.disabled=false;
-            if(!d.ok){s.textContent='失敗：'+(d.error||'');return;}
+            if(!d.ok){s.textContent='失敗：'+errMsg(d.error);return;}
             s.textContent='已推進：新進流程 '+((d.scheduleEnrolled||0)+(d.eventEnrolled||0))+' 人、處理進行中 '+(d.advanced||0)+' 步。';
             loadList();
           }).catch(function(e){btn.disabled=false;s.textContent='錯誤：'+e.message;});
@@ -415,7 +428,7 @@
         $('fl-new').addEventListener('click',function(){openEditor(null);});
         $('fl-back').addEventListener('click',backToList);
         $('fl-save').addEventListener('click',function(){save(false);});
-        $('fl-save-activate').addEventListener('click',function(){save(true);});
+        $('fl-save-activate').addEventListener('click',function(){if(!window.confirm(ACTIVATE_WARN))return;save(true);});
         $('fl-trigger-type').addEventListener('change',function(){syncTrigger();flow.trigger={type:this.value,config:{}};renderTrigger();});
 
         // 列表獨立載入（不依賴 options），options 失敗也不影響列表顯示
