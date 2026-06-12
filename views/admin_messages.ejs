@@ -167,7 +167,7 @@
             if(cfg&&cfg.mode==='template'&&cfg.template){stage.appendChild(renderTemplateMock(cfg.template));return;}
             var flex=cfg&&cfg.flex;
             var contents=flex&&flex.contents;
-            if(!contents){stage.textContent='（無法預覽）';return;}
+            if(!contents){stage.textContent='此訊息較特殊，無法在這裡預覽。點下方「編輯」可開啟完整編輯器查看與調整。';return;}
             if(contents.type==='carousel'&&Array.isArray(contents.contents)){
               var wrap=document.createElement('div');wrap.style.width='100%';
               var tag=document.createElement('div');tag.className='lm-cara-tag';tag.textContent='多頁卡片 · 共 '+contents.contents.length+' 張（左右滑動）';wrap.appendChild(tag);
@@ -205,7 +205,7 @@
           var acts=document.createElement('div');acts.className='msg-actions';
           acts.innerHTML='<a class="msg-go-broadcast" href="/admin/broadcast?tpl='+m.id+'">用這則去群發</a>'+
             '<a href="/admin/broadcast?msglib=1&mid='+m.id+'">編輯</a>'+
-            '<a href="/admin/broadcast?msglib=1&mid='+m.id+'&dup=1">複製</a>'+
+            '<a href="/admin/broadcast?msglib=1&mid='+m.id+'&dup=1" title="複製成新訊息，建立一份副本去修改">複製成新訊息</a>'+
             '<button class="del" data-del="'+m.id+'">刪除</button>';
           info.appendChild(acts);
           div.appendChild(info);

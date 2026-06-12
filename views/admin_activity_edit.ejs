@@ -95,7 +95,7 @@
         <h2 style="margin:0;">2. 獎品池</h2>
         <button type="button" class="ae-secondary-btn" id="ae-add-prize">＋ 新增獎品</button>
       </div>
-      <p class="muted" style="font-size:12px;">輪盤照「位置」排序顯示。「概率權重」是相對值（不需總和=100），系統自動算百分比。「庫存」為空 = 無限。</p>
+      <p class="muted" style="font-size:12px;"><span id="ae-prize-order-noun">遊戲</span>照「位置」排序顯示。「概率權重」是相對值（不需總和=100），系統自動算百分比。「庫存」為空 = 無限。</p>
       <div class="table-wrap">
         <table class="ae-prize-table">
           <thead>
@@ -170,7 +170,7 @@
             </select>
           </label>
           <label class="ae-field">
-            <span>位置（輪盤順序）</span>
+            <span>位置（顯示順序）</span>
             <input type="number" id="pm-position" min="0" value="0" />
           </label>
           <label class="ae-field">
@@ -182,7 +182,7 @@
             <input type="number" id="pm-stock" min="0" placeholder="" />
           </label>
           <label class="ae-field">
-            <span>圖片 URL（輪盤格子用，可選）</span>
+            <span>圖片 URL（可選）</span>
             <input type="text" id="pm-image" placeholder="https://..." />
           </label>
           <label class="ae-field ae-field-full">

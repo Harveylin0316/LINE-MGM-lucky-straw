@@ -105,7 +105,7 @@
       }
       <div class="broadcast-page-head">
         <h1>群發訊息</h1>
-        <p class="page-subtitle">三步驟：① 選收件人 → ② 編訊息（含預覽即時更新 / 點文字直接編輯） → ③ 先測試再正式送</p>
+        <p class="page-subtitle">四步驟 · ① 選通道 · ② 選收件人 · ③ 編訊息（含預覽即時更新 / 點文字直接編輯） · ④ 先測試再正式送</p>
       </div>
 
       ${
@@ -117,7 +117,7 @@
       <div class="broadcast-grid">
         <div class="broadcast-form">
           <fieldset class="broadcast-step" id="bc-channel-step">
-            <legend><span class="step-pill">0</span> 通道</legend>
+            <legend><span class="step-pill">1</span> 通道</legend>
             <div class="broadcast-tabs channel-tabs">
               <button type="button" class="tab-btn active" data-channel="line">LINE 推播</button>
               <button type="button" class="tab-btn" data-channel="email">Email 信件</button>
@@ -129,7 +129,7 @@
           </fieldset>
 
           <fieldset class="broadcast-step" id="bc-audience-step">
-            <legend><span class="step-pill">1</span> 收件人</legend>
+            <legend><span class="step-pill">2</span> 收件人</legend>
 
             <div class="broadcast-tabs audience-tabs">
               <button type="button" class="tab-btn active" data-audience="conditions">條件篩選</button>
@@ -257,7 +257,7 @@
           </fieldset>
 
           <fieldset class="broadcast-step">
-            <legend><span class="step-pill">2</span> 訊息內容</legend>
+            <legend><span class="step-pill">3</span> 訊息內容</legend>
 
             <!-- Email 專屬：主旨 + 寄件人欄位（channel='email' 時顯示）-->
             <div class="email-only-fields" hidden>
@@ -447,7 +447,7 @@
           </fieldset>
 
           <fieldset class="broadcast-step" id="bc-send-step">
-            <legend><span class="step-pill">3</span> 送出</legend>
+            <legend><span class="step-pill">4</span> 送出</legend>
             <p class="muted" style="margin-bottom:10px;">建議先發測試訊息確認沒問題，再正式批次送。</p>
 
             <div class="broadcast-field test-push-block">

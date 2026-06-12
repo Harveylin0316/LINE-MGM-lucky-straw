@@ -15,6 +15,9 @@
     <div class="us-grid">
       <section class="card us-list-card">
         <div id="us-list"><p class="muted">載入中…</p></div>
+        <div id="us-more-wrap" style="margin-top:10px;display:none;">
+          <button type="button" id="us-more-btn" class="us-more-btn">載入更多</button>
+        </div>
       </section>
       <section class="card us-profile-card">
         <div id="us-profile"><p class="muted">← 從左邊點一個用戶看完整檔案</p></div>
@@ -34,6 +37,9 @@
       .us-row .nm{font-size:14px;color:#1f2937;}
       .us-row .sub{font-size:11px;color:#9ca3af;}
       .us-blocked{color:#b91c1c;font-size:11px;font-weight:700;}
+      .us-more-btn{width:100%;padding:9px 12px;border:1px solid #e5e7eb;border-radius:8px;background:#fff;font-size:13px;color:#374151;cursor:pointer;}
+      .us-more-btn:hover:not(:disabled){background:#f9fafb;border-color:#d1d5db;}
+      .us-more-btn:disabled{color:#9ca3af;cursor:default;}
       .us-prof-head{display:flex;align-items:center;gap:14px;margin-bottom:16px;}
       .us-prof-head .av{width:56px;height:56px;border-radius:50%;background:#f3f4f6;overflow:hidden;display:flex;align-items:center;justify-content:center;color:#6b7280;}
       .us-prof-head .av img{width:100%;height:100%;object-fit:cover;}
@@ -60,22 +66,66 @@
         function shortUid(u){return u?(u.slice(0,7)+'…'+u.slice(-4)):'';}
         var KIND={follow:'加好友',unfollow:'封鎖了',message:'傳訊息給你',game_play:'玩了遊戲',restaurant_click:'點了餐廳',broadcast_click:'點了推播',liff:'今天吃什麼',invite_rewarded:'邀請成功'};
         var curUid=null, timer=null;
+        var PAGE=80, loaded=0, total=0, loading=false;
 
-        function loadList(){
+        function rowHtml(u){
+          var nm=u.line_display_name||u.username||'（未命名）';
+          var av=u.line_display_name?esc(nm.slice(0,1)):'?';
+          return '<div class="us-row" data-uid="'+esc(u.line_user_id)+'"><div class="av">'+av+'</div>'+
+            '<div><div class="nm">'+esc(nm)+(u.blocked_at?' <span class="us-blocked">已封鎖</span>':'')+'</div>'+
+            '<div class="sub">'+esc(shortUid(u.line_user_id))+' · '+(fmt(u.created_at)||'—')+'</div></div></div>';
+        }
+        function bindRows(scope){
+          scope.querySelectorAll('[data-uid]').forEach(function(el){
+            if(el.getAttribute('data-bound'))return;
+            el.setAttribute('data-bound','1');
+            el.addEventListener('click',function(){openProfile(el.getAttribute('data-uid'));});
+          });
+        }
+        function updateCount(){
+          var c=$('us-count');if(c)c.textContent='顯示 '+loaded+' / 共 '+total+' 人';
+        }
+        function updateMore(){
+          var wrap=$('us-more-wrap'),btn=$('us-more-btn');if(!wrap||!btn)return;
+          if(total===0){wrap.style.display='none';return;}
+          wrap.style.display='';
+          if(loaded>=total){btn.disabled=true;btn.textContent='已全部載入（共 '+total+' 人）';}
+          else{btn.disabled=false;btn.textContent='載入更多';}
+        }
+
+        // reset=true：搜尋或首次載入，offset 歸 0、清空列表；reset=false：載入更多，append
+        function loadList(reset){
+          if(loading)return;
+          loading=true;
           var s=$('us-search').value.trim();
-          fetch('/admin/users/api/list?limit=80&search='+encodeURIComponent(s)).then(function(r){return r.json();}).then(function(d){
+          var offset=reset?0:loaded;
+          var btn=$('us-more-btn');
+          if(!reset&&btn){btn.disabled=true;btn.textContent='載入中…';}
+          fetch('/admin/users/api/list?limit='+PAGE+'&offset='+offset+'&search='+encodeURIComponent(s)).then(function(r){return r.json();}).then(function(d){
+            loading=false;
             var box=$('us-list');
-            if(!d.ok){box.innerHTML='<p class="muted">載入失敗</p>';return;}
-            if(!d.users.length){box.innerHTML='<p class="muted">沒有符合的用戶</p>';return;}
-            box.innerHTML='<div class="muted" style="font-size:12px;margin-bottom:8px;">共 '+d.total+' 人</div>'+d.users.map(function(u){
-              var nm=u.line_display_name||u.username||'（未命名）';
-              var av=u.line_display_name?esc(nm.slice(0,1)):'?';
-              return '<div class="us-row" data-uid="'+esc(u.line_user_id)+'"><div class="av">'+av+'</div>'+
-                '<div><div class="nm">'+esc(nm)+(u.blocked_at?' <span class="us-blocked">已封鎖</span>':'')+'</div>'+
-                '<div class="sub">'+esc(shortUid(u.line_user_id))+' · '+(fmt(u.created_at)||'—')+'</div></div></div>';
-            }).join('');
-            box.querySelectorAll('[data-uid]').forEach(function(el){el.addEventListener('click',function(){openProfile(el.getAttribute('data-uid'));});});
-          }).catch(function(e){var box=$('us-list');if(box)box.innerHTML='<p class="muted">載入失敗，請重新整理</p>';});
+            if(!d.ok){if(reset)box.innerHTML='<p class="muted">載入失敗</p>';updateMore();return;}
+            if(reset){
+              loaded=0;
+              total=d.total||0;
+              if(!d.users.length){box.innerHTML='<p class="muted">沒有符合的用戶</p>';updateCount();updateMore();return;}
+              box.innerHTML='<div class="muted" id="us-count" style="font-size:12px;margin-bottom:8px;"></div>'+
+                '<div id="us-rows">'+d.users.map(rowHtml).join('')+'</div>';
+            }else{
+              total=d.total||total;
+              var rows=$('us-rows');
+              if(rows&&d.users.length){rows.insertAdjacentHTML('beforeend',d.users.map(rowHtml).join(''));}
+            }
+            loaded+=d.users.length;
+            bindRows(box);
+            updateCount();
+            updateMore();
+          }).catch(function(e){
+            loading=false;
+            var box=$('us-list');
+            if(reset){if(box)box.innerHTML='<p class="muted">載入失敗，請重新整理</p>';}
+            else{updateMore();}
+          });
         }
 
         function openProfile(uid){
@@ -122,8 +172,10 @@
         }
         function stat(v,k){return '<div class="us-stat"><div class="v">'+(v||0)+'</div><div class="k">'+k+'</div></div>';}
 
-        $('us-search').addEventListener('input',function(){clearTimeout(timer);timer=setTimeout(loadList,250);});
-        loadList();
+        $('us-search').addEventListener('input',function(){clearTimeout(timer);timer=setTimeout(function(){loadList(true);},250);});
+        var moreBtn=$('us-more-btn');
+        if(moreBtn)moreBtn.addEventListener('click',function(){loadList(false);});
+        loadList(true);
       })();
     </script>
     `

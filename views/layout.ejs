@@ -15,6 +15,7 @@
       /* 透明橋接：填滿按鈕與選單間的空隙，滑鼠移過去 hover 不會中斷 */
       .navgrp-menu::before { content: ''; position: absolute; top: -12px; left: 0; right: 0; height: 12px; }
       .navgrp:hover .navgrp-menu, .navgrp:focus-within .navgrp-menu { display: block; }
+      .navgrp.open .navgrp-menu { display: block; }
       .navgrp-menu a { display: block; padding: 10px 12px; border-radius: 8px; color: #374151; text-decoration: none; font-size: 14px; white-space: nowrap; }
       .navgrp-menu a:hover { background: #F9FAFB; }
       .navgrp-menu a.active { background: #FFFBEB; color: #1f2937; font-weight: 700; }
@@ -36,7 +37,7 @@
           <span class="welcome">嗨，<%= user %></span>
           <% if (isAdmin) { %>
           <div class="navgrp">
-            <button type="button" class="nav-item navgrp-btn">訊息 <span class="navgrp-caret">▾</span></button>
+            <button type="button" class="nav-item navgrp-btn" aria-haspopup="true" aria-expanded="false">訊息 <span class="navgrp-caret">▾</span></button>
             <div class="navgrp-menu">
               <a href="/admin/broadcast">群發訊息</a>
               <a href="/admin/broadcast/history">發送紀錄</a>
@@ -45,7 +46,7 @@
             </div>
           </div>
           <div class="navgrp">
-            <button type="button" class="nav-item navgrp-btn">名單與用戶 <span class="navgrp-caret">▾</span></button>
+            <button type="button" class="nav-item navgrp-btn" aria-haspopup="true" aria-expanded="false">名單與用戶 <span class="navgrp-caret">▾</span></button>
             <div class="navgrp-menu">
               <a href="/admin/recipient-lists">名單庫</a>
               <a href="/admin/users">用戶檔案</a>
@@ -53,7 +54,7 @@
             </div>
           </div>
           <div class="navgrp">
-            <button type="button" class="nav-item navgrp-btn">活動 <span class="navgrp-caret">▾</span></button>
+            <button type="button" class="nav-item navgrp-btn" aria-haspopup="true" aria-expanded="false">活動 <span class="navgrp-caret">▾</span></button>
             <div class="navgrp-menu">
               <a href="/admin/activities">活動管理</a>
               <a href="/admin/referrals">邀請成效</a>
@@ -86,6 +87,30 @@
           });
           if (has && btn) btn.classList.add('has-active');
         });
+
+        // 點擊開合（觸控/手機友善）：點按鈕 toggle、一次只開一個；點外面或 Esc 關閉。桌機 hover 仍可用。
+        var groups = document.querySelectorAll('.navgrp');
+        function closeAll(except) {
+          groups.forEach(function (g) {
+            if (g === except) return;
+            g.classList.remove('open');
+            var b = g.querySelector('.navgrp-btn');
+            if (b) b.setAttribute('aria-expanded', 'false');
+          });
+        }
+        groups.forEach(function (g) {
+          var btn = g.querySelector('.navgrp-btn');
+          if (!btn) return;
+          btn.addEventListener('click', function (e) {
+            e.stopPropagation();
+            var willOpen = !g.classList.contains('open');
+            closeAll(g);
+            g.classList.toggle('open', willOpen);
+            btn.setAttribute('aria-expanded', willOpen ? 'true' : 'false');
+          });
+        });
+        document.addEventListener('click', function () { closeAll(null); });
+        document.addEventListener('keydown', function (e) { if (e.key === 'Escape') closeAll(null); });
       })();
     </script>
   </body>
