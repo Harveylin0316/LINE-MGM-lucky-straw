@@ -158,7 +158,7 @@ function registerAdminFlowsRoutes(app, deps) {
     if (!name) return { ok: false, error: 'name_required' };
     const trigger = body.trigger || {};
     const tType = trigger.type;
-    if (!['follow', 'list_join', 'event', 'schedule', 'game_play', 'broadcast_click', 'restaurant_click', 'inactivity'].includes(tType)) return { ok: false, error: 'invalid_trigger_type' };
+    if (!['follow', 'list_join', 'event', 'schedule', 'game_play', 'broadcast_click', 'restaurant_click', 'inactivity', 'streak_risk'].includes(tType)) return { ok: false, error: 'invalid_trigger_type' };
     const tCfg = trigger.config || {};
     if (tType === 'list_join' && !(Number(tCfg.list_id) > 0)) return { ok: false, error: 'list_join_needs_list' };
     if (tType === 'event' && !String(tCfg.event_name || '').trim()) return { ok: false, error: 'event_needs_name' };
@@ -169,6 +169,13 @@ function registerAdminFlowsRoutes(app, deps) {
       tCfg.days = Math.min(3650, d);
       const bl = Math.round(Number(tCfg.batch_limit));
       tCfg.batch_limit = Number.isFinite(bl) && bl > 0 ? Math.min(500, bl) : 50;
+    }
+    if (tType === 'streak_risk') {
+      const ms = Math.round(Number(tCfg.min_streak));
+      tCfg.min_streak = Number.isFinite(ms) && ms >= 2 ? Math.min(30, ms) : 2;
+      const bl2 = Math.round(Number(tCfg.batch_limit));
+      tCfg.batch_limit = Number.isFinite(bl2) && bl2 > 0 ? Math.min(500, bl2) : 50;
+      tCfg.hour_start = 19; tCfg.hour_end = 21; // 固定晚間提醒時窗，UI 不開放（保持簡單）
     }
     if (tType === 'schedule') {
       if (!Number.isFinite(Number(tCfg.hour))) return { ok: false, error: 'schedule_needs_hour' };

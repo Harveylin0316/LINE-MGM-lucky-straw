@@ -266,6 +266,59 @@ function createFlowEngine({ query, pool, linePush, buildLineMessages }) {
     return enrolled;
   }
 
+  // ---------- 觸發：streak_risk（連勝守護：連續玩了 N 天、今天還沒玩 → 晚間提醒） ----------
+  // config: { min_streak 預設 2, batch_limit 預設 50, hour_start 預設 19, hour_end 預設 21 }
+  // 只在台北時間 [hour_start, hour_end) 之間 enroll（讓提醒落在晚上）；每人每天最多進一次。
+  // 注意：這類流程建議 re_enroll=true（完成後隔天可再進）；同日去重由本查詢的 enrolled_at 條件把關。
+  async function runStreakRiskTriggers() {
+    const flows = await getActiveFlowsByTrigger('streak_risk');
+    if (flows.length === 0) return 0;
+    const tp = taipeiParts(new Date());
+    let enrolled = 0;
+    for (const f of flows) {
+      const cfg = f.trigger_config || {};
+      const minStreakRaw = Math.round(Number(cfg.min_streak));
+      const minStreak = Number.isFinite(minStreakRaw) && minStreakRaw >= 2 ? Math.min(30, minStreakRaw) : 2;
+      const hourStart = Number.isFinite(Number(cfg.hour_start)) ? Math.min(23, Math.max(0, Math.round(Number(cfg.hour_start)))) : 19;
+      const hourEnd = Number.isFinite(Number(cfg.hour_end)) ? Math.min(24, Math.max(1, Math.round(Number(cfg.hour_end)))) : 21;
+      if (tp.hour < hourStart || tp.hour >= hourEnd) continue;
+      const blRaw = Math.round(Number(cfg.batch_limit));
+      const batchLimit = Number.isFinite(blRaw) && blRaw > 0 ? Math.min(500, blRaw) : 50;
+      // 連續 minStreak 天（截至昨天）每天都有玩 + 今天還沒玩 + 今天還沒被本流程 enroll 過
+      const rs = await query(
+        `WITH tz AS (SELECT (now() AT TIME ZONE 'Asia/Taipei')::date AS today)
+         SELECT u.id AS user_id, u.line_user_id
+         FROM users u, tz
+         WHERE u.line_user_id IS NOT NULL AND BTRIM(u.line_user_id) <> ''
+           AND u.is_admin = false AND u.blocked_at IS NULL
+           AND (
+             SELECT COUNT(DISTINCT (p.played_at AT TIME ZONE 'Asia/Taipei')::date)
+             FROM activity_plays p
+             WHERE p.line_user_id = u.line_user_id
+               AND (p.played_at AT TIME ZONE 'Asia/Taipei')::date >= tz.today - $2::int
+               AND (p.played_at AT TIME ZONE 'Asia/Taipei')::date <= tz.today - 1
+           ) = $2::int
+           AND NOT EXISTS (
+             SELECT 1 FROM activity_plays p2
+             WHERE p2.line_user_id = u.line_user_id
+               AND (p2.played_at AT TIME ZONE 'Asia/Taipei')::date = tz.today
+           )
+           AND NOT EXISTS (
+             SELECT 1 FROM admin_flow_enrollments e
+             WHERE e.flow_id = $1 AND e.line_user_id = u.line_user_id
+               AND (e.enrolled_at AT TIME ZONE 'Asia/Taipei')::date = tz.today
+           )
+         LIMIT $3`,
+        [f.id, minStreak, batchLimit]
+      );
+      for (const row of rs.rows) {
+        const r = await enrollUser(f, row.line_user_id, { userId: row.user_id, context: { trigger: 'streak_risk', min_streak: minStreak } });
+        if (r.enrolled) enrolled++;
+      }
+    }
+    return enrolled;
+  }
+
   // ---------- 觸發：schedule（cron 檢查是否到點） ----------
   function taipeiParts(now) {
     const s = now.toLocaleString('en-US', { timeZone: 'Asia/Taipei', hour12: false });
@@ -584,6 +637,7 @@ function createFlowEngine({ query, pool, linePush, buildLineMessages }) {
       ev += await runBroadcastClickTriggers();
       ev += await runRestaurantClickTriggers();
       ev += await runInactivityTriggers();
+      ev += await runStreakRiskTriggers();
       result.eventEnrolled = ev;
     } catch (e) { console.error('event trig err', e.message); }
     try { const a = await advanceDue({ limit: 100 }); result.advanced = a.processed; } catch (e) { console.error('advance err', e.message); }
@@ -599,6 +653,7 @@ function createFlowEngine({ query, pool, linePush, buildLineMessages }) {
     runBroadcastClickTriggers,
     runRestaurantClickTriggers,
     runInactivityTriggers,
+    runStreakRiskTriggers,
     runScheduleTriggers,
     advanceDue,
     run,

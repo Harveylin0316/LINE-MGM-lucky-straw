@@ -67,6 +67,7 @@
           <option value="broadcast_click">點了群發訊息的連結</option>
           <option value="restaurant_click">點了訊息裡的餐廳連結</option>
           <option value="inactivity">沉睡喚醒（超過 N 天沒互動）</option>
+          <option value="streak_risk">連勝守護（連續玩了幾天、今天還沒玩）</option>
           <option value="event">活動頁互動（用戶在活動頁做了某個動作）</option>
           <option value="schedule">定時（每天/每週/每月）</option>
         </select>
@@ -156,7 +157,7 @@
         var editingId=null;
         var initialSnapshot='';
 
-        var TRIGGER_LABEL={follow:'加好友',list_join:'加入名單',event:'活動頁互動',schedule:'定時',game_play:'玩遊戲/中獎',broadcast_click:'點推播',restaurant_click:'點餐廳連結',inactivity:'沉睡喚醒'};
+        var TRIGGER_LABEL={follow:'加好友',list_join:'加入名單',event:'活動頁互動',schedule:'定時',game_play:'玩遊戲/中獎',broadcast_click:'點推播',restaurant_click:'點餐廳連結',inactivity:'沉睡喚醒',streak_risk:'連勝守護'};
         var ACTIVATE_WARN='啟用後此流程會立刻對真實用戶生效，符合觸發條件的人會真的收到 LINE 訊息（不是測試）。\\n\\n確定啟用？';
 
         function loadOptions(cb){
@@ -261,6 +262,11 @@
               '<div class="fl-inline" style="margin-bottom:12px;"><span>超過</span><input type="number" id="tc-inact-days" min="7" max="3650" value="'+(Number.isFinite(Number(c.days))&&Number(c.days)>0?Number(c.days):60)+'"><span>天沒互動就喚醒</span></div>'+
               '<div class="fl-field"><span>每輪最多喚醒人數</span><input type="number" id="tc-inact-batch" min="1" max="500" style="max-width:120px;" value="'+(Number.isFinite(Number(c.batch_limit))&&Number(c.batch_limit)>0?Number(c.batch_limit):50)+'">'+
               '<span class="muted" style="font-weight:400;">每 5 分鐘最多喚醒幾人，避免瞬間大量發送。</span></div>';
+          }else if(t==='streak_risk'){
+            h='<p class="muted" style="font-size:13px;margin:0 0 8px;">用戶連續玩遊戲滿 N 天、但今天還沒玩時，當晚 19:00-21:00 自動進入此流程（每人每天最多一次）。適合發「連勝別斷在今天」提醒。建議勾選「允許同一人重複進入」讓提醒可在不同天再次觸發。</p>'+
+              '<div class="fl-inline" style="margin-bottom:12px;"><span>連續玩滿</span><input type="number" id="tc-streak-min" min="2" max="30" value="'+(Number.isFinite(Number(c.min_streak))&&Number(c.min_streak)>=2?Number(c.min_streak):2)+'"><span>天才提醒</span></div>'+
+              '<div class="fl-field"><span>每輪最多提醒人數</span><input type="number" id="tc-streak-batch" min="1" max="500" style="max-width:120px;" value="'+(Number.isFinite(Number(c.batch_limit))&&Number(c.batch_limit)>0?Number(c.batch_limit):50)+'">'+
+              '<span class="muted" style="font-weight:400;">提醒固定在晚間 19:00-21:00 之間送出。</span></div>';
           }else if(t==='event'){
             h='<div class="fl-field"><span>哪個事件發生時</span><select id="tc-event">'+eventOptionsHtml(c.event_name)+'</select></div>';
           }else if(t==='schedule'){
@@ -292,6 +298,7 @@
           else if(t==='game_play'){c.activity_id=Number($('tc-activity')&&$('tc-activity').value)||null;c.prize_only=!!($('tc-prizeonly')&&$('tc-prizeonly').checked);}
           else if(t==='broadcast_click'){/* 無設定 */}
           else if(t==='inactivity'){c.days=Number($('tc-inact-days')&&$('tc-inact-days').value)||60;c.batch_limit=Number($('tc-inact-batch')&&$('tc-inact-batch').value)||50;}
+          else if(t==='streak_risk'){c.min_streak=Number($('tc-streak-min')&&$('tc-streak-min').value)||2;c.batch_limit=Number($('tc-streak-batch')&&$('tc-streak-batch').value)||50;}
           else if(t==='event'){c.event_name=($('tc-event')&&$('tc-event').value)||'';}
           else if(t==='schedule'){
             c.freq=($('tc-freq')&&$('tc-freq').value)||'daily';
