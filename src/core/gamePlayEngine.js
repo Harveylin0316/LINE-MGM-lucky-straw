@@ -261,6 +261,85 @@ async function computeUserQuota(query, activity, lineUserId) {
   };
 }
 
+// ---- 邀請成功即時通知（fire-and-forget）----
+// 防騷擾：同一活動同一邀請人 60 秒內只通知一次（in-memory Map）。
+// 注意：serverless（Netlify Functions）下每個 instance 各自一份 Map，跨 instance 不去重，
+// 屬「盡力而為」；搭配 LINE X-Line-Retry-Key（同一筆 referral 冪等）已足夠避免重複轟炸。
+const REFERRAL_NOTIFY_COOLDOWN_MS = 60 * 1000;
+const referralNotifyLastAt = new Map();
+
+function shouldSkipReferralNotify(key) {
+  const now = Date.now();
+  const last = referralNotifyLastAt.get(key);
+  if (last && now - last < REFERRAL_NOTIFY_COOLDOWN_MS) return true;
+  // 順手清掉過期項目，避免 Map 無限成長
+  if (referralNotifyLastAt.size > 500) {
+    for (const [k, t] of referralNotifyLastAt) {
+      if (now - t >= REFERRAL_NOTIFY_COOLDOWN_MS) referralNotifyLastAt.delete(k);
+    }
+  }
+  referralNotifyLastAt.set(key, now);
+  return false;
+}
+
+// 盡力取得被邀請人的 LINE 顯示名稱（registerReferral 前已驗過是 OA 好友，profile 端點通常可取）
+async function fetchLineDisplayName(lineUserId) {
+  const token = process.env.LINE_CHANNEL_ACCESS_TOKEN || '';
+  if (!token || !lineUserId) return null;
+  try {
+    const resp = await fetch('https://api.line.me/v2/bot/profile/' + encodeURIComponent(lineUserId), {
+      headers: { Authorization: 'Bearer ' + token }
+    });
+    if (!resp.ok) return null;
+    const data = await resp.json();
+    const name = data && typeof data.displayName === 'string' ? data.displayName.trim() : '';
+    return name || null;
+  } catch (_e) {
+    return null;
+  }
+}
+
+async function notifyInviterOfReferral({ query, activity, activitySlug, gameType, inviterId, inviteeId }) {
+  if (shouldSkipReferralNotify(activity.id + ':' + inviterId)) return;
+  const refPer = Number(activity.referral_bonus_per || 0);
+  const refMax = Number(activity.referral_bonus_max || 0);
+  const { rows: refRows } = await query(
+    `SELECT COUNT(*) AS c FROM activity_referrals
+     WHERE activity_id = $1 AND inviter_line_user_id = $2`,
+    [activity.id, inviterId]
+  );
+  const count = Number(refRows[0].c);
+  // 本次實際入帳的加碼（與 computeUserQuota 的 Math.min 上限算法一致，含「最後一次只補到上限」的部分加碼）
+  const gained = Math.min(refMax, count * refPer) - Math.min(refMax, (count - 1) * refPer);
+  const who = (await fetchLineDisplayName(inviteeId)) || '1 位好友';
+  // 遊戲連結組法與 games 路由 / 各 game view 一致：https://liff.line.me/{liffId}/{gameType}/{slug}
+  const liffId = (activity.liff_id_override && String(activity.liff_id_override).trim()) ||
+    process.env.GAMES_LIFF_ID || process.env.WHEEL_LIFF_ID || process.env.LIFF_ID || '';
+  const gameUrl = liffId
+    ? 'https://liff.line.me/' + liffId + '/' + gameType + '/' + encodeURIComponent(activitySlug)
+    : '';
+  let text;
+  if (gained > 0) {
+    text = '邀請成功！' + who + ' 已透過你的連結加入。你獲得 +' + gained +
+      ' 次遊戲機會（已邀 ' + count + ' 位，上限 +' + refMax + ' 次）。';
+    if (gameUrl) text += '打開遊戲馬上用：' + gameUrl;
+  } else if (refMax > 0) {
+    text = '邀請成功！' + who + ' 已加入。你的邀請加碼已達上限（+' + refMax + ' 次全數入帳），仍感謝你的分享！';
+  } else {
+    // referral_bonus_max <= 0 的設定邊界：避免「+0 次全數入帳」這種怪文案
+    text = '邀請成功！' + who + ' 已透過你的連結加入，感謝你的分享！';
+  }
+  const { createLinePushService } = require('./linePush');
+  const linePush = createLinePushService({
+    query,
+    lineChannelAccessToken: process.env.LINE_CHANNEL_ACCESS_TOKEN || ''
+  });
+  await linePush.pushLineMessages(inviterId, [text], {
+    pushType: 'referral_inviter_notify',
+    retryKey: 'referral-notify:' + activity.id + ':' + inviterId + ':' + inviteeId
+  });
+}
+
 async function registerReferral({ query, activitySlug, gameType, inviterId, inviteeId }) {
   if (!inviteeId || !inviterId) {
     return { error: { status: 400, code: 'missing_ids' } };
@@ -269,7 +348,7 @@ async function registerReferral({ query, activitySlug, gameType, inviterId, invi
     return { error: { status: 400, code: 'self_referral', detail: '不能邀請自己' } };
   }
   const { rows: act } = await query(
-    `SELECT id, referral_bonus_per FROM activities
+    `SELECT id, referral_bonus_per, referral_bonus_max, liff_id_override FROM activities
      WHERE slug = $1 AND game_type = $2 LIMIT 1`,
     [activitySlug, gameType]
   );
@@ -290,7 +369,13 @@ async function registerReferral({ query, activitySlug, gameType, inviterId, invi
      RETURNING id`,
     [a.id, inviterId, inviteeId]
   );
-  return { ok: true, counted: ins.rows.length > 0 };
+  const counted = ins.rows.length > 0;
+  if (counted) {
+    // 邀請成功 → 即時通知邀請人。fire-and-forget：通知失敗絕不影響 API 回應
+    notifyInviterOfReferral({ query, activity: a, activitySlug, gameType, inviterId, inviteeId })
+      .catch(err => console.error('referral inviter notify failed:', err && err.message));
+  }
+  return { ok: true, counted };
 }
 
 module.exports = { selectPrizeAndRecord, computeUserQuota, registerReferral };

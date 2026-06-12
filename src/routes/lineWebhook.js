@@ -1,6 +1,7 @@
 const crypto = require('crypto');
 const { applyInviteFollowReward } = require('../core/inviteReward');
 const { buildInviteRewardPushMessages } = require('../core/inviteRewardPushMessages');
+const { buildLineMessages } = require('../core/broadcastTemplates');
 
 function safeEqualBase64(a, b) {
   const left = Buffer.from(a || '', 'utf8');
@@ -61,6 +62,53 @@ function createLineWebhookHandler({
     }
   }
 
+  // ---------- 關鍵字自動回覆 ----------
+  // 撈 active 規則（574 好友量級，每次查 DB 可接受），priority 小的先比，第一條命中即回。
+  async function matchKeywordRule(messageText) {
+    const msg = String(messageText || '').trim();
+    if (!msg) return null;
+    const msgLower = msg.toLowerCase();
+    const rs = await pool.query(
+      `SELECT id, keywords, match_type, message_template_id
+       FROM admin_keyword_replies
+       WHERE is_active = true AND message_template_id IS NOT NULL
+       ORDER BY priority ASC, id ASC`
+    );
+    for (const rule of rs.rows) {
+      const kws = String(rule.keywords || '')
+        .split(',')
+        .map(s => s.trim().toLowerCase())
+        .filter(Boolean);
+      if (kws.length === 0) continue;
+      const hit = rule.match_type === 'exact'
+        ? kws.some(k => msgLower === k)
+        : kws.some(k => msgLower.includes(k));
+      if (hit) return rule;
+    }
+    return null;
+  }
+
+  // 公開網域（給訊息庫模板 hero 圖組 https 網址；同 flowEngine.getOrigin 的來源）
+  function getKeywordReplyOrigin() {
+    const o = process.env.LINE_PUSH_PUBLIC_BASE_URL || process.env.URL || process.env.PUBLIC_SITE_URL || '';
+    return String(o).replace(/\/+$/, '');
+  }
+
+  async function replyKeywordTemplate(rule, replyToken, lineUserId) {
+    if (!linePush || typeof linePush.replyLineMessages !== 'function') return false;
+    const rs = await pool.query(
+      'SELECT message_config FROM admin_message_templates WHERE id = $1',
+      [rule.message_template_id]
+    );
+    if (rs.rowCount === 0) return false;
+    const built = buildLineMessages(rs.rows[0].message_config, { heroImageBaseUrl: getKeywordReplyOrigin() });
+    if (!built.ok) return false;
+    return await linePush.replyLineMessages(replyToken, built.messages, {
+      lineUserId: lineUserId || null,
+      pushType: 'keyword_reply'
+    });
+  }
+
   return async function lineWebhookHandler(req, res) {
     try {
       if (!channelSecret) {
@@ -89,6 +137,39 @@ function createLineWebhookHandler({
             eventType: 'unfollow', lineUserId: blockedUid, result: 'blocked',
             detail: '用戶封鎖 OA', eventTimestamp: event?.timestamp, rawEvent: event || {}
           });
+          continue;
+        }
+        // 文字訊息：關鍵字自動回覆（reply token 一次性；本 webhook 僅此路徑使用 replyToken）
+        // 任何失敗 try/catch 吞掉，絕不讓整批 webhook 回 500（同 reward_exception → continue 原則）
+        if (event?.type === 'message' && event?.message?.type === 'text' && event?.replyToken) {
+          let krResult = 'keyword_no_match';
+          let krDetail = null;
+          try {
+            const rule = await matchKeywordRule(event?.message?.text);
+            if (rule) {
+              const sent = await replyKeywordTemplate(rule, event.replyToken, event?.source?.userId || null);
+              krResult = sent ? 'keyword_replied' : 'keyword_reply_failed';
+              krDetail = ('rule#' + rule.id + ' keywords=' + String(rule.keywords || '')).slice(0, 300);
+              if (sent) {
+                // 命中次數 +1：fire-and-forget，失敗不影響回覆
+                pool
+                  .query('UPDATE admin_keyword_replies SET hit_count = hit_count + 1, updated_at = now() WHERE id = $1', [rule.id])
+                  .catch(e => console.error('keyword reply hit_count update failed:', e.message));
+              }
+            }
+          } catch (krErr) {
+            krResult = 'keyword_reply_exception';
+            krDetail = String(krErr.message || krErr).slice(0, 800);
+            console.error('keyword reply failed:', krErr.message);
+          }
+          await appendWebhookEventLog({
+            eventType: 'message',
+            lineUserId: event?.source?.userId || null,
+            result: krResult,
+            detail: krDetail,
+            eventTimestamp: event?.timestamp,
+            rawEvent: event || {}
+          }).catch(() => {});
           continue;
         }
         if (event?.type !== 'follow') {

@@ -158,11 +158,18 @@ function registerAdminFlowsRoutes(app, deps) {
     if (!name) return { ok: false, error: 'name_required' };
     const trigger = body.trigger || {};
     const tType = trigger.type;
-    if (!['follow', 'list_join', 'event', 'schedule', 'game_play', 'broadcast_click', 'restaurant_click'].includes(tType)) return { ok: false, error: 'invalid_trigger_type' };
+    if (!['follow', 'list_join', 'event', 'schedule', 'game_play', 'broadcast_click', 'restaurant_click', 'inactivity'].includes(tType)) return { ok: false, error: 'invalid_trigger_type' };
     const tCfg = trigger.config || {};
     if (tType === 'list_join' && !(Number(tCfg.list_id) > 0)) return { ok: false, error: 'list_join_needs_list' };
     if (tType === 'event' && !String(tCfg.event_name || '').trim()) return { ok: false, error: 'event_needs_name' };
     // game_play / broadcast_click：無必填設定（活動可選任一、推播點擊任意）
+    if (tType === 'inactivity') {
+      const d = Math.round(Number(tCfg.days));
+      if (!Number.isFinite(d) || d < 7) return { ok: false, error: 'inactivity_needs_days' };
+      tCfg.days = Math.min(3650, d);
+      const bl = Math.round(Number(tCfg.batch_limit));
+      tCfg.batch_limit = Number.isFinite(bl) && bl > 0 ? Math.min(500, bl) : 50;
+    }
     if (tType === 'schedule') {
       if (!Number.isFinite(Number(tCfg.hour))) return { ok: false, error: 'schedule_needs_hour' };
       // 正規化：對齊 */5 cron、避開 23:56-23:59 死區、夾正範圍

@@ -116,7 +116,75 @@ function createLinePushService({ query, lineChannelAccessToken }) {
     }
   }
 
-  return { logLinePush, pushLineMessages };
+  /**
+   * Reply API：用 webhook 事件的 replyToken 回覆（免推播額度）。
+   * 注意 reply token 一次性且有效期短，呼叫端要保證同一 token 只用一次。
+   */
+  async function replyLineMessages(replyToken, messages, extra = {}) {
+    const normalizedMessages = Array.isArray(messages)
+      ? messages.map(normalizeLinePushMessageItem).filter(Boolean)
+      : [];
+    const pushType = typeof extra.pushType === 'string' && extra.pushType.trim() ? extra.pushType.trim() : 'keyword_reply';
+    const { pushType: _pt, ...extraForBody } = extra;
+    const logPayload = {
+      userId: extra.userId || null,
+      lineUserId: extra.lineUserId || null,
+      pushType,
+      body: { messages: normalizedMessages, ...extraForBody }
+    };
+    if (!replyToken || !lineChannelAccessToken || normalizedMessages.length === 0) {
+      await logLinePush({
+        ...logPayload,
+        status: 'skipped',
+        detail: !replyToken
+          ? 'missing_reply_token'
+          : !lineChannelAccessToken
+            ? 'missing_channel_access_token'
+            : 'empty_messages'
+      });
+      return false;
+    }
+    try {
+      const response = await fetch('https://api.line.me/v2/bot/message/reply', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${lineChannelAccessToken}`
+        },
+        body: JSON.stringify({
+          replyToken,
+          messages: normalizedMessages
+        })
+      });
+      if (!response.ok) {
+        const detail = await response.text().catch(() => '');
+        console.error('LINE reply failed:', response.status, detail);
+        await logLinePush({
+          ...logPayload,
+          status: 'failed',
+          httpStatus: Number(response.status),
+          detail: detail ? String(detail).slice(0, 1500) : 'line_api_error'
+        });
+        return false;
+      }
+      await logLinePush({
+        ...logPayload,
+        status: 'success',
+        httpStatus: Number(response.status)
+      });
+      return true;
+    } catch (err) {
+      console.error('LINE reply failed:', err.message);
+      await logLinePush({
+        ...logPayload,
+        status: 'failed',
+        detail: String(err.message || 'network_error').slice(0, 1500)
+      });
+      return false;
+    }
+  }
+
+  return { logLinePush, pushLineMessages, replyLineMessages };
 }
 
 module.exports = { createLinePushService };

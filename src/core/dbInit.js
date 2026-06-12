@@ -21,7 +21,8 @@ const APP_PUBLIC_TABLES_WITH_RLS = [
   'admin_recipient_list_members',
   'admin_broadcast_clicks',
   'admin_broadcast_views',
-  'admin_message_templates'
+  'admin_message_templates',
+  'admin_keyword_replies'
 ];
 
 /**
@@ -290,6 +291,18 @@ async function initDb({ query, adminUsername, adminPassword, skipDdl = true }) {
     updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
   )`);
 
+  await query(`CREATE TABLE IF NOT EXISTS admin_keyword_replies (
+    id SERIAL PRIMARY KEY,
+    keywords TEXT NOT NULL,
+    match_type TEXT NOT NULL DEFAULT 'contains',
+    message_template_id BIGINT REFERENCES admin_message_templates(id) ON DELETE SET NULL,
+    is_active BOOLEAN DEFAULT true,
+    priority INTEGER DEFAULT 100,
+    hit_count INTEGER DEFAULT 0,
+    created_at TIMESTAMPTZ DEFAULT now(),
+    updated_at TIMESTAMPTZ DEFAULT now()
+  )`);
+
   // Supabase exposes public schema via PostgREST by default.
   // Enable RLS on app tables to prevent direct external reads/writes.
   await query('ALTER TABLE users ENABLE ROW LEVEL SECURITY');
@@ -312,6 +325,7 @@ async function initDb({ query, adminUsername, adminPassword, skipDdl = true }) {
   await query('ALTER TABLE admin_broadcast_clicks ENABLE ROW LEVEL SECURITY');
   await query('ALTER TABLE admin_broadcast_views ENABLE ROW LEVEL SECURITY');
   await query('ALTER TABLE admin_message_templates ENABLE ROW LEVEL SECURITY');
+  await query('ALTER TABLE admin_keyword_replies ENABLE ROW LEVEL SECURITY');
 
   await query(
     'CREATE INDEX IF NOT EXISTS admin_login_throttle_ip_created_idx ON admin_login_throttle (ip_key, created_at DESC)'
@@ -345,6 +359,9 @@ async function initDb({ query, adminUsername, adminPassword, skipDdl = true }) {
   );
   await query(
     'CREATE INDEX IF NOT EXISTS admin_message_templates_created_id_desc_idx ON admin_message_templates (created_at DESC, id DESC)'
+  );
+  await query(
+    'CREATE INDEX IF NOT EXISTS admin_keyword_replies_active_priority_idx ON admin_keyword_replies (is_active, priority, id)'
   );
   // A/B test columns（後加）
   await query('ALTER TABLE admin_broadcasts ADD COLUMN IF NOT EXISTS is_ab_test BOOLEAN NOT NULL DEFAULT false');

@@ -16,6 +16,7 @@
  *   list_join  被加進某名單  { list_id }
  *   event      發生某事件    { event_name }（對 user_events）
  *   schedule   定時          { freq, hour, dow/dom, audience }
+ *   inactivity 沉睡喚醒      { days, batch_limit }（超過 N 天沒任何互動）
  *
  * 推進：cron 每 5 分鐘呼叫 run()：先跑 schedule/event 觸發建 enrollment，再 advance 到期的 enrollment。
  */
@@ -214,6 +215,53 @@ function createFlowEngine({ query, pool, linePush, buildLineMessages }) {
         if (r.enrolled) enrolled++;
       }
       if (maxId > cursor) await setCursor(f.id, maxId);
+    }
+    return enrolled;
+  }
+
+  // inactivity：沉睡喚醒（超過 N 天沒有任何互動）
+  // 沉睡定義：last_activity = GREATEST(加好友時間, 各互動表的最後時間) < now() - N 天。
+  // 每輪每 flow 最多 enroll batch_limit 人（cron 每 5 分鐘會再跑，分批消化避免瞬間大量發送）。
+  // 語義：SQL 已排除「曾進過此流程」的人 → 每人一生只會被喚醒一次（re_enroll 對此觸發無效，
+  // 否則沉睡者跑完流程後仍然沉睡，每 5 分鐘會再進一次造成轟炸）。
+  async function runInactivityTriggers() {
+    const flows = await getActiveFlowsByTrigger('inactivity');
+    let enrolled = 0;
+    for (const f of flows) {
+      const cfg = f.trigger_config || {};
+      const days = Math.round(Number(cfg.days));
+      if (!Number.isFinite(days) || days < 1) continue; // 沒設天數不跑，避免誤灌全部好友
+      const blRaw = Math.round(Number(cfg.batch_limit));
+      const batchLimit = Number.isFinite(blRaw) && blRaw > 0 ? Math.min(500, blRaw) : 50;
+      const rs = await query(
+        `SELECT u.id AS user_id, u.line_user_id
+         FROM users u
+         LEFT JOIN LATERAL (
+           SELECT GREATEST(
+             u.created_at,
+             (SELECT MAX(w.event_timestamp) FROM line_webhook_events w WHERE w.line_user_id = u.line_user_id),
+             (SELECT MAX(p.played_at) FROM activity_plays p WHERE p.line_user_id = u.line_user_id),
+             (SELECT MAX(b.clicked_at) FROM admin_broadcast_clicks b WHERE b.line_user_id = u.line_user_id),
+             (SELECT MAX(rc.clicked_at) FROM user_restaurant_clicks rc WHERE rc.line_user_id = u.line_user_id),
+             (SELECT MAX(ue.created_at) FROM user_events ue WHERE ue.line_id = u.line_user_id)
+           ) AS last_activity
+         ) la ON true
+         WHERE u.line_user_id IS NOT NULL AND BTRIM(u.line_user_id) <> ''
+           AND u.is_admin = false AND u.blocked_at IS NULL
+           AND la.last_activity IS NOT NULL
+           AND la.last_activity < now() - make_interval(days => $2)
+           AND NOT EXISTS (
+             SELECT 1 FROM admin_flow_enrollments e
+             WHERE e.flow_id = $1 AND e.line_user_id = u.line_user_id
+           )
+         ORDER BY la.last_activity ASC
+         LIMIT $3`,
+        [f.id, days, batchLimit]
+      );
+      for (const row of rs.rows) {
+        const r = await enrollUser(f, row.line_user_id, { userId: row.user_id, context: { trigger: 'inactivity', days } });
+        if (r.enrolled) enrolled++;
+      }
     }
     return enrolled;
   }
@@ -535,6 +583,7 @@ function createFlowEngine({ query, pool, linePush, buildLineMessages }) {
       ev += await runGamePlayTriggers();
       ev += await runBroadcastClickTriggers();
       ev += await runRestaurantClickTriggers();
+      ev += await runInactivityTriggers();
       result.eventEnrolled = ev;
     } catch (e) { console.error('event trig err', e.message); }
     try { const a = await advanceDue({ limit: 100 }); result.advanced = a.processed; } catch (e) { console.error('advance err', e.message); }
@@ -549,6 +598,7 @@ function createFlowEngine({ query, pool, linePush, buildLineMessages }) {
     runGamePlayTriggers,
     runBroadcastClickTriggers,
     runRestaurantClickTriggers,
+    runInactivityTriggers,
     runScheduleTriggers,
     advanceDue,
     run,
