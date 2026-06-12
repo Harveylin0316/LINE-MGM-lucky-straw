@@ -158,6 +158,7 @@
         var initialSnapshot='';
 
         var TRIGGER_LABEL={follow:'加好友',list_join:'加入名單',event:'活動頁互動',schedule:'定時',game_play:'玩遊戲/中獎',broadcast_click:'點推播',restaurant_click:'點餐廳連結',inactivity:'沉睡喚醒',streak_risk:'連勝守護'};
+        var CUISINES=['日式','韓式','台菜中式','港式','泰式東南亞','義式','美式','火鍋','燒肉','甜點咖啡','早午餐','其他'];
         var ACTIVATE_WARN='啟用後此流程會立刻對真實用戶生效，符合觸發條件的人會真的收到 LINE 訊息（不是測試）。\\n\\n確定啟用？';
 
         function loadOptions(cb){
@@ -256,7 +257,8 @@
           }else if(t==='broadcast_click'){
             h='<p class="muted" style="font-size:13px;margin:0 0 8px;">用戶點了任何一則群發訊息的連結時觸發。</p>';
           }else if(t==='restaurant_click'){
-            h='<p class="muted" style="font-size:13px;margin:0 0 8px;">用戶點了訊息裡的「餐廳連結」時觸發（系統自動從連結認出是餐廳）。適合做「看了餐廳 → 跟進推薦」。</p>';
+            h='<p class="muted" style="font-size:13px;margin:0 0 8px;">用戶點了訊息裡的「餐廳連結」時觸發（系統自動從連結認出是餐廳）。適合做「看了餐廳 → 跟進推薦」。可只在用戶點了特定種類的餐廳時觸發（需先在『餐廳目錄』幫餐廳標種類）。例如選「日式」並搭配「加入名單」步驟，就能做出「點了日式餐廳，自動加進日式愛好者名單」。</p>'+
+              '<div class="fl-field"><span>餐廳種類</span><select id="tc-cuisine"><option value="">不限（任何餐廳）</option>'+CUISINES.map(function(cz){return '<option value="'+esc(cz)+'"'+(c.cuisine===cz?' selected':'')+'>'+esc(cz)+'</option>';}).join('')+'</select></div>';
           }else if(t==='inactivity'){
             h='<p class="muted" style="font-size:13px;margin:0 0 8px;">好友超過 N 天沒有任何互動時，自動進入此流程（每人只會進入一次）。適合發喚醒訊息，例如回流寶箱。</p>'+
               '<div class="fl-inline" style="margin-bottom:12px;"><span>超過</span><input type="number" id="tc-inact-days" min="7" max="3650" value="'+(Number.isFinite(Number(c.days))&&Number(c.days)>0?Number(c.days):60)+'"><span>天沒互動就喚醒</span></div>'+
@@ -297,6 +299,7 @@
           if(t==='list_join'){c.list_id=Number($('tc-list')&&$('tc-list').value)||null;}
           else if(t==='game_play'){c.activity_id=Number($('tc-activity')&&$('tc-activity').value)||null;c.prize_only=!!($('tc-prizeonly')&&$('tc-prizeonly').checked);}
           else if(t==='broadcast_click'){/* 無設定 */}
+          else if(t==='restaurant_click'){var cz=($('tc-cuisine')&&$('tc-cuisine').value)||'';if(cz)c.cuisine=cz;}
           else if(t==='inactivity'){c.days=Number($('tc-inact-days')&&$('tc-inact-days').value)||60;c.batch_limit=Number($('tc-inact-batch')&&$('tc-inact-batch').value)||50;}
           else if(t==='streak_risk'){c.min_streak=Number($('tc-streak-min')&&$('tc-streak-min').value)||2;c.batch_limit=Number($('tc-streak-batch')&&$('tc-streak-batch').value)||50;}
           else if(t==='event'){c.event_name=($('tc-event')&&$('tc-event').value)||'';}

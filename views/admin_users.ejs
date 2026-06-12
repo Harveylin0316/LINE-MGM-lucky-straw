@@ -7,7 +7,7 @@
     <section class="card us-hero">
       <div>
         <h1>用戶檔案</h1>
-        <p class="muted" style="margin-top:6px;">看單一用戶在系統內的所有行為：加入/封鎖、玩遊戲、邀請、點擊、餐廳興趣、傳訊息、時間軸。</p>
+        <p class="muted" style="margin-top:6px;">看單一用戶在系統內的所有行為：加入/封鎖、玩遊戲、邀請、點擊、口味偏好、傳訊息、時間軸。</p>
       </div>
       <input type="search" id="us-search" placeholder="搜尋名字或 LINE 編號…" />
     </section>
@@ -51,6 +51,8 @@
       .us-stat .k{font-size:11px;color:#6b7280;margin-top:3px;}
       .us-sec-title{font-size:13px;font-weight:700;color:#1f2937;margin:18px 0 8px;}
       .us-chip{display:inline-block;background:#f3f4f6;border-radius:20px;padding:4px 11px;font-size:12px;color:#374151;margin:0 6px 6px 0;}
+      .us-pref-chip{background:#FFFBEB;border:1px solid #FCC726;color:#1F2937;font-weight:600;}
+      .us-chip-tag{color:#9ca3af;font-size:11px;margin-left:4px;}
       .us-tl{border-left:2px solid #e5e7eb;padding-left:14px;margin-top:8px;}
       .us-tl-item{position:relative;padding:6px 0;font-size:13px;}
       .us-tl-item .k{font-weight:600;color:#1f2937;}
@@ -157,7 +159,21 @@
                 '<p class="muted" style="font-size:11px;margin-top:4px;">*M 為餐廳客單價推算的預估價位帶，非真實消費金額</p>';
             }
             if(d.interest&&d.interest.length){
-              h+='<div class="us-sec-title">餐廳興趣（點過的）</div><div>'+d.interest.map(function(i){return '<span class="us-chip">'+esc(i.name)+' ×'+i.clicks+'</span>';}).join('')+'</div>';
+              var pref=d.preference||{};
+              var topCu=(pref.cuisine&&pref.cuisine.length)?pref.cuisine[0]:null;
+              var topPb=(pref.price_band&&pref.price_band.length)?pref.price_band[0]:null;
+              h+='<div class="us-sec-title">口味偏好</div>';
+              if(topCu||topPb){
+                h+='<div style="margin-bottom:8px;">'+
+                  (topCu?'<span class="us-chip us-pref-chip">'+esc(topCu.k)+' '+topCu.n+' 次</span>':'')+
+                  (topPb?'<span class="us-chip us-pref-chip">'+esc(topPb.k)+'</span>':'')+'</div>';
+              }else{
+                h+='<p class="muted" style="font-size:12px;margin:0 0 8px;">尚未能判斷偏好——到「<a href="/admin/restaurants">餐廳目錄</a>」幫餐廳標上種類與價位後，這裡會自動顯示</p>';
+              }
+              h+='<div>'+d.interest.map(function(i){
+                var tag=(i.cuisine||i.price_band)?((i.cuisine||'—')+' · '+(i.price_band||'—')):'—';
+                return '<span class="us-chip">'+esc(i.name)+' ×'+i.clicks+'<span class="us-chip-tag">'+esc(tag)+'</span></span>';
+              }).join('')+'</div>';
             }
             if(d.lists&&d.lists.length){
               h+='<div class="us-sec-title">在這些名單裡</div><div>'+d.lists.map(function(l){return '<span class="us-chip">'+esc(l.name)+'</span>';}).join('')+'</div>';

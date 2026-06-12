@@ -1,0 +1,220 @@
+<%-
+  include('layout', {
+    user: user,
+    isAdmin: isAdmin,
+    bodyClass: bodyClass,
+    body: `
+    <section class="card rc-hero">
+      <div class="rc-hero-inner">
+        <div>
+          <h1>餐廳目錄</h1>
+          <p class="muted" style="margin-top:6px;max-width:560px;">
+            把出現過的餐廳標上種類與價位，系統就能自動算出每位用戶的口味偏好（在用戶檔案顯示，也能用在自動化流程篩選）。每家只要標一次。
+          </p>
+        </div>
+        <div class="rc-stats" id="rc-stats">載入中…</div>
+      </div>
+    </section>
+
+    <section class="card">
+      <h2 style="margin:0 0 10px;">餐廳清單</h2>
+      <p class="muted" style="margin:0 0 12px;font-size:12px;">改動種類、價位或名稱後會自動儲存，旁邊出現「已儲存」就完成了。未標記的餐廳排在最前面。</p>
+      <div class="rc-table-wrap">
+        <table class="rc-table">
+          <thead>
+            <tr>
+              <th>餐廳名稱</th>
+              <th style="text-align:right;">點擊次數</th>
+              <th style="text-align:right;">點過的人數</th>
+              <th>最近點擊</th>
+              <th>種類</th>
+              <th>價位</th>
+              <th></th>
+            </tr>
+          </thead>
+          <tbody id="rc-tbody">
+            <tr><td colspan="7" class="muted" style="text-align:center;padding:18px 0;">載入中…</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </section>
+
+    <script>
+    (function () {
+      var items = [];
+      var cuisineOptions = [];
+      var priceBandOptions = [];
+      var tbody = document.getElementById('rc-tbody');
+      var statsEl = document.getElementById('rc-stats');
+
+      function esc(s) {
+        return String(s == null ? '' : s)
+          .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
+          .replace(/"/g, '&quot;').replace(/'/g, '&#039;');
+      }
+
+      function pad2(n) { return n < 10 ? '0' + n : '' + n; }
+
+      function fmtDate(s) {
+        if (!s) return '';
+        var d = new Date(s);
+        if (isNaN(d.getTime())) return '';
+        return d.getFullYear() + '/' + pad2(d.getMonth() + 1) + '/' + pad2(d.getDate());
+      }
+
+      function isTagged(r) { return !!(r.cuisine && r.price_band); }
+
+      function updateStats() {
+        var tagged = 0;
+        for (var i = 0; i < items.length; i++) { if (isTagged(items[i])) tagged++; }
+        statsEl.innerHTML = '已標記 <strong>' + tagged + '</strong> / 共 ' + items.length + ' 家';
+      }
+
+      function optionsHtml(opts, selected, placeholder) {
+        var html = '<option value="">' + placeholder + '</option>';
+        for (var i = 0; i < opts.length; i++) {
+          html += '<option value="' + esc(opts[i]) + '"' + (opts[i] === selected ? ' selected' : '') + '>' + esc(opts[i]) + '</option>';
+        }
+        return html;
+      }
+
+      function refHint(r) {
+        var parts = [];
+        if (r.poi_id) parts.push('POI ' + esc(r.poi_id));
+        if (r.query && r.query !== r.display_name) parts.push('搜尋詞 ' + esc(r.query));
+        return parts.join(' · ');
+      }
+
+      function render() {
+        if (!items.length) {
+          tbody.innerHTML = '<tr><td colspan="7" class="muted" style="text-align:center;padding:28px 12px;line-height:1.7;">' +
+            '還沒有餐廳點擊記錄。在訊息裡放 OpenRice 餐廳連結、用戶點了之後，餐廳會自動出現在這裡。</td></tr>';
+          return;
+        }
+        var html = '';
+        for (var i = 0; i < items.length; i++) {
+          var r = items[i];
+          var hint = refHint(r);
+          html += '<tr data-idx="' + i + '">' +
+            '<td class="rc-name-cell">' +
+              '<input type="text" class="rc-name" maxlength="200" value="' + esc(r.display_name || '') + '" placeholder="輸入餐廳名稱" />' +
+              (hint ? '<div class="muted" style="font-size:11px;margin-top:2px;padding-left:8px;">' + hint + '</div>' : '') +
+            '</td>' +
+            '<td style="text-align:right;font-weight:600;font-variant-numeric:tabular-nums;">' + (r.click_count || 0) + '</td>' +
+            '<td style="text-align:right;font-variant-numeric:tabular-nums;">' + (r.user_count || 0) + '</td>' +
+            '<td class="muted" style="white-space:nowrap;font-size:12px;">' + fmtDate(r.last_clicked_at) + '</td>' +
+            '<td><select class="rc-select rc-cuisine' + (r.cuisine ? '' : ' rc-empty') + '">' +
+              optionsHtml(cuisineOptions, r.cuisine, '選擇種類') + '</select></td>' +
+            '<td><select class="rc-select rc-price' + (r.price_band ? '' : ' rc-empty') + '">' +
+              optionsHtml(priceBandOptions, r.price_band, '選擇價位') + '</select></td>' +
+            '<td><span class="rc-status"></span></td>' +
+          '</tr>';
+        }
+        tbody.innerHTML = html;
+
+        tbody.querySelectorAll('tr[data-idx]').forEach(function (tr) {
+          var idx = Number(tr.getAttribute('data-idx'));
+          tr.querySelectorAll('.rc-select').forEach(function (sel) {
+            sel.addEventListener('change', function () {
+              sel.classList.toggle('rc-empty', !sel.value);
+              saveRow(idx, tr);
+            });
+          });
+          tr.querySelector('.rc-name').addEventListener('change', function () {
+            saveRow(idx, tr);
+          });
+        });
+      }
+
+      function saveRow(idx, tr) {
+        var r = items[idx];
+        if (!r) return;
+        var nameInput = tr.querySelector('.rc-name');
+        var cuisineSel = tr.querySelector('.rc-cuisine');
+        var priceSel = tr.querySelector('.rc-price');
+        var status = tr.querySelector('.rc-status');
+        status.classList.remove('rc-status-err');
+        status.textContent = '儲存中…';
+        status.classList.add('show');
+        fetch('/admin/restaurants/api/upsert', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            ref_key: r.ref_key,
+            poi_id: r.poi_id,
+            query: r.query,
+            display_name: nameInput.value.trim(),
+            cuisine: cuisineSel.value,
+            price_band: priceSel.value
+          })
+        })
+          .then(function (resp) { return resp.json(); })
+          .then(function (d) {
+            if (!d.ok) {
+              status.textContent = '儲存失敗：' + (d.detail || d.error || '未知');
+              status.classList.add('rc-status-err');
+              return;
+            }
+            r.cuisine = d.restaurant.cuisine;
+            r.price_band = d.restaurant.price_band;
+            r.display_name = d.restaurant.display_name || r.display_name;
+            if (!nameInput.value.trim() && r.display_name) nameInput.value = r.display_name;
+            status.textContent = '已儲存';
+            setTimeout(function () { status.classList.remove('show'); }, 1600);
+            updateStats();
+          })
+          .catch(function (e) {
+            status.textContent = '錯誤：' + e.message;
+            status.classList.add('rc-status-err');
+          });
+      }
+
+      function load() {
+        fetch('/admin/restaurants/api/list')
+          .then(function (resp) { return resp.json(); })
+          .then(function (d) {
+            if (!d.ok) {
+              tbody.innerHTML = '<tr><td colspan="7" class="muted" style="text-align:center;padding:18px 0;">載入失敗：' + esc(d.detail || d.error || '未知') + '</td></tr>';
+              statsEl.textContent = '載入失敗';
+              return;
+            }
+            items = d.restaurants || [];
+            cuisineOptions = d.cuisineOptions || [];
+            priceBandOptions = d.priceBandOptions || [];
+            render();
+            updateStats();
+          })
+          .catch(function () {
+            tbody.innerHTML = '<tr><td colspan="7" class="muted" style="text-align:center;padding:18px 0;">載入失敗，請重新整理</td></tr>';
+            statsEl.textContent = '載入失敗';
+          });
+      }
+
+      load();
+    })();
+    </script>
+
+    <style>
+      .rc-hero { background: linear-gradient(135deg, #fffbeb 0%, #fff 100%); border: 1px solid #fde68a; }
+      .rc-hero-inner { display: flex; justify-content: space-between; align-items: center; gap: 12px; flex-wrap: wrap; }
+      .rc-stats { font-size: 13px; color: #6B6B70; background: #fff; border: 1px solid #fde68a; padding: 8px 14px; border-radius: 8px; white-space: nowrap; }
+      .rc-stats strong { color: #1f2937; font-size: 15px; }
+
+      .rc-table-wrap { overflow-x: auto; }
+      .rc-table { width: 100%; border-collapse: collapse; font-size: 13px; }
+      .rc-table th, .rc-table td { padding: 8px 10px; border-bottom: 1px solid #F3F4F6; vertical-align: middle; }
+      .rc-table th { background: #FAFAFA; text-align: left; font-size: 11px; color: #6B6B70; font-weight: 600; text-transform: uppercase; letter-spacing: 0.04em; white-space: nowrap; }
+      .rc-name-cell { min-width: 200px; }
+      .rc-name { width: 100%; min-width: 160px; padding: 6px 8px; border: 1px solid transparent; border-radius: 6px; font-size: 14px; font-weight: 600; color: #1f2937; font-family: inherit; background: transparent; box-sizing: border-box; }
+      .rc-name:hover { border-color: #ECECEE; background: #fff; }
+      .rc-name:focus { border-color: #FCC726; background: #fff; outline: none; }
+      .rc-select { padding: 7px 9px; border: 1px solid #ECECEE; border-radius: 6px; font-size: 13px; font-family: inherit; background: #fff; color: #1f2937; cursor: pointer; max-width: 150px; }
+      .rc-select:focus { border-color: #FCC726; outline: none; }
+      .rc-select.rc-empty { color: #9CA3AF; border-style: dashed; }
+      .rc-status { font-size: 12px; color: #16a34a; opacity: 0; transition: opacity 0.4s ease; white-space: nowrap; }
+      .rc-status.show { opacity: 1; }
+      .rc-status.rc-status-err { color: #dc2626; }
+    </style>
+    `
+  })
+%>

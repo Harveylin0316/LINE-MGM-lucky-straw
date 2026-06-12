@@ -172,20 +172,33 @@ function createFlowEngine({ query, pool, linePush, buildLineMessages }) {
   }
 
   // restaurant_click：點了訊息裡的餐廳連結（user_restaurant_clicks）
+  // trigger_config.cuisine（可選）：有設時只在點擊的餐廳於 restaurant_catalog 標了該種類才觸發。
+  // 用 LEFT JOIN 算 cuisine_match：cursor 仍依「掃過的所有點擊」前進，
+  // 避免一直沒有符合種類的點擊時 cursor 停滯、每輪重掃同一批資料。
   async function runRestaurantClickTriggers() {
     const flows = await getActiveFlowsByTrigger('restaurant_click');
     let enrolled = 0;
     for (const f of flows) {
+      const cuisine = String((f.trigger_config && f.trigger_config.cuisine) || '').trim();
       const cursor = await getCursor(f.id, `SELECT COALESCE(MAX(id),0)::bigint AS m FROM user_restaurant_clicks`);
-      const rs = await query(
-        `SELECT id, line_user_id, restaurant_query, poi_id FROM user_restaurant_clicks
+      const params = [cursor];
+      let sql = `SELECT id, line_user_id, restaurant_query, poi_id FROM user_restaurant_clicks
          WHERE id > $1 AND line_user_id IS NOT NULL AND BTRIM(line_user_id) <> ''
-         ORDER BY id ASC LIMIT 500`,
-        [cursor]
-      );
+         ORDER BY id ASC LIMIT 500`;
+      if (cuisine) {
+        params.push(cuisine);
+        sql = `SELECT c.id, c.line_user_id, c.restaurant_query, c.poi_id, (rc.cuisine = $2) AS cuisine_match
+           FROM user_restaurant_clicks c
+           LEFT JOIN restaurant_catalog rc
+             ON COALESCE(c.poi_id, lower(btrim(c.restaurant_query))) = rc.ref_key
+           WHERE c.id > $1 AND c.line_user_id IS NOT NULL AND BTRIM(c.line_user_id) <> ''
+           ORDER BY c.id ASC LIMIT 500`;
+      }
+      const rs = await query(sql, params);
       let maxId = cursor;
       for (const row of rs.rows) {
         maxId = Math.max(maxId, Number(row.id));
+        if (cuisine && row.cuisine_match !== true) continue;
         const r = await enrollUser(f, row.line_user_id, {
           context: { trigger: 'restaurant_click', restaurant: row.restaurant_query || row.poi_id || null, click_id: Number(row.id) }
         });

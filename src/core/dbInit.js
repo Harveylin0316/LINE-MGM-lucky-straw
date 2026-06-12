@@ -22,7 +22,8 @@ const APP_PUBLIC_TABLES_WITH_RLS = [
   'admin_broadcast_clicks',
   'admin_broadcast_views',
   'admin_message_templates',
-  'admin_keyword_replies'
+  'admin_keyword_replies',
+  'restaurant_catalog'
 ];
 
 /**
@@ -303,6 +304,20 @@ async function initDb({ query, adminUsername, adminPassword, skipDdl = true }) {
     updated_at TIMESTAMPTZ DEFAULT now()
   )`);
 
+  // 餐廳目錄：把 user_restaurant_clicks 出現過的餐廳標上種類/價位
+  // ref_key 口徑：COALESCE(poi_id, lower(btrim(restaurant_query)))
+  await query(`CREATE TABLE IF NOT EXISTS restaurant_catalog (
+    id SERIAL PRIMARY KEY,
+    ref_key TEXT NOT NULL UNIQUE,
+    poi_id TEXT,
+    query TEXT,
+    display_name TEXT,
+    cuisine TEXT,
+    price_band TEXT,
+    created_at TIMESTAMPTZ DEFAULT now(),
+    updated_at TIMESTAMPTZ DEFAULT now()
+  )`);
+
   // Supabase exposes public schema via PostgREST by default.
   // Enable RLS on app tables to prevent direct external reads/writes.
   await query('ALTER TABLE users ENABLE ROW LEVEL SECURITY');
@@ -326,6 +341,7 @@ async function initDb({ query, adminUsername, adminPassword, skipDdl = true }) {
   await query('ALTER TABLE admin_broadcast_views ENABLE ROW LEVEL SECURITY');
   await query('ALTER TABLE admin_message_templates ENABLE ROW LEVEL SECURITY');
   await query('ALTER TABLE admin_keyword_replies ENABLE ROW LEVEL SECURITY');
+  await query('ALTER TABLE restaurant_catalog ENABLE ROW LEVEL SECURITY');
 
   await query(
     'CREATE INDEX IF NOT EXISTS admin_login_throttle_ip_created_idx ON admin_login_throttle (ip_key, created_at DESC)'

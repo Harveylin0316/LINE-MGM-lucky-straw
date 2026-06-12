@@ -22,6 +22,7 @@ const { registerAdminFlowsRoutes } = require('./routes/adminFlows');
 const { registerAdminKeywordRepliesRoutes } = require('./routes/adminKeywordReplies');
 const { createFlowEngine } = require('./core/flowEngine');
 const { registerAdminUsersRoutes } = require('./routes/adminUsers');
+const { registerAdminRestaurantsRoutes } = require('./routes/adminRestaurants');
 const { registerAdminRfmRoutes } = require('./routes/adminRfm');
 const { registerAdminReferralsRoutes } = require('./routes/adminReferrals');
 const { registerAdminHubRoutes } = require('./routes/adminHub');
@@ -512,6 +513,8 @@ registerAdminFlowsRoutes(app, { query, pool, flowEngine, authCore });
 registerAdminKeywordRepliesRoutes(app, { query, authCore });
 
 registerAdminUsersRoutes(app, { query, authCore });
+
+registerAdminRestaurantsRoutes(app, { query, authCore });
 
 registerAdminRfmRoutes(app, { query, pool, authCore });
 

@@ -30,6 +30,9 @@ const KNOWN_EVENTS = [
   { value: 'restaurant_click', label: '點了餐廳訂位' }
 ];
 
+// restaurant_click 觸發的餐廳種類白名單（與餐廳目錄 restaurant_catalog.cuisine 一致）
+const FLOW_CUISINES = ['日式', '韓式', '台菜中式', '港式', '泰式東南亞', '義式', '美式', '火鍋', '燒肉', '甜點咖啡', '早午餐', '其他'];
+
 function registerAdminFlowsRoutes(app, deps) {
   const { query, pool, flowEngine, authCore } = deps;
   const requireAdmin = authCore && authCore.requireAdmin;
@@ -163,6 +166,11 @@ function registerAdminFlowsRoutes(app, deps) {
     if (tType === 'list_join' && !(Number(tCfg.list_id) > 0)) return { ok: false, error: 'list_join_needs_list' };
     if (tType === 'event' && !String(tCfg.event_name || '').trim()) return { ok: false, error: 'event_needs_name' };
     // game_play / broadcast_click：無必填設定（活動可選任一、推播點擊任意）
+    if (tType === 'restaurant_click') {
+      // cuisine 白名單正規化（空值 = 不限種類，任何餐廳都觸發）
+      const cz = String(tCfg.cuisine || '').trim();
+      if (FLOW_CUISINES.includes(cz)) tCfg.cuisine = cz; else delete tCfg.cuisine;
+    }
     if (tType === 'inactivity') {
       const d = Math.round(Number(tCfg.days));
       if (!Number.isFinite(d) || d < 7) return { ok: false, error: 'inactivity_needs_days' };

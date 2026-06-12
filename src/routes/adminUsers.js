@@ -86,13 +86,36 @@ function registerAdminUsersRoutes(app, deps) {
         : 0;
       counts.liff_events = Number((await query(`SELECT COUNT(*)::int AS n FROM user_events WHERE line_id = $1`, [luid])).rows[0]?.n || 0);
 
-      // 餐廳興趣（點過的餐廳 Top）
+      // 餐廳興趣（點過的餐廳 Top，LEFT JOIN 目錄帶出種類/價位）
       const interest = (await query(
-        `SELECT COALESCE(restaurant_query, poi_id) AS name, COUNT(*)::int AS clicks, MAX(clicked_at) AS last
-         FROM user_restaurant_clicks WHERE line_user_id = $1 AND (restaurant_query IS NOT NULL OR poi_id IS NOT NULL)
-         GROUP BY COALESCE(restaurant_query, poi_id) ORDER BY clicks DESC, last DESC LIMIT 10`,
+        `SELECT COALESCE(c.restaurant_query, c.poi_id) AS name, COUNT(*)::int AS clicks, MAX(c.clicked_at) AS last,
+                rc.cuisine, rc.price_band
+         FROM user_restaurant_clicks c
+         LEFT JOIN restaurant_catalog rc ON COALESCE(c.poi_id, lower(btrim(c.restaurant_query))) = rc.ref_key
+         WHERE c.line_user_id = $1 AND (c.restaurant_query IS NOT NULL OR c.poi_id IS NOT NULL)
+         GROUP BY COALESCE(c.restaurant_query, c.poi_id), rc.cuisine, rc.price_band
+         ORDER BY clicks DESC, last DESC LIMIT 10`,
         [luid]
       )).rows;
+
+      // 口味偏好彙總（只計有標記種類/價位的餐廳點擊）
+      const prefCuisine = (await query(
+        `SELECT rc.cuisine AS k, COUNT(*)::int AS n
+         FROM user_restaurant_clicks c
+         JOIN restaurant_catalog rc ON COALESCE(c.poi_id, lower(btrim(c.restaurant_query))) = rc.ref_key
+         WHERE c.line_user_id = $1 AND rc.cuisine IS NOT NULL
+         GROUP BY rc.cuisine ORDER BY n DESC`,
+        [luid]
+      )).rows;
+      const prefPrice = (await query(
+        `SELECT rc.price_band AS k, COUNT(*)::int AS n
+         FROM user_restaurant_clicks c
+         JOIN restaurant_catalog rc ON COALESCE(c.poi_id, lower(btrim(c.restaurant_query))) = rc.ref_key
+         WHERE c.line_user_id = $1 AND rc.price_band IS NOT NULL
+         GROUP BY rc.price_band ORDER BY n DESC`,
+        [luid]
+      )).rows;
+      const preference = { cuisine: prefCuisine, price_band: prefPrice };
 
       // 名單歸屬（在哪些名單裡）
       const lists = (await query(
@@ -122,7 +145,7 @@ function registerAdminUsersRoutes(app, deps) {
         tlParams
       )).rows;
 
-      return res.json({ ok: true, profile, counts, interest, lists, timeline, rfm });
+      return res.json({ ok: true, profile, counts, interest, preference, lists, timeline, rfm });
     } catch (err) {
       return jsonErr(res, 500, 'profile_failed', { detail: err && err.message });
     }
