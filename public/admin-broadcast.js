@@ -1962,14 +1962,11 @@
       }
       return;
     }
-    var confirmMsg;
-    if (state.sendMode === 'scheduled') {
-      var dtStr2 = $('schedule-datetime').value;
-      confirmMsg = '將排程於「' + dtStr2.replace('T', ' ') + '」送給 ' + state.audiencePreviewedTotal + ' 人，確認？';
-    } else {
-      confirmMsg = '確定發送給 ' + state.audiencePreviewedTotal + ' 位會員？送出後無法回收。\n\n（建議先用上方『發送測試』確認內容無誤）';
-    }
-    if (!confirm(confirmMsg)) return;
+    openSendConfirm();
+  });
+
+  // 實際送出流程（抽出，由確認 modal 的「確定發送」呼叫）
+  function executeSend() {
     state.sending = true;
     updateSendButton();
     var progressWrap = $('send-progress');
@@ -2031,7 +2028,67 @@
         state.sending = false;
         updateSendButton();
       });
-  });
+  }
+
+  // ===== 正式發送確認 modal =====
+  function openSendConfirm() {
+    var overlay = $('send-confirm-overlay');
+    if (!overlay) { executeSend(); return; } // modal 不存在時退回直接送（仍有就緒檢查把關）
+    var channel = getActiveChannel();
+    var total = Number(state.audiencePreviewedTotal || 0);
+    var scheduled = state.sendMode === 'scheduled';
+    $('sc-channel').textContent = channel === 'email' ? 'Email' : 'LINE';
+    $('sc-total').textContent = total.toLocaleString() + ' 人';
+    $('sc-titlek').textContent = channel === 'email' ? '郵件主旨' : '通知文字';
+    var ttl = channel === 'email'
+      ? (($('email-subject') && $('email-subject').value || '').trim() || '（未填主旨）')
+      : (($('msg-alt-text') && $('msg-alt-text').value || '').trim() || '（未填通知文字）');
+    $('sc-msgtitle').textContent = ttl;
+    if (scheduled) {
+      $('sc-schedule-row').hidden = false;
+      $('sc-schedule').textContent = (($('schedule-datetime') && $('schedule-datetime').value) || '').replace('T', ' ');
+    } else {
+      $('sc-schedule-row').hidden = true;
+    }
+    $('sc-ab-row').hidden = !state.abTestEnabled;
+    var go = $('sc-btn-go');
+    if (scheduled) {
+      $('sc-title').textContent = '最後確認：排程發送';
+      $('sc-warn').textContent = '排程後系統會在指定時間自動送出，屆時無法回收。請再次確認以下內容。';
+      go.textContent = '確定排程給 ' + total.toLocaleString() + ' 人';
+    } else {
+      $('sc-title').textContent = '最後確認：正式發送';
+      $('sc-warn').textContent = '送出後無法回收。請再次確認以下內容。';
+      go.textContent = '確定發送給 ' + total.toLocaleString() + ' 人';
+    }
+    var chk = $('sc-confirm-check');
+    chk.checked = false;
+    go.disabled = true;
+    overlay.hidden = false;
+    var cancelBtn = $('sc-btn-cancel');
+    if (cancelBtn) cancelBtn.focus();
+  }
+  function closeSendConfirm() {
+    var overlay = $('send-confirm-overlay');
+    if (overlay) overlay.hidden = true;
+  }
+  (function wireSendConfirm() {
+    var chk = $('sc-confirm-check');
+    var go = $('sc-btn-go');
+    var cancel = $('sc-btn-cancel');
+    var overlay = $('send-confirm-overlay');
+    if (chk && go) chk.addEventListener('change', function () { go.disabled = !chk.checked; });
+    if (go) go.addEventListener('click', function () {
+      if (!chk || !chk.checked) return;
+      closeSendConfirm();
+      executeSend();
+    });
+    if (cancel) cancel.addEventListener('click', closeSendConfirm);
+    if (overlay) overlay.addEventListener('click', function (e) { if (e.target === overlay) closeSendConfirm(); });
+    document.addEventListener('keydown', function (e) {
+      if (e.key === 'Escape' && overlay && !overlay.hidden) closeSendConfirm();
+    });
+  })();
 
   function processChunkLoop(broadcastId, total, processedSoFar) {
     var bar = $('progress-bar-inner');
@@ -2117,6 +2174,23 @@
         },
         flexJson: $('flex-json').value,
         testRecipient: $('test-recipient').value,
+        altTop: ($('msg-alt-text') ? $('msg-alt-text').value : ''),
+        email: {
+          subject: ($('email-subject') ? $('email-subject').value : ''),
+          fromName: ($('email-from-name') ? $('email-from-name').value : ''),
+          fromAddress: ($('email-from-address') ? $('email-from-address').value : '')
+        },
+        abEnabled: !!state.abTestEnabled,
+        variantB: {
+          title: ($('b-tpl-title') ? $('b-tpl-title').value : ''),
+          subtitle: ($('b-tpl-subtitle') ? $('b-tpl-subtitle').value : ''),
+          couponCode: ($('b-tpl-coupon-code') ? $('b-tpl-coupon-code').value : ''),
+          disclaimer: ($('b-tpl-disclaimer') ? $('b-tpl-disclaimer').value : ''),
+          ctaLabel: ($('b-tpl-cta-label') ? $('b-tpl-cta-label').value : ''),
+          ctaUrl: ($('b-tpl-cta-url') ? $('b-tpl-cta-url').value : ''),
+          altText: ($('b-tpl-alt') ? $('b-tpl-alt').value : ''),
+          flexJson: ($('b-flex-json') ? $('b-flex-json').value : '')
+        },
         _t: Date.now()
       };
       localStorage.setItem(DRAFT_KEY, JSON.stringify(d));
@@ -2146,6 +2220,25 @@
       if (tpl.altText != null) $('tpl-alt').value = tpl.altText;
       if (d.flexJson != null) $('flex-json').value = d.flexJson;
       if (d.testRecipient != null) $('test-recipient').value = d.testRecipient;
+      if (d.altTop != null && $('msg-alt-text')) $('msg-alt-text').value = d.altTop;
+      if (d.email) {
+        if (d.email.subject != null && $('email-subject')) $('email-subject').value = d.email.subject;
+        if (d.email.fromName != null && $('email-from-name')) $('email-from-name').value = d.email.fromName;
+        if (d.email.fromAddress != null && $('email-from-address')) $('email-from-address').value = d.email.fromAddress;
+      }
+      var vb = d.variantB || {};
+      var vbMap = {
+        'b-tpl-title': vb.title, 'b-tpl-subtitle': vb.subtitle, 'b-tpl-coupon-code': vb.couponCode,
+        'b-tpl-disclaimer': vb.disclaimer, 'b-tpl-cta-label': vb.ctaLabel, 'b-tpl-cta-url': vb.ctaUrl,
+        'b-tpl-alt': vb.altText, 'b-flex-json': vb.flexJson
+      };
+      Object.keys(vbMap).forEach(function (id) {
+        if (vbMap[id] != null && $(id)) $(id).value = vbMap[id];
+      });
+      if (d.abEnabled && $('ab-test-enable') && !$('ab-test-enable').checked) {
+        $('ab-test-enable').checked = true;
+        $('ab-test-enable').dispatchEvent(new Event('change'));
+      }
       if (d.hero && d.hero.mediaId) {
         state.heroMediaId = d.hero.mediaId;
         state.heroUrl = d.hero.url || null;
