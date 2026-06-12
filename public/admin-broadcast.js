@@ -1967,6 +1967,13 @@
 
   // 實際送出流程（抽出，由確認 modal 的「確定發送」呼叫）
   function executeSend() {
+    // 最後一道把關：modal 開著期間若改了名單/條件/排程，狀態可能已變，送出前再驗一次
+    var finalCheck = checkSendReadiness();
+    if (!finalCheck.ok) {
+      closeSendConfirm();
+      alert('狀態已變更，無法送出：\n\n' + finalCheck.reason);
+      return;
+    }
     state.sending = true;
     updateSendButton();
     var progressWrap = $('send-progress');
@@ -2154,7 +2161,11 @@
   var DRAFT_KEY = 'broadcast_draft_v1';
   var DRAFT_FIELDS = [
     'tpl-title', 'tpl-subtitle', 'tpl-coupon-code', 'tpl-disclaimer',
-    'tpl-cta-label', 'tpl-cta-url', 'tpl-alt', 'flex-json', 'test-recipient'
+    'tpl-cta-label', 'tpl-cta-url', 'tpl-alt', 'flex-json', 'test-recipient',
+    // 通知文字 / Email / A/B 版本 B —— 也要在輸入時觸發自動存草稿
+    'msg-alt-text', 'email-subject', 'email-from-name', 'email-from-address',
+    'b-tpl-title', 'b-tpl-subtitle', 'b-tpl-coupon-code', 'b-tpl-disclaimer',
+    'b-tpl-cta-label', 'b-tpl-cta-url', 'b-tpl-alt', 'b-flex-json'
   ];
   var draftSaveTimer = null;
 
