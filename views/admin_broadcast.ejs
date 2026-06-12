@@ -1821,6 +1821,9 @@
     </div>
     <style>
       .send-confirm-overlay{position:fixed;inset:0;background:rgba(15,15,16,.5);display:flex;align-items:center;justify-content:center;z-index:1000;padding:20px;}
+      /* hidden 屬性會被上面的 display:flex 蓋掉（UA 的 display:none 輸給作者樣式），必須明確補回 */
+      .send-confirm-overlay[hidden]{display:none;}
+      .sc-row[hidden]{display:none;}
       .send-confirm-modal{background:#fff;border-radius:16px;max-width:440px;width:100%;padding:24px;box-shadow:0 20px 60px rgba(0,0,0,.3);}
       .sc-title{margin:0 0 6px;font-size:18px;color:#1f2937;}
       .sc-warn{margin:0 0 16px;font-size:13px;color:#b91c1c;line-height:1.6;}
