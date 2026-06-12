@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, viewport-fit=cover" />
-  <meta name="theme-color" content="#FAFAFA" />
+  <meta name="theme-color" content="#FFFBEB" />
   <title><%= title %></title>
   <script src="https://static.line-scdn.net/liff/edge/2/sdk.js"></script>
   <style>
@@ -15,7 +15,14 @@
     }
     * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
     html, body { margin: 0; padding: 0; }
-    body { background: var(--bg); color: var(--ink); min-height: 100vh; font-family: -apple-system, BlinkMacSystemFont, "SF Pro Display", "Inter", "PingFang TC", sans-serif; letter-spacing: -0.011em; -webkit-font-smoothing: antialiased; }
+    body {
+      background: var(--bg);
+      background-image:
+        radial-gradient(900px 420px at 85% -120px, rgba(252, 199, 38, 0.18), transparent 65%),
+        radial-gradient(700px 380px at -10% 10%, rgba(252, 199, 38, 0.10), transparent 60%),
+        linear-gradient(180deg, #FFFBEB 0%, #FAFAFA 420px);
+      color: var(--ink); min-height: 100vh; font-family: -apple-system, BlinkMacSystemFont, "SF Pro Display", "Inter", "PingFang TC", sans-serif; letter-spacing: -0.011em; -webkit-font-smoothing: antialiased;
+    }
     .page { max-width: 480px; margin: 0 auto; padding: 16px 16px 56px; }
 
     .brand-bar { display: flex; align-items: center; justify-content: space-between; padding: 6px 0 16px; }
@@ -34,24 +41,29 @@
     .hero-cover { width: calc(100% + 44px); margin: 18px -22px -24px; aspect-ratio: 16 / 9; object-fit: cover; display: block; border-top: 1px solid var(--border); }
 
     .stats { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 8px; margin-top: 12px; }
-    .stat { background: var(--surface); border: 1px solid var(--border); border-radius: 14px; padding: 12px; }
-    .stat .v { font-size: 20px; font-weight: 700; letter-spacing: -0.02em; line-height: 1; font-variant-numeric: tabular-nums; }
+    .stat { background: var(--surface); border: 1px solid var(--border); border-radius: 16px; padding: 12px; }
+    .stat .v { font-size: 20px; font-weight: 700; letter-spacing: -0.02em; line-height: 1; font-variant-numeric: tabular-nums; transform-origin: left center; }
     .stat .v .unit { font-size: 11px; color: var(--ink-2); margin-left: 2px; font-weight: 500; }
     .stat .k { font-size: 11px; color: var(--ink-2); margin-top: 5px; font-weight: 500; }
+    @keyframes stat-pop { 0% { transform: scale(1.3); color: var(--or-yellow-d); } 100% { transform: scale(1); } }
+    .stat .v.pop { animation: stat-pop 0.5s cubic-bezier(0.34, 1.56, 0.64, 1); }
 
-    .invite-card { margin-top: 8px; background: var(--ink); border-radius: 16px; padding: 14px 16px; display: flex; align-items: center; justify-content: space-between; gap: 12px; position: relative; overflow: hidden; color: #fff; }
-    .invite-card::before { content: ''; position: absolute; top: -40px; right: -30px; width: 140px; height: 140px; background: radial-gradient(circle, rgba(252, 199, 38, 0.32), transparent 70%); }
+    .invite-card { margin-top: 8px; background: linear-gradient(135deg, #FFDC66, var(--or-yellow) 42%, #F3B70E); border-radius: 18px; padding: 16px 18px; display: flex; align-items: center; justify-content: space-between; gap: 12px; position: relative; overflow: hidden; color: var(--ink); box-shadow: 0 12px 26px -12px rgba(232, 180, 0, 0.6); }
+    .invite-card::before { content: ''; position: absolute; top: -46px; right: -34px; width: 150px; height: 150px; border-radius: 50%; background: rgba(255, 255, 255, 0.3); pointer-events: none; }
+    .invite-card::after { content: ''; position: absolute; bottom: -34px; left: -22px; width: 92px; height: 92px; border-radius: 50%; border: 10px solid rgba(31, 41, 55, 0.08); pointer-events: none; }
     .invite-left { flex: 1; z-index: 1; }
-    .invite-title { font-size: 14px; font-weight: 700; }
-    .invite-sub { font-size: 11px; color: rgba(255, 255, 255, 0.62); margin-top: 3px; }
-    .invite-btn { flex-shrink: 0; background: var(--or-yellow); color: var(--ink); border: none; border-radius: 999px; padding: 8px 16px; font-family: inherit; font-weight: 700; font-size: 13px; cursor: pointer; z-index: 1; transition: background 0.15s ease, transform 0.15s cubic-bezier(0.34, 1.56, 0.64, 1); display: inline-flex; align-items: center; }
-    .invite-btn:hover { background: var(--or-yellow-d); }
+    .invite-kicker { display: inline-block; font-size: 10px; font-weight: 800; letter-spacing: 0.12em; color: var(--ink); background: rgba(255, 255, 255, 0.55); border-radius: 999px; padding: 3px 9px; margin-bottom: 6px; }
+    .invite-title { font-size: 15px; font-weight: 800; letter-spacing: -0.01em; }
+    .invite-title strong { color: var(--or-red); font-size: 17px; }
+    .invite-sub { font-size: 11px; color: rgba(31, 41, 55, 0.68); margin-top: 3px; font-weight: 500; }
+    .invite-btn { flex-shrink: 0; background: var(--ink); color: #fff; border: none; border-radius: 999px; padding: 10px 18px; font-family: inherit; font-weight: 700; font-size: 13px; cursor: pointer; z-index: 1; box-shadow: 0 6px 14px -6px rgba(15, 15, 16, 0.5); transition: background 0.15s ease, transform 0.15s cubic-bezier(0.34, 1.56, 0.64, 1); display: inline-flex; align-items: center; }
+    .invite-btn:hover { background: #000; }
     .invite-btn:active { transform: scale(0.96); }
-    .invite-card.maxed { opacity: 0.6; }
-    .invite-card.maxed .invite-btn { background: var(--ink-3); cursor: default; pointer-events: none; }
+    .invite-card.maxed { opacity: 0.6 !important; filter: grayscale(0.5); box-shadow: none; }
+    .invite-card.maxed .invite-btn { background: var(--ink-3); cursor: default; pointer-events: none; box-shadow: none; }
 
     /* ========== Scratch stage ========== */
-    .stage-card { margin-top: 12px; background: var(--surface); border: 1px solid var(--border); border-radius: 24px; padding: 24px 20px 22px; position: relative; overflow: hidden; }
+    .stage-card { margin-top: 12px; background: var(--surface); border: 1px solid var(--border); border-radius: 20px; padding: 24px 20px 22px; position: relative; overflow: hidden; box-shadow: 0 8px 24px -16px rgba(15, 15, 16, 0.14); }
     .stage-head { display: flex; align-items: center; justify-content: space-between; margin-bottom: 14px; }
     .stage-head .label { font-size: 11px; font-weight: 600; letter-spacing: 0.06em; text-transform: uppercase; color: var(--ink-3); }
     .stage-head .count { font-size: 11px; color: var(--ink-2); font-weight: 500; }
@@ -75,6 +87,12 @@
         0 0 0 1px var(--border);
       background: var(--surface);
     }
+    /* 可玩狀態：金黃微光描邊呼吸 */
+    @keyframes card-breathe {
+      0%, 100% { box-shadow: 0 12px 32px -8px rgba(15, 15, 16, 0.18), 0 4px 12px -2px rgba(15, 15, 16, 0.08), 0 0 0 2px rgba(252, 199, 38, 0.45); }
+      50% { box-shadow: 0 12px 32px -8px rgba(15, 15, 16, 0.18), 0 4px 12px -2px rgba(15, 15, 16, 0.08), 0 0 0 3px rgba(252, 199, 38, 0.9), 0 0 26px 2px rgba(252, 199, 38, 0.4); }
+    }
+    .scratch-card.ready:not(.revealed):not(.exhausted) { animation: card-breathe 2.4s ease-in-out infinite; }
     .scratch-prize {
       position: absolute;
       inset: 0;
@@ -106,6 +124,11 @@
     .scratch-prize.grand .scratch-glyph { background: rgba(255,255,255,0.2); color: #fff; }
     .scratch-name { font-size: 22px; font-weight: 700; letter-spacing: -0.025em; line-height: 1.2; margin-bottom: 4px; }
     .scratch-desc { font-size: 12px; opacity: 0.8; line-height: 1.5; max-width: 80%; }
+    /* 揭曉節奏：獎品區 scale pop；銘謝惠顧再加溫和浮動 */
+    @keyframes prize-pop { 0% { transform: scale(0.82); } 55% { transform: scale(1.07); } 100% { transform: scale(1); } }
+    .scratch-prize.pop { animation: prize-pop 0.55s cubic-bezier(0.34, 1.56, 0.64, 1); }
+    @keyframes prize-soft { 0%, 100% { transform: translateY(0); } 50% { transform: translateY(-5px); } }
+    .scratch-prize.pop.soft { animation: prize-pop 0.55s cubic-bezier(0.34, 1.56, 0.64, 1), prize-soft 1.7s ease-in-out 0.6s 2; }
 
     /* canvas 蓋層（要刮的部分） */
     #scratch-canvas {
@@ -116,6 +139,28 @@
       cursor: crosshair;
       touch-action: none;
     }
+    /* 灰膜光澤：獨立 DOM 層疊在 canvas 上（pointer-events:none，不影響刮除） */
+    .scratch-shine {
+      position: absolute;
+      inset: 0;
+      pointer-events: none;
+      z-index: 2;
+      opacity: 0;
+      transition: opacity 0.4s ease;
+      border-radius: 18px;
+      background: linear-gradient(115deg, transparent 38%, rgba(255, 255, 255, 0.24) 48%, rgba(255, 255, 255, 0.06) 52%, transparent 62%);
+      background-size: 300% 300%;
+      animation: shine-sweep 3.4s ease-in-out infinite;
+    }
+    @keyframes shine-sweep { 0% { background-position: 120% 120%; } 60%, 100% { background-position: -60% -60%; } }
+    .scratch-card.ready .scratch-shine { opacity: 1; }
+    .scratch-card.revealed .scratch-shine, .scratch-card.exhausted .scratch-shine { opacity: 0; }
+    /* 刮動碎屑 + 揭曉碎片（額外 DOM 層，不碰 canvas） */
+    .scratch-dust { position: absolute; inset: 0; pointer-events: none; z-index: 6; }
+    .scratch-dust .dust { position: absolute; width: 5px; height: 5px; border-radius: 50%; background: #9CA3AD; animation: dust-fall 0.75s ease-in forwards; }
+    @keyframes dust-fall { 0% { opacity: 0.95; } 100% { transform: translate(var(--dx, 0px), var(--dy, 44px)) scale(0.35); opacity: 0; } }
+    .scratch-dust .frag { position: absolute; width: 11px; height: 11px; border-radius: 2px; background: linear-gradient(135deg, #C3C9D2, #8A919E); animation: frag-fly 0.6s cubic-bezier(0.16, 1, 0.3, 1) forwards; }
+    @keyframes frag-fly { 0% { opacity: 1; } 100% { transform: translate(var(--dx, 0px), var(--dy, -40px)) rotate(var(--rot, 90deg)) scale(0.5); opacity: 0; } }
     /* 載入遮罩 — 蓋住整張卡，paintCover 完才移除 */
     .scratch-loading {
       position: absolute;
@@ -158,10 +203,17 @@
       transition: background 0.15s, transform 0.18s cubic-bezier(0.34, 1.56, 0.64, 1);
     }
     .primary-btn:hover:not(:disabled) { background: var(--or-yellow-d); }
-    .primary-btn:active:not(:disabled) { transform: scale(0.96); }
-    .primary-btn:disabled { background: #F0F0F2; color: var(--ink-3); cursor: default; box-shadow: none; }
-    .secondary-btn { background: transparent; color: var(--ink-2); border: 1px solid var(--border); padding: 14px 22px; border-radius: 999px; font-family: inherit; font-weight: 600; font-size: 14px; cursor: pointer; }
-    .secondary-btn:active { transform: scale(0.96); }
+    .primary-btn:active:not(:disabled) { transform: scale(0.97); }
+    .primary-btn:disabled { background: #F0F0F2; color: var(--ink-3); cursor: default; box-shadow: none; animation: none; }
+    /* 可以玩時：黃色呼吸光暈 */
+    @keyframes btn-breathe {
+      0%, 100% { box-shadow: 0 6px 16px -4px rgba(252, 199, 38, 0.5), 0 0 0 0 rgba(252, 199, 38, 0.4); }
+      50% { box-shadow: 0 8px 22px -4px rgba(252, 199, 38, 0.7), 0 0 0 9px rgba(252, 199, 38, 0); }
+    }
+    .primary-btn:not(:disabled) { animation: btn-breathe 2.2s ease-in-out infinite; }
+    .secondary-btn { background: transparent; color: var(--ink-2); border: 1px solid var(--border); padding: 14px 22px; border-radius: 999px; font-family: inherit; font-weight: 600; font-size: 14px; cursor: pointer; transition: transform 0.15s cubic-bezier(0.34, 1.56, 0.64, 1), border-color 0.15s ease; }
+    .secondary-btn:hover { border-color: var(--ink-3); }
+    .secondary-btn:active { transform: scale(0.97); }
 
     .status-row { display: flex; align-items: center; justify-content: center; gap: 8px; margin-top: 16px; font-size: 13px; color: var(--ink-2); min-height: 22px; }
     .status-row .name { color: var(--ink); font-weight: 600; }
@@ -171,7 +223,7 @@
     .section-head h2 { margin: 0; font-size: 17px; font-weight: 700; letter-spacing: -0.015em; }
     .section-head .meta { font-size: 11px; color: var(--ink-2); font-weight: 500; }
     .prize-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
-    .prize-card { background: var(--surface); border: 1px solid var(--border); border-radius: 14px; padding: 14px; }
+    .prize-card { background: var(--surface); border: 1px solid var(--border); border-radius: 16px; padding: 14px; box-shadow: 0 4px 14px -10px rgba(15, 15, 16, 0.12); }
     .prize-card.grand { grid-column: span 2; border-color: var(--or-red); background: linear-gradient(180deg, rgba(225, 29, 39, 0.04), transparent); }
     .prize-card .top { display: flex; justify-content: space-between; margin-bottom: 8px; }
     .prize-card .icon { width: 32px; height: 32px; border-radius: 10px; background: linear-gradient(135deg, #FFF7DA, var(--or-yellow)); display: flex; align-items: center; justify-content: center; font-weight: 700; font-size: 14px; }
@@ -180,10 +232,30 @@
     .prize-card .name { font-size: 14px; font-weight: 600; line-height: 1.35; }
     .prize-card .desc { margin-top: 3px; font-size: 12px; color: var(--ink-2); line-height: 1.4; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
 
-    .foot { margin-top: 28px; padding: 14px 16px; background: var(--surface); border: 1px solid var(--border); border-radius: 14px; display: flex; align-items: center; justify-content: space-between; font-size: 12px; color: var(--ink-2); }
+    .foot { margin-top: 28px; padding: 14px 16px; background: var(--surface); border: 1px solid var(--border); border-radius: 16px; display: flex; align-items: center; justify-content: space-between; font-size: 12px; color: var(--ink-2); }
     .foot .l { display: flex; align-items: center; gap: 8px; }
     .foot .i { width: 20px; height: 20px; border-radius: 6px; background: var(--bg); border: 1px solid var(--border); display: inline-flex; align-items: center; justify-content: center; font-size: 11px; }
     .foot .r { font-weight: 600; color: var(--ink); }
+
+    /* ========== 進場動畫 ========== */
+    @keyframes rise-in { from { opacity: 0; transform: translateY(16px); } to { opacity: 1; transform: translateY(0); } }
+    .enter { animation: rise-in 0.4s cubic-bezier(0.22, 1, 0.36, 1) both; }
+    .enter.d1 { animation-delay: 0.06s; }
+    .enter.d2 { animation-delay: 0.12s; }
+    .enter.d3 { animation-delay: 0.18s; }
+    .enter.d4 { animation-delay: 0.26s; }
+    .enter.d5 { animation-delay: 0.34s; }
+
+    /* ========== 動效減量（無障礙） ========== */
+    @media (prefers-reduced-motion: reduce) {
+      .enter, .enter.d1, .enter.d2, .enter.d3, .enter.d4, .enter.d5 { animation: none; }
+      .primary-btn:not(:disabled) { animation: none; }
+      .scratch-card.ready:not(.revealed):not(.exhausted) { animation: none; }
+      .scratch-shine { animation: none; opacity: 0 !important; }
+      .scratch-prize.pop, .scratch-prize.pop.soft { animation: none; }
+      .stat .v.pop { animation: none; }
+      .scratch-dust .dust, .scratch-dust .frag { animation: none; display: none; }
+    }
   </style>
 </head>
 <body>
@@ -194,7 +266,7 @@
       <div class="chip">活動進行中</div>
     </header>
 
-    <section class="hero">
+    <section class="hero enter">
       <div class="hero-tag">刮刮樂</div>
       <h1><%= activity.name %></h1>
       <% if (activity.description) { %><p><%= activity.description %></p><% } %>
@@ -203,18 +275,20 @@
       <% } %>
     </section>
 
-    <section class="stats">
+    <section class="stats enter d1">
       <div class="stat"><div class="v" id="stat-remaining">—</div><div class="k">剩餘次數</div></div>
       <div class="stat"><div class="v" id="stat-referrals">—</div><div class="k">已邀請</div></div>
       <div class="stat"><div class="v"><%= prizes && prizes.length || 0 %><span class="unit">種</span></div><div class="k">獎品</div></div>
     </section>
 
-    <section class="invite-card" id="invite-card">
+    <section class="invite-card enter d2" id="invite-card">
       <div class="invite-left">
         <% if (activity.referral_bonus_per && activity.referral_bonus_per > 0) { %>
-          <div class="invite-title">邀請朋友 +<%= activity.referral_bonus_per %> 次</div>
+          <div class="invite-kicker">好友助攻</div>
+          <div class="invite-title">邀 1 位好友，多刮 <strong>+<%= activity.referral_bonus_per %> 次</strong></div>
           <div class="invite-sub" id="invite-sub">最多再加 <%= activity.referral_bonus_max %> 次</div>
         <% } else { %>
+          <div class="invite-kicker">分享同樂</div>
           <div class="invite-title">分享給朋友一起玩</div>
           <div class="invite-sub" id="invite-sub">把這個活動傳出去</div>
         <% } %>
@@ -224,7 +298,7 @@
       </button>
     </section>
 
-    <section class="stage-card">
+    <section class="stage-card enter d3">
       <div class="stage-head">
         <span class="label">刮獎</span>
         <span class="count" id="stage-hint">準備中⋯</span>
@@ -238,12 +312,16 @@
             <div class="scratch-desc" id="prize-desc"></div>
           </div>
           <canvas id="scratch-canvas"></canvas>
+          <!-- 灰膜光澤層：純裝飾、pointer-events:none，不影響 canvas 刮除 -->
+          <div class="scratch-shine"></div>
           <!-- 載入遮罩：LIFF init + paintCover 完成才移除（避免底層獎品先閃現） -->
           <div class="scratch-loading" id="card-loading">
             <div class="spinner"></div>
             <div id="card-loading-text">準 備 中</div>
           </div>
         </div>
+        <!-- 碎屑/碎片層：獨立 DOM、pointer-events:none -->
+        <div class="scratch-dust" id="dust-layer"></div>
       </div>
 
       <div class="draw-btn-wrap">
@@ -256,7 +334,7 @@
     </section>
 
     <% if (prizes && prizes.length > 0) { %>
-    <section class="section">
+    <section class="section enter d4">
       <div class="section-head"><h2>本次獎項</h2><span class="meta"><%= prizes.length %> 種</span></div>
       <div class="prize-grid">
         <% prizes.forEach(function (p, i) { %>
@@ -273,7 +351,7 @@
     </section>
     <% } %>
 
-    <div class="foot">
+    <div class="foot enter d5">
       <div class="l"><span class="i">i</span><span>遊戲規則</span></div>
       <span class="r">公平隨機</span>
     </div>
@@ -306,6 +384,131 @@
       var inProgress = false;
       var currentPrize = null;
       var revealed = false;
+
+      /* ===== 體驗層（純演出，不碰遊戲邏輯） ===== */
+      var reducedMotion = false;
+      try { reducedMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches; } catch (e) {}
+      var dustLayer = document.getElementById('dust-layer');
+      var dustCount = 0;
+      var lastDustAt = 0;
+      var lastRemainingShown = null;
+      var lastReferralsShown = null;
+
+      function buzz(pattern) {
+        try { if (navigator.vibrate) navigator.vibrate(pattern); } catch (e) {}
+      }
+
+      // 數字變化 pop（剩餘次數 / 已邀請）
+      function popStat(el) {
+        if (!el || reducedMotion) return;
+        el.classList.remove('pop');
+        void el.offsetWidth;
+        el.classList.add('pop');
+      }
+
+      // 刮動碎屑：節流 ~40ms，每次最多 2 顆，同時上限 30 顆
+      function spawnDust(x, y) {
+        if (reducedMotion || !dustLayer) return;
+        var now = Date.now();
+        if (now - lastDustAt < 40) return;
+        lastDustAt = now;
+        var n = Math.min(2, 30 - dustCount);
+        for (var i = 0; i < n; i++) {
+          var d = document.createElement('div');
+          d.className = 'dust';
+          var s = Math.random() * 3 + 3;
+          d.style.width = s + 'px';
+          d.style.height = s + 'px';
+          d.style.left = (x + (Math.random() - 0.5) * 18) + 'px';
+          d.style.top = (y + (Math.random() - 0.5) * 12) + 'px';
+          d.style.setProperty('--dx', ((Math.random() - 0.5) * 36) + 'px');
+          d.style.setProperty('--dy', (Math.random() * 30 + 34) + 'px');
+          dustCount++;
+          d.addEventListener('animationend', function () { this.remove(); dustCount--; });
+          dustLayer.appendChild(d);
+        }
+      }
+
+      // 揭曉瞬間：灰色碎片往外飛散
+      function spawnFragments() {
+        if (reducedMotion || !dustLayer) return;
+        var w = dustLayer.offsetWidth || 280;
+        var h = dustLayer.offsetHeight || 210;
+        for (var i = 0; i < 10; i++) {
+          var f = document.createElement('div');
+          f.className = 'frag';
+          f.style.left = (w * 0.5 + (Math.random() - 0.5) * w * 0.55) + 'px';
+          f.style.top = (h * 0.5 + (Math.random() - 0.5) * h * 0.55) + 'px';
+          f.style.setProperty('--dx', ((Math.random() - 0.5) * 170) + 'px');
+          f.style.setProperty('--dy', ((Math.random() - 0.5) * 130 - 40) + 'px');
+          f.style.setProperty('--rot', (Math.random() * 260 - 130) + 'deg');
+          f.addEventListener('animationend', function () { this.remove(); });
+          dustLayer.appendChild(f);
+        }
+      }
+
+      // 「銘謝惠顧」類判斷（純文案判斷，僅決定演出，不影響獎品本身）
+      function isLosePrize(p) {
+        var t = ((p && p.name) || '') + ' ' + ((p && p.description) || '');
+        return /銘謝|惠顧|未中獎|沒中|再接再厲|下次再來/.test(t);
+      }
+
+      // 輕量 canvas 紙花：黃/墨/白 約 80 顆，~1.8 秒自動清理
+      function fireConfetti() {
+        if (reducedMotion) return;
+        var cv = document.createElement('canvas');
+        cv.style.cssText = 'position:fixed;top:0;left:0;width:100%;height:100%;pointer-events:none;z-index:9999;';
+        document.body.appendChild(cv);
+        var dpr = window.devicePixelRatio || 1;
+        var vw = window.innerWidth, vh = window.innerHeight;
+        cv.width = vw * dpr;
+        cv.height = vh * dpr;
+        var cc = cv.getContext('2d');
+        cc.scale(dpr, dpr);
+        var colors = ['#FCC726', '#1F2937', '#FFFFFF', '#FCC726', '#1F2937', '#FCC726'];
+        var parts = [];
+        for (var i = 0; i < 80; i++) {
+          parts.push({
+            x: vw / 2 + (Math.random() - 0.5) * 140,
+            y: vh * 0.42,
+            vx: (Math.random() - 0.5) * 10,
+            vy: -(Math.random() * 9 + 5),
+            size: Math.random() * 5 + 4,
+            color: colors[i % colors.length],
+            circle: Math.random() < 0.4,
+            rot: Math.random() * Math.PI * 2,
+            vr: (Math.random() - 0.5) * 0.3
+          });
+        }
+        var start = null;
+        var DURATION = 1800;
+        function frame(ts) {
+          if (start === null) start = ts;
+          var t = ts - start;
+          cc.clearRect(0, 0, vw, vh);
+          var fade = t > DURATION - 450 ? Math.max(0, (DURATION - t) / 450) : 1;
+          for (var j = 0; j < parts.length; j++) {
+            var p = parts[j];
+            p.vy += 0.26;
+            p.x += p.vx;
+            p.y += p.vy;
+            p.vx *= 0.99;
+            p.rot += p.vr;
+            cc.save();
+            cc.globalAlpha = fade;
+            cc.translate(p.x, p.y);
+            cc.rotate(p.rot);
+            cc.fillStyle = p.color;
+            if (p.circle) { cc.beginPath(); cc.arc(0, 0, p.size / 2, 0, Math.PI * 2); cc.fill(); }
+            else { cc.fillRect(-p.size / 2, -p.size / 2, p.size, p.size * 0.62); }
+            cc.restore();
+          }
+          if (t < DURATION) requestAnimationFrame(frame);
+          else if (cv.parentNode) cv.parentNode.removeChild(cv);
+        }
+        requestAnimationFrame(frame);
+      }
+      /* ===== 體驗層結束 ===== */
 
       function paintCover() {
         var rect = card.getBoundingClientRect();
@@ -363,6 +566,8 @@
           isDrawing = true;
           var p = getPos(e);
           lastX = p.x; lastY = p.y;
+          buzz(10);              // 開始刮：輕震
+          spawnDust(p.x, p.y);   // 碎屑回饋
           // 第一觸點：畫一個小圓圈讓刮跡更明顯
           ctx.lineWidth = 36;
           ctx.lineCap = 'round';
@@ -383,6 +588,7 @@
           ctx.lineTo(p.x, p.y);
           ctx.stroke();
           lastX = p.x; lastY = p.y;
+          spawnDust(p.x, p.y);   // 沿手指產生碎屑（內部已節流）
           card.classList.add('scratched');
           checkProgress();
         }
@@ -422,13 +628,28 @@
       function doReveal() {
         if (revealed) return;
         revealed = true;
-        // 整個 canvas 漸隱
-        canvas.style.transition = 'opacity 0.4s ease';
+        card.classList.add('revealed');
+        buzz(15);
+        // 碎片飛散 + 整個 canvas 漸隱
+        spawnFragments();
+        canvas.style.transition = 'opacity 0.45s ease';
         canvas.style.opacity = '0';
         stageHint.textContent = '完成！';
-        statusEl.textContent = '恭喜抽中 ' + (currentPrize && currentPrize.name || '');
         newCardBtn.hidden = false;
         revealBtn.hidden = true;
+        // 揭曉節奏：停頓 → 獎品 pop → 慶祝
+        var win = currentPrize && !isLosePrize(currentPrize);
+        setTimeout(function () {
+          prizeEl.classList.add('pop');
+          if (win) {
+            statusEl.textContent = '恭喜抽中 ' + (currentPrize && currentPrize.name || '');
+            buzz([30, 40, 80]);
+            fireConfetti();
+          } else {
+            prizeEl.classList.add('soft');
+            statusEl.textContent = '銘謝惠顧，下次再來';
+          }
+        }, 420);
         setTimeout(refreshQuota, 500);
       }
 
@@ -475,8 +696,14 @@
       }
 
       function renderQuota(q) {
-        document.getElementById('stat-remaining').innerHTML = q.remaining + '<span class="unit">/ ' + q.total + '</span>';
-        document.getElementById('stat-referrals').innerHTML = q.referrals + '<span class="unit">人</span>';
+        var remEl = document.getElementById('stat-remaining');
+        var refStatEl = document.getElementById('stat-referrals');
+        if (lastRemainingShown !== null && lastRemainingShown !== q.remaining) popStat(remEl);
+        if (lastReferralsShown !== null && lastReferralsShown !== q.referrals) popStat(refStatEl);
+        lastRemainingShown = q.remaining;
+        lastReferralsShown = q.referrals;
+        remEl.innerHTML = q.remaining + '<span class="unit">/ ' + q.total + '</span>';
+        refStatEl.innerHTML = q.referrals + '<span class="unit">人</span>';
 
         var inviteCard = document.getElementById('invite-card');
         var inviteSub = document.getElementById('invite-sub');
@@ -545,8 +772,9 @@
           }
           currentPrize = resp.prize;
           renderPrize(currentPrize);
-          // 重設 canvas（蓋上灰膜）
-          card.classList.remove('scratched', 'exhausted');
+          // 重設 canvas（蓋上灰膜）+ 清掉上一輪的演出狀態
+          card.classList.remove('scratched', 'exhausted', 'revealed');
+          prizeEl.classList.remove('pop', 'soft');
           canvas.style.transition = 'none';
           canvas.style.opacity = '1';
           paintCover();

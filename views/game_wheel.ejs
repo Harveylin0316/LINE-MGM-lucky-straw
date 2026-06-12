@@ -22,7 +22,10 @@
     * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
     html, body { margin: 0; padding: 0; }
     body {
-      background: var(--bg);
+      background:
+        radial-gradient(640px 360px at 88% -80px, rgba(252, 199, 38, 0.20), transparent 70%),
+        radial-gradient(520px 300px at -10% 240px, rgba(252, 199, 38, 0.08), transparent 70%),
+        linear-gradient(180deg, #FFFBEB 0%, var(--bg) 360px);
       color: var(--ink);
       min-height: 100vh;
       font-family: -apple-system, BlinkMacSystemFont, "SF Pro Display", "SF Pro Text",
@@ -36,6 +39,21 @@
       margin: 0 auto;
       padding: 16px 16px 56px;
     }
+
+    /* ========== 進場動畫（staggered fade + up）========== */
+    @keyframes rise {
+      from { opacity: 0; transform: translateY(14px); }
+      to   { opacity: 1; transform: translateY(0); }
+    }
+    .brand-bar, .hero, .stats, .invite-card, .stage-card, .section, .foot {
+      animation: rise 0.38s cubic-bezier(0.22, 0.9, 0.3, 1) both;
+    }
+    .hero       { animation-delay: 0.05s; }
+    .stats      { animation-delay: 0.11s; }
+    .invite-card{ animation-delay: 0.17s; }
+    .stage-card { animation-delay: 0.23s; }
+    .section    { animation-delay: 0.31s; }
+    .foot       { animation-delay: 0.38s; }
 
     /* ========== Brand bar ========== */
     .brand-bar {
@@ -95,6 +113,7 @@
       padding: 22px 22px 24px;
       position: relative;
       overflow: hidden;
+      box-shadow: 0 10px 28px -16px rgba(15, 15, 16, 0.12);
     }
     .hero::before {
       content: '';
@@ -155,8 +174,9 @@
     .stat {
       background: var(--surface);
       border: 1px solid var(--border);
-      border-radius: 14px;
+      border-radius: 16px;
       padding: 12px 12px;
+      box-shadow: 0 4px 14px -8px rgba(15, 15, 16, 0.08);
     }
     .stat .v {
       font-size: 20px;
@@ -164,6 +184,15 @@
       letter-spacing: -0.02em;
       line-height: 1;
       font-variant-numeric: tabular-nums;
+      transform-origin: left center;
+    }
+    /* 次數變化時的 pop（scale 1.3 → 1） */
+    @keyframes stat-pop {
+      0%   { transform: scale(1.3); color: var(--or-yellow-d); }
+      100% { transform: scale(1); }
+    }
+    .stat .v.pop {
+      animation: stat-pop 0.45s cubic-bezier(0.34, 1.56, 0.64, 1);
     }
     .stat .v .unit { font-size: 11px; font-weight: 500; color: var(--ink-2); margin-left: 2px; }
     .stat .k {
@@ -173,48 +202,71 @@
       font-weight: 500;
     }
 
-    /* ========== Invite card（MGM）========== */
+    /* ========== Invite card（MGM 主視覺：品牌黃）========== */
     .invite-card {
       margin-top: 8px;
-      background: var(--ink);
-      border-radius: 16px;
-      padding: 14px 16px;
+      background: linear-gradient(135deg, #FFDC6B 0%, var(--or-yellow) 52%, #F3B913 100%);
+      border-radius: 18px;
+      padding: 16px 18px;
       display: flex;
       align-items: center;
       justify-content: space-between;
       gap: 12px;
       position: relative;
       overflow: hidden;
-      color: #fff;
+      color: var(--ink);
+      box-shadow:
+        0 1px 0 rgba(255, 255, 255, 0.5) inset,
+        0 12px 26px -14px rgba(232, 180, 0, 0.65);
     }
     .invite-card::before {
       content: '';
       position: absolute;
-      top: -40px;
-      right: -30px;
-      width: 140px; height: 140px;
-      background: radial-gradient(circle, rgba(252, 199, 38, 0.32), transparent 70%);
+      top: -48px;
+      right: -28px;
+      width: 144px; height: 144px;
+      border-radius: 50%;
+      background: rgba(255, 255, 255, 0.30);
+      pointer-events: none;
+    }
+    .invite-card::after {
+      content: '';
+      position: absolute;
+      bottom: -62px;
+      right: 42px;
+      width: 112px; height: 112px;
+      border-radius: 50%;
+      background: rgba(31, 41, 55, 0.06);
       pointer-events: none;
     }
     .invite-left { flex: 1; min-width: 0; z-index: 1; }
-    .invite-title {
-      font-size: 14px;
+    .invite-eyebrow {
+      font-size: 10px;
       font-weight: 700;
-      letter-spacing: -0.012em;
+      letter-spacing: 0.1em;
+      text-transform: uppercase;
+      color: rgba(31, 41, 55, 0.62);
+      margin-bottom: 4px;
+    }
+    .invite-title {
+      font-size: 16px;
+      font-weight: 800;
+      letter-spacing: -0.015em;
       line-height: 1.3;
     }
     .invite-sub {
-      font-size: 11px;
-      color: rgba(255, 255, 255, 0.62);
+      font-size: 11.5px;
+      font-weight: 500;
+      color: rgba(31, 41, 55, 0.72);
       margin-top: 3px;
     }
     .invite-btn {
       flex-shrink: 0;
-      background: var(--or-yellow);
-      color: var(--ink);
+      background: var(--ink);
+      color: #fff;
       border: none;
       border-radius: 999px;
-      padding: 8px 16px;
+      padding: 10px 18px;
       font-family: inherit;
       font-weight: 700;
       font-size: 13px;
@@ -224,21 +276,23 @@
       transition: background 0.15s ease, transform 0.15s cubic-bezier(0.34, 1.56, 0.64, 1);
       display: inline-flex;
       align-items: center;
+      box-shadow: 0 6px 14px -6px rgba(15, 15, 16, 0.5);
     }
-    .invite-btn:hover { background: var(--or-yellow-d); }
+    .invite-btn:hover { background: #000; }
     .invite-btn:active { transform: scale(0.96); }
-    .invite-card.maxed { opacity: 0.6; }
-    .invite-card.maxed .invite-btn { background: var(--ink-3); cursor: default; pointer-events: none; }
+    .invite-card.maxed { opacity: 0.6; box-shadow: none; }
+    .invite-card.maxed .invite-btn { background: var(--ink-3); cursor: default; pointer-events: none; box-shadow: none; }
 
     /* ========== Stage card ========== */
     .stage-card {
       margin-top: 12px;
       background: var(--surface);
       border: 1px solid var(--border);
-      border-radius: 24px;
+      border-radius: 20px;
       padding: 24px 20px 20px;
       position: relative;
       overflow: hidden;
+      box-shadow: 0 14px 32px -18px rgba(15, 15, 16, 0.14);
     }
     .stage-card::before {
       content: '';
@@ -287,7 +341,25 @@
       transform: translateX(-50%);
       z-index: 5;
     }
-    .pointer svg { display: block; }
+    .pointer svg { display: block; transform-origin: 50% 20%; }
+    /* 轉動中：指針細微 tick 抖動（模擬撞釘） */
+    @keyframes ptr-tick {
+      from { transform: rotate(2deg); }
+      to   { transform: rotate(-8deg); }
+    }
+    .stage.spinning .pointer svg {
+      animation: ptr-tick 0.12s linear infinite alternate;
+    }
+    /* 停止瞬間：指針 bounce */
+    @keyframes ptr-bounce {
+      0%   { transform: rotate(-11deg); }
+      40%  { transform: rotate(7deg); }
+      70%  { transform: rotate(-3deg); }
+      100% { transform: rotate(0deg); }
+    }
+    .stage.landed .pointer svg {
+      animation: ptr-bounce 0.55s cubic-bezier(0.34, 1.56, 0.64, 1);
+    }
     .canvas-wrap {
       position: relative;
       width: 100%;
@@ -303,7 +375,12 @@
       width: 100%;
       height: 100%;
       display: block;
-      transition: transform 5.6s cubic-bezier(0.16, 0.74, 0.24, 1);
+      /* 期待感曲線：長尾 ease-out，最後一格慢慢滑過去 */
+      transition: transform 5.2s cubic-bezier(0.12, 0.8, 0.2, 1);
+    }
+    /* 按下後先反向蓄力一小段 */
+    #wheel.windup {
+      transition: transform 0.3s cubic-bezier(0.45, 0, 0.55, 1);
     }
 
     /* 中央按鈕 — 黃色 + 微陰影，現代 web product 風 */
@@ -348,6 +425,15 @@
       background: #F0F0F2;
       color: var(--ink-3);
       cursor: default;
+    }
+    /* 可以玩的時候：黃色呼吸光暈 */
+    @keyframes breathe {
+      0%, 100% { box-shadow: 0 0 0 0 rgba(252, 199, 38, 0.55); }
+      55%      { box-shadow: 0 0 0 13px rgba(252, 199, 38, 0); }
+      56%      { box-shadow: 0 0 0 0 rgba(252, 199, 38, 0); }
+    }
+    .spin-btn:not(:disabled) {
+      animation: breathe 1.9s ease-out infinite;
     }
 
     /* ========== Status line ========== */
@@ -409,11 +495,13 @@
     .prize-card {
       background: var(--surface);
       border: 1px solid var(--border);
-      border-radius: 14px;
+      border-radius: 16px;
       padding: 14px;
       position: relative;
       transition: transform 0.15s ease, border-color 0.15s ease;
+      box-shadow: 0 4px 14px -10px rgba(15, 15, 16, 0.10);
     }
+    .prize-card:active { transform: scale(0.98); }
     .prize-card.grand {
       grid-column: span 2;
       border-color: var(--or-red);
@@ -475,7 +563,7 @@
       padding: 14px 16px;
       background: var(--surface);
       border: 1px solid var(--border);
-      border-radius: 14px;
+      border-radius: 16px;
       display: flex;
       align-items: center;
       justify-content: space-between;
@@ -594,6 +682,65 @@
       transition: transform 0.15s cubic-bezier(0.34, 1.56, 0.64, 1);
     }
     .modal-btn:active { transform: scale(0.98); }
+
+    /* ========== 揭曉節奏：停頓 → 彈跳放大 → 慶祝 ========== */
+    .modal .modal-img-wrap,
+    .modal .modal-prize,
+    .modal .modal-desc {
+      opacity: 0;
+    }
+    @keyframes reveal-pop {
+      0%   { transform: scale(0.35); opacity: 0; }
+      62%  { transform: scale(1.1);  opacity: 1; }
+      82%  { transform: scale(0.96); }
+      100% { transform: scale(1);    opacity: 1; }
+    }
+    @keyframes reveal-rise {
+      from { transform: translateY(10px) scale(0.94); opacity: 0; }
+      to   { transform: translateY(0)    scale(1);    opacity: 1; }
+    }
+    .modal.open .modal-img-wrap {
+      animation: reveal-pop 0.5s 0.16s cubic-bezier(0.34, 1.56, 0.64, 1) forwards;
+    }
+    .modal.open .modal-prize {
+      animation: reveal-pop 0.5s 0.3s cubic-bezier(0.34, 1.56, 0.64, 1) forwards;
+    }
+    .modal.open .modal-desc {
+      animation: reveal-rise 0.4s 0.46s ease-out forwards;
+    }
+    /* 銘謝惠顧類：溫和動效、不彈跳不慶祝 */
+    @keyframes reveal-soft {
+      from { transform: scale(0.94); opacity: 0; }
+      to   { transform: scale(1);    opacity: 1; }
+    }
+    .modal.noprize .modal-img-wrap {
+      background: linear-gradient(135deg, #F4F4F6, #E8E8EC);
+    }
+    .modal.noprize .modal-img-wrap .glyph { color: var(--ink-3); }
+    .modal.noprize .modal-eyebrow { color: var(--ink-3); }
+    .modal.noprize.open .modal-img-wrap,
+    .modal.noprize.open .modal-prize {
+      animation-name: reveal-soft;
+      animation-timing-function: ease-out;
+    }
+
+    /* ========== Reduced motion：關閉大型動畫 ========== */
+    @media (prefers-reduced-motion: reduce) {
+      .brand-bar, .hero, .stats, .invite-card, .stage-card, .section, .foot {
+        animation: none;
+      }
+      .spin-btn:not(:disabled) { animation: none; }
+      .stage.spinning .pointer svg,
+      .stage.landed .pointer svg { animation: none; }
+      .status-row .arrow { animation: none; }
+      .stat .v.pop { animation: none; }
+      #wheel { transition-duration: 1.1s; }
+      .modal.open .modal-img-wrap,
+      .modal.open .modal-prize,
+      .modal.open .modal-desc {
+        animation: reveal-soft 0.25s ease-out forwards;
+      }
+    }
   </style>
 </head>
 <body>
@@ -635,9 +782,10 @@
 
     <section class="invite-card" id="invite-card">
       <div class="invite-left">
+        <div class="invite-eyebrow">好友加碼</div>
         <% if (activity.referral_bonus_per && activity.referral_bonus_per > 0) { %>
-          <div class="invite-title">邀請朋友 +<%= activity.referral_bonus_per %> 次抽獎</div>
-          <div class="invite-sub" id="invite-sub">最多再加 <%= activity.referral_bonus_max %> 次</div>
+          <div class="invite-title">邀 1 位朋友，立刻 +<%= activity.referral_bonus_per %> 次</div>
+          <div class="invite-sub" id="invite-sub">最多可加 <%= activity.referral_bonus_max %> 次，分享就有</div>
         <% } else { %>
           <div class="invite-title">分享給朋友一起玩</div>
           <div class="invite-sub" id="invite-sub">把這個活動傳出去</div>
@@ -658,7 +806,7 @@
         <span class="count">準備好按下中央按鈕</span>
       </div>
       <div class="stage-wrap">
-        <div class="stage">
+        <div class="stage" id="stage">
           <div class="pointer">
             <svg width="22" height="26" viewBox="0 0 22 26" fill="none">
               <path d="M11 26 L1 8 Q1 1 11 1 Q21 1 21 8 Z" fill="#0F0F10"/>
@@ -717,7 +865,7 @@
   <div id="modal" class="modal" aria-hidden="true">
     <div class="sheet">
       <div class="handle"></div>
-      <div class="modal-eyebrow">恭喜抽中</div>
+      <div class="modal-eyebrow" id="modal-eyebrow">恭喜抽中</div>
       <div class="modal-img-wrap" id="modal-img-wrap">
         <img id="modal-img" alt="" hidden />
         <span class="glyph" id="modal-glyph">★</span>
@@ -752,10 +900,75 @@
       var idToken = null;
       var liffReady = false;
 
+      var REDUCED = !!(window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches);
+
+      // ----- 觸覺回饋（guard）-----
+      function buzz(pattern) {
+        if (navigator.vibrate) {
+          try { navigator.vibrate(pattern); } catch (e) {}
+        }
+      }
+
+      // ----- 輕量 canvas 紙花（黃 / 墨 / 白，~80 顆，自動清理）-----
+      function fireConfetti() {
+        if (REDUCED) return;
+        var c = document.createElement('canvas');
+        c.style.cssText = 'position:fixed;inset:0;width:100%;height:100%;pointer-events:none;z-index:300;';
+        var dpr = Math.min(window.devicePixelRatio || 1, 2);
+        var vw = window.innerWidth, vh = window.innerHeight;
+        c.width = vw * dpr;
+        c.height = vh * dpr;
+        document.body.appendChild(c);
+        var cc = c.getContext('2d');
+        cc.scale(dpr, dpr);
+        var colors = ['#FCC726', '#1F2937', '#FFFFFF'];
+        var parts = [];
+        for (var i = 0; i < 80; i++) {
+          parts.push({
+            x: vw / 2 + (Math.random() - 0.5) * vw * 0.55,
+            y: vh * 0.3 + (Math.random() - 0.5) * 50,
+            vx: (Math.random() - 0.5) * 7,
+            vy: -(Math.random() * 8 + 4),
+            size: Math.random() * 6 + 4,
+            color: colors[i % 3],
+            round: Math.random() < 0.35,
+            rot: Math.random() * Math.PI,
+            vr: (Math.random() - 0.5) * 0.3
+          });
+        }
+        var t0 = null;
+        var LIFE = 1700;
+        function tick(ts) {
+          if (t0 === null) t0 = ts;
+          var t = ts - t0;
+          cc.clearRect(0, 0, vw, vh);
+          cc.globalAlpha = t > LIFE - 400 ? Math.max(0, (LIFE - t) / 400) : 1;
+          for (var j = 0; j < parts.length; j++) {
+            var p = parts[j];
+            p.vy += 0.28; p.x += p.vx; p.y += p.vy; p.rot += p.vr;
+            cc.save();
+            cc.translate(p.x, p.y);
+            cc.rotate(p.rot);
+            cc.fillStyle = p.color;
+            if (p.round) {
+              cc.beginPath();
+              cc.arc(0, 0, p.size / 2, 0, Math.PI * 2);
+              cc.fill();
+            } else {
+              cc.fillRect(-p.size / 2, -p.size / 2, p.size, p.size);
+            }
+            cc.restore();
+          }
+          if (t < LIFE) requestAnimationFrame(tick);
+          else c.remove();
+        }
+        requestAnimationFrame(tick);
+      }
+
       // ===========================================================
       // 畫輪盤 — 純色配色（黃白交替、紅大獎）+ 細邊分隔
       // ===========================================================
-      function drawWheel() {
+      function drawWheel(highlightIdx, pulse) {
         var W = canvas.width;
         var H = canvas.height;
         var cx = W / 2, cy = H / 2;
@@ -818,6 +1031,60 @@
           ctx.fillText(label, 0, 0);
           ctx.restore();
         });
+
+        // 停止瞬間的中獎高亮：其餘扇形微暗 + 中獎格亮黃描邊 pulse
+        if (typeof highlightIdx === 'number' && highlightIdx >= 0 && highlightIdx < n) {
+          prizes.forEach(function (p, i) {
+            if (i === highlightIdx) return;
+            var ds = i * anglePer - Math.PI / 2;
+            var de = ds + anglePer;
+            ctx.beginPath();
+            ctx.moveTo(cx, cy);
+            ctx.arc(cx, cy, R, ds, de);
+            ctx.closePath();
+            ctx.fillStyle = 'rgba(15, 15, 16, 0.30)';
+            ctx.fill();
+          });
+          var hs = highlightIdx * anglePer - Math.PI / 2;
+          var he = hs + anglePer;
+          ctx.beginPath();
+          ctx.moveTo(cx, cy);
+          ctx.arc(cx, cy, R - 5, hs, he);
+          ctx.closePath();
+          ctx.lineWidth = 10;
+          ctx.lineJoin = 'round';
+          ctx.globalAlpha = (typeof pulse === 'number') ? (0.35 + 0.65 * pulse) : 1;
+          ctx.strokeStyle = '#FCC726';
+          ctx.stroke();
+          ctx.globalAlpha = 1;
+        }
+      }
+
+      // ----- 停止瞬間：中獎扇形高亮 pulse（~0.55s）再揭曉 -----
+      function highlightWinner(prize) {
+        var idx = prizes.findIndex(function (p) { return p.id === prize.id; });
+        if (idx < 0) {
+          return new Promise(function (resolve) { setTimeout(resolve, 250); });
+        }
+        buzz([12, 50, 20]);
+        return new Promise(function (resolve) {
+          if (REDUCED) {
+            drawWheel(idx, 1);
+            setTimeout(resolve, 250);
+            return;
+          }
+          var startTs = null;
+          var DUR = 550;
+          function frame(ts) {
+            if (startTs === null) startTs = ts;
+            var t = Math.min((ts - startTs) / DUR, 1);
+            var pulse = 0.5 - 0.5 * Math.cos(t * Math.PI * 4); // 兩次脈衝
+            drawWheel(idx, t >= 1 ? 1 : pulse);
+            if (t < 1) requestAnimationFrame(frame);
+            else resolve();
+          }
+          requestAnimationFrame(frame);
+        });
       }
 
       // ----- LIFF init -----
@@ -846,7 +1113,7 @@
         try { idToken = liff.getIDToken(); } catch (e) {}
       }
 
-      // ----- 旋轉動畫 -----
+      // ----- 旋轉動畫：反向蓄力 → 長尾 ease-out 正轉 → 指針 bounce -----
       function animateToPrize(prize) {
         var n = prizes.length;
         if (n === 0) return Promise.resolve();
@@ -856,9 +1123,36 @@
         var targetCenter = (idx + 0.5) * anglePer;
         var jitter = (Math.random() - 0.5) * (anglePer * 0.5);
         var finalAngle = currentRotation + 360 * 6 + (360 - targetCenter) + jitter;
+        var windFrom = currentRotation;
         currentRotation = finalAngle;
-        canvas.style.transform = 'rotate(' + finalAngle + 'deg)';
-        return new Promise(function (resolve) { setTimeout(resolve, 5700); });
+
+        var stage = document.getElementById('stage');
+        var spinMs = REDUCED ? 1200 : 5300; // 對應 CSS transition 時長
+
+        return new Promise(function (resolve) {
+          function mainSpin() {
+            canvas.classList.remove('windup');
+            void canvas.offsetWidth; // 強制 reflow，確保 transition 切換生效
+            if (stage) stage.classList.add('spinning');
+            canvas.style.transform = 'rotate(' + finalAngle + 'deg)';
+            setTimeout(function () {
+              if (stage) {
+                stage.classList.remove('spinning');
+                stage.classList.add('landed');
+                setTimeout(function () { stage.classList.remove('landed'); }, 650);
+              }
+              resolve();
+            }, spinMs);
+          }
+          if (REDUCED) {
+            mainSpin();
+            return;
+          }
+          // 蓄力：先反向 -15deg（0.3s），再正轉
+          canvas.classList.add('windup');
+          canvas.style.transform = 'rotate(' + (windFrom - 15) + 'deg)';
+          setTimeout(mainSpin, 320);
+        });
       }
 
       // ----- spin -----
@@ -872,6 +1166,7 @@
         spinBtn.disabled = true;
         statusRow.classList.remove('ready');
         statusEl.textContent = '抽選中⋯';
+        buzz(12);
 
         try {
           var resp = await fetch('/api/games/wheel/' + encodeURIComponent(slug) + '/spin', {
@@ -892,6 +1187,7 @@
           }
 
           await animateToPrize(resp.prize);
+          await highlightWinner(resp.prize); // 停頓：高亮 pulse ~0.55s
           showResult(resp.prize);
         } catch (e) {
           statusEl.textContent = '錯誤';
@@ -901,8 +1197,18 @@
         }
       }
 
+      // 「銘謝惠顧」類判斷（純演出用：決定要不要慶祝）
+      function isNoPrize(prize) {
+        if (!prize) return false;
+        if (prize.prize_type === 'none') return true;
+        return /銘謝|惠顧|再接再厲|未中|落空/.test(String(prize.name || ''));
+      }
+
       function showResult(prize) {
         statusEl.textContent = '';
+        var noPrize = isNoPrize(prize);
+        var eyebrowEl = document.getElementById('modal-eyebrow');
+        if (eyebrowEl) eyebrowEl.textContent = noPrize ? '開獎結果' : '恭喜抽中';
         document.getElementById('modal-prize').textContent = prize.name || '—';
         var imgEl = document.getElementById('modal-img');
         var glyphEl = document.getElementById('modal-glyph');
@@ -925,14 +1231,29 @@
         document.getElementById('modal-desc').textContent = descParts.join(' · ');
         if (prize.is_grand_prize) modal.classList.add('grand');
         else modal.classList.remove('grand');
+        if (noPrize) modal.classList.add('noprize');
+        else modal.classList.remove('noprize');
         requestAnimationFrame(function () { modal.classList.add('open'); });
+        // 揭曉節奏：modal 彈起 → 獎名彈跳放大 → 慶祝
+        if (!noPrize) {
+          setTimeout(function () {
+            fireConfetti();
+            buzz([18, 70, 32]);
+          }, 380);
+        } else {
+          buzz(14);
+        }
       }
 
       document.getElementById('modal-close').addEventListener('click', function () {
         modal.classList.remove('open');
+        drawWheel(); // 還原高亮
       });
       modal.addEventListener('click', function (e) {
-        if (e.target === modal) modal.classList.remove('open');
+        if (e.target === modal) {
+          modal.classList.remove('open');
+          drawWheel(); // 還原高亮
+        }
       });
 
       spinBtn.addEventListener('click', spin);
@@ -1005,11 +1326,25 @@
         } catch (e) { console.warn('quota fetch failed:', e); }
       }
 
+      // 數字變化時 pop 一下（scale 1.3 → 1）
+      var lastRemaining = null;
+      var lastReferrals = null;
+      function popStat(el) {
+        if (!el || REDUCED) return;
+        el.classList.remove('pop');
+        void el.offsetWidth; // restart animation
+        el.classList.add('pop');
+      }
+
       function renderQuota(q) {
         var remEl = document.getElementById('stat-remaining');
         var refEl = document.getElementById('stat-referrals');
         if (remEl) remEl.innerHTML = q.remaining + '<span class="unit">/ ' + q.total + '</span>';
         if (refEl) refEl.innerHTML = q.referrals + '<span class="unit">人</span>';
+        if (remEl && lastRemaining !== null && lastRemaining !== q.remaining) popStat(remEl);
+        if (refEl && lastReferrals !== null && lastReferrals !== q.referrals) popStat(refEl);
+        lastRemaining = q.remaining;
+        lastReferrals = q.referrals;
 
         // 沒次數 → SPIN 鈕禁用 + 提示
         if (q.remaining <= 0) {
@@ -1056,7 +1391,7 @@
         // /wheel/<slug>?ref=<my_id> 會解析到 /games/wheel/<slug>?ref=<my_id>
         var inviteUrl = 'https://liff.line.me/' + liffId +
           '/wheel/' + encodeURIComponent(slug) + '?ref=' + encodeURIComponent(profile.userId);
-        var msg = '快來抽「' + activityMeta.name + '」！我已經抽過了，你也來試試 🎁';
+        var msg = '快來抽「' + activityMeta.name + '」！我已經抽過了，你也來試試';
 
         try {
           if (liff.isApiAvailable && liff.isApiAvailable('shareTargetPicker')) {

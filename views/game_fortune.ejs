@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, viewport-fit=cover" />
-  <meta name="theme-color" content="#FAFAFA" />
+  <meta name="theme-color" content="#FFFBEB" />
   <title><%= title %></title>
   <script src="https://static.line-scdn.net/liff/edge/2/sdk.js"></script>
   <style>
@@ -13,7 +13,9 @@
       --or-yellow:  #FCC726;
       --or-yellow-d: #E8B400;
       --or-red:     #E11D27;
+      --or-soft:    #FFFBEB;
       --ink:        #0F0F10;
+      --ink-brand:  #1F2937;
       --ink-2:      #6B6B70;
       --ink-3:      #A0A0A6;
       --border:     #ECECEE;
@@ -22,11 +24,30 @@
     * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
     html, body { margin: 0; padding: 0; }
     body {
-      background: var(--bg); color: var(--ink); min-height: 100vh;
+      background:
+        radial-gradient(circle at 88% -4%, rgba(252, 199, 38, 0.22), transparent 42%),
+        radial-gradient(circle at -10% 24%, rgba(252, 199, 38, 0.10), transparent 38%),
+        linear-gradient(180deg, var(--or-soft) 0%, var(--bg) 420px);
+      color: var(--ink); min-height: 100vh;
       font-family: -apple-system, BlinkMacSystemFont, "SF Pro Display", "Inter", "PingFang TC", sans-serif;
       letter-spacing: -0.011em; -webkit-font-smoothing: antialiased;
     }
     .page { max-width: 480px; margin: 0 auto; padding: 16px 16px 56px; }
+
+    /* 進場動畫（fade + up，逐區交錯） */
+    @keyframes rise-in {
+      from { opacity: 0; transform: translateY(14px); }
+      to   { opacity: 1; transform: translateY(0); }
+    }
+    .brand-bar, .hero, .stats, .invite-card, .stage-card, .section, .foot {
+      animation: rise-in 0.38s cubic-bezier(0.22, 0.8, 0.36, 1) both;
+    }
+    .hero       { animation-delay: 0.04s; }
+    .stats      { animation-delay: 0.09s; }
+    .invite-card { animation-delay: 0.14s; }
+    .stage-card { animation-delay: 0.19s; }
+    .section    { animation-delay: 0.26s; }
+    .foot       { animation-delay: 0.32s; }
 
     /* Brand bar */
     .brand-bar { display: flex; align-items: center; justify-content: space-between; padding: 6px 0 16px; }
@@ -37,8 +58,8 @@
     .brand-bar .chip::before { content: ''; width: 5px; height: 5px; border-radius: 50%; background: #22C55E; box-shadow: 0 0 0 2px rgba(34, 197, 94, 0.15); }
 
     /* Hero */
-    .hero { background: var(--surface); border: 1px solid var(--border); border-radius: 20px; padding: 22px 22px 24px; position: relative; overflow: hidden; }
-    .hero::before { content: ''; position: absolute; top: -40px; right: -40px; width: 180px; height: 180px; background: radial-gradient(circle, rgba(252, 199, 38, 0.18), transparent 70%); pointer-events: none; }
+    .hero { background: var(--surface); border: 1px solid var(--border); border-radius: 20px; padding: 22px 22px 24px; position: relative; overflow: hidden; box-shadow: 0 1px 2px rgba(15, 15, 16, 0.04), 0 10px 28px -16px rgba(15, 15, 16, 0.12); }
+    .hero::before { content: ''; position: absolute; top: -40px; right: -40px; width: 180px; height: 180px; background: radial-gradient(circle, rgba(252, 199, 38, 0.22), transparent 70%); pointer-events: none; }
     .hero-tag { display: inline-flex; align-items: center; gap: 6px; font-size: 11px; font-weight: 600; letter-spacing: 0.06em; color: var(--or-red); text-transform: uppercase; margin-bottom: 14px; }
     .hero-tag::before { content: ''; width: 6px; height: 6px; background: var(--or-red); border-radius: 50%; }
     .hero h1 { margin: 0 0 8px; font-size: 26px; font-weight: 700; letter-spacing: -0.028em; line-height: 1.2; }
@@ -47,25 +68,46 @@
 
     /* Stats */
     .stats { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 8px; margin-top: 12px; }
-    .stat { background: var(--surface); border: 1px solid var(--border); border-radius: 14px; padding: 12px; }
-    .stat .v { font-size: 20px; font-weight: 700; letter-spacing: -0.02em; line-height: 1; font-variant-numeric: tabular-nums; }
+    .stat { background: var(--surface); border: 1px solid var(--border); border-radius: 16px; padding: 12px; box-shadow: 0 1px 2px rgba(15, 15, 16, 0.03); }
+    .stat .v { font-size: 20px; font-weight: 700; letter-spacing: -0.02em; line-height: 1; font-variant-numeric: tabular-nums; transform-origin: left center; }
     .stat .v .unit { font-size: 11px; font-weight: 500; color: var(--ink-2); margin-left: 2px; }
     .stat .k { font-size: 11px; color: var(--ink-2); margin-top: 5px; font-weight: 500; }
+    @keyframes stat-pop {
+      0%   { transform: scale(1.3); color: var(--or-yellow-d); }
+      100% { transform: scale(1); }
+    }
+    .stat .v.pop { animation: stat-pop 0.5s cubic-bezier(0.34, 1.56, 0.64, 1); }
 
-    /* Invite */
-    .invite-card { margin-top: 8px; background: var(--ink); border-radius: 16px; padding: 14px 16px; display: flex; align-items: center; justify-content: space-between; gap: 12px; position: relative; overflow: hidden; color: #fff; }
-    .invite-card::before { content: ''; position: absolute; top: -40px; right: -30px; width: 140px; height: 140px; background: radial-gradient(circle, rgba(252, 199, 38, 0.32), transparent 70%); pointer-events: none; }
+    /* Invite（MGM 主視覺：黃底卡片） */
+    .invite-card {
+      margin-top: 8px;
+      background: linear-gradient(135deg, #FFE07A 0%, var(--or-yellow) 55%, #F2B900 100%);
+      border-radius: 18px; padding: 15px 16px;
+      display: flex; align-items: center; gap: 12px;
+      position: relative; overflow: hidden; color: var(--ink-brand);
+      box-shadow: 0 12px 26px -14px rgba(232, 180, 0, 0.7), 0 1px 2px rgba(15, 15, 16, 0.04);
+    }
+    .invite-card::before { content: ''; position: absolute; top: -50px; left: -30px; width: 160px; height: 160px; background: radial-gradient(circle, rgba(255, 255, 255, 0.55), transparent 65%); pointer-events: none; }
+    .invite-card::after { content: ''; position: absolute; right: -34px; bottom: -56px; width: 130px; height: 130px; border-radius: 50%; border: 14px solid rgba(255, 255, 255, 0.22); pointer-events: none; }
+    .invite-bonus {
+      flex-shrink: 0; width: 52px; height: 52px; border-radius: 50%;
+      background: var(--ink-brand); color: var(--or-yellow);
+      display: flex; flex-direction: column; align-items: center; justify-content: center;
+      z-index: 1; box-shadow: 0 6px 12px -4px rgba(31, 41, 55, 0.45);
+    }
+    .invite-bonus .plus { font-size: 18px; font-weight: 800; line-height: 1; letter-spacing: -0.02em; }
+    .invite-bonus .bl { font-size: 10px; font-weight: 600; opacity: 0.85; margin-top: 2px; }
     .invite-left { flex: 1; min-width: 0; z-index: 1; }
-    .invite-title { font-size: 14px; font-weight: 700; line-height: 1.3; }
-    .invite-sub { font-size: 11px; color: rgba(255, 255, 255, 0.62); margin-top: 3px; }
-    .invite-btn { flex-shrink: 0; background: var(--or-yellow); color: var(--ink); border: none; border-radius: 999px; padding: 8px 16px; font-family: inherit; font-weight: 700; font-size: 13px; cursor: pointer; z-index: 1; transition: background 0.15s ease, transform 0.15s cubic-bezier(0.34, 1.56, 0.64, 1); display: inline-flex; align-items: center; }
-    .invite-btn:hover { background: var(--or-yellow-d); }
+    .invite-title { font-size: 15px; font-weight: 800; line-height: 1.3; letter-spacing: -0.01em; }
+    .invite-sub { font-size: 11px; color: rgba(31, 41, 55, 0.72); margin-top: 3px; font-weight: 500; }
+    .invite-btn { flex-shrink: 0; background: var(--ink-brand); color: #fff; border: none; border-radius: 999px; padding: 9px 16px; font-family: inherit; font-weight: 700; font-size: 13px; cursor: pointer; z-index: 1; transition: background 0.15s ease, transform 0.15s cubic-bezier(0.34, 1.56, 0.64, 1); display: inline-flex; align-items: center; box-shadow: 0 6px 14px -6px rgba(31, 41, 55, 0.55); }
+    .invite-btn:hover { background: #111827; }
     .invite-btn:active { transform: scale(0.96); }
-    .invite-card.maxed { opacity: 0.6; }
-    .invite-card.maxed .invite-btn { background: var(--ink-3); cursor: default; pointer-events: none; }
+    .invite-card.maxed { opacity: 0.6; box-shadow: none; }
+    .invite-card.maxed .invite-btn { background: var(--ink-3); cursor: default; pointer-events: none; box-shadow: none; }
 
     /* ========== Fortune stage ========== */
-    .stage-card { margin-top: 12px; background: var(--surface); border: 1px solid var(--border); border-radius: 24px; padding: 24px 20px 22px; position: relative; overflow: hidden; }
+    .stage-card { margin-top: 12px; background: var(--surface); border: 1px solid var(--border); border-radius: 20px; padding: 24px 20px 22px; position: relative; overflow: hidden; box-shadow: 0 1px 2px rgba(15, 15, 16, 0.04), 0 14px 32px -18px rgba(15, 15, 16, 0.14); }
     .stage-card::before { content: ''; position: absolute; bottom: -80px; left: -60px; width: 240px; height: 240px; background: radial-gradient(circle, rgba(225, 29, 39, 0.05), transparent 70%); pointer-events: none; }
     .stage-head { display: flex; align-items: center; justify-content: space-between; margin-bottom: 14px; }
     .stage-head .label { font-size: 11px; font-weight: 600; letter-spacing: 0.06em; text-transform: uppercase; color: var(--ink-3); }
@@ -79,6 +121,21 @@
       justify-content: center;
     }
 
+    /* 籤筒後方的呼吸光暈 */
+    .fortune-halo {
+      position: absolute; left: 50%; top: 50%;
+      width: 230px; height: 230px;
+      transform: translate(-50%, -50%);
+      border-radius: 50%;
+      background: radial-gradient(circle, rgba(252, 199, 38, 0.22), rgba(252, 199, 38, 0.07) 55%, transparent 72%);
+      pointer-events: none;
+      animation: halo-breathe 3s ease-in-out infinite;
+    }
+    @keyframes halo-breathe {
+      0%, 100% { transform: translate(-50%, -50%) scale(1); opacity: 0.75; }
+      50%      { transform: translate(-50%, -50%) scale(1.09); opacity: 1; }
+    }
+
     /* 籤筒 */
     .fortune-jar {
       position: relative;
@@ -88,15 +145,48 @@
                   opacity 0.35s ease;
       cursor: pointer;
       z-index: 2;
+      transform-origin: 50% 88%;
     }
-    .fortune-jar.shake { animation: jar-shake 0.6s ease-in-out 3; }
+    .fortune-jar svg { position: relative; z-index: 1; display: block; }
+    /* 搖籤：-6deg ~ 6deg 衰減搖 1.2s */
+    .fortune-jar.shake { animation: jar-shake 1.2s cubic-bezier(0.36, 0.07, 0.19, 0.97) both; }
     @keyframes jar-shake {
-      0%, 100% { transform: rotate(0); }
-      25% { transform: rotate(-8deg); }
-      75% { transform: rotate(8deg); }
+      0%   { transform: rotate(0); }
+      10%  { transform: rotate(-6deg); }
+      20%  { transform: rotate(6deg); }
+      31%  { transform: rotate(-5deg); }
+      42%  { transform: rotate(4.5deg); }
+      54%  { transform: rotate(-3.5deg); }
+      66%  { transform: rotate(2.8deg); }
+      78%  { transform: rotate(-1.8deg); }
+      90%  { transform: rotate(1deg); }
+      100% { transform: rotate(0); }
     }
     .fortune-jar.tilt { transform: rotate(-30deg) translateY(-10px); }
     .fortune-jar.hidden { opacity: 0; pointer-events: none; }
+
+    /* 出籤：籤條從筒口彈出（藏在筒身後，往上彈） */
+    .fortune-stick {
+      position: absolute; left: 50%; top: 18px;
+      width: 14px; height: 120px; margin-left: -7px;
+      background: linear-gradient(180deg, #FFF4CE, var(--or-soft));
+      border: 1px solid #EAD9A0;
+      border-radius: 7px 7px 3px 3px;
+      z-index: 0;
+      opacity: 0;
+      transform: translateY(34px);
+      pointer-events: none;
+    }
+    .fortune-stick::before {
+      content: ''; position: absolute; top: 8px; left: 2px; right: 2px; height: 18px;
+      background: var(--or-red); border-radius: 4px;
+    }
+    .fortune-stick.out { animation: stick-out 0.55s cubic-bezier(0.34, 1.7, 0.5, 1) forwards; }
+    @keyframes stick-out {
+      0%   { opacity: 0; transform: translateY(34px); }
+      30%  { opacity: 1; }
+      100% { opacity: 1; transform: translateY(-66px); }
+    }
 
     /* 籤紙散在頂部準備飛出 */
     .fortune-paper-stack {
@@ -110,25 +200,23 @@
       perspective: 1200px;
     }
 
-    /* 抽出的籤紙 */
+    /* 抽出的籤詩紙（由上往下展開揭曉） */
     .fortune-result {
       position: absolute;
       top: 50%;
       left: 50%;
-      transform: translate(-50%, -50%) rotateY(180deg) scale(0.7);
-      width: 220px;
-      height: 320px;
-      background: var(--surface);
-      border-radius: 14px;
-      border: 1px solid var(--border);
+      transform: translate(-50%, -50%);
+      width: 230px;
+      height: 326px;
+      background: linear-gradient(180deg, #FFFDF4, var(--or-soft));
+      border-radius: 12px;
+      border: 1px solid #F0E2B6;
       box-shadow:
         0 24px 60px -12px rgba(15, 15, 16, 0.25),
         0 8px 20px -6px rgba(15, 15, 16, 0.15);
       opacity: 0;
-      transition: opacity 0.3s ease, transform 0.7s cubic-bezier(0.34, 1.56, 0.64, 1);
-      transform-style: preserve-3d;
-      backface-visibility: hidden;
-      padding: 22px 18px 18px;
+      clip-path: inset(0 0 100% 0);
+      padding: 30px 18px 26px;
       display: flex;
       flex-direction: column;
       align-items: center;
@@ -136,19 +224,46 @@
       z-index: 10;
       pointer-events: none;
     }
-    .fortune-result.show { pointer-events: auto; }
+    /* 籤詩紙上下虛線裝飾 */
+    .fortune-result::before,
+    .fortune-result::after {
+      content: ''; position: absolute; left: 16px; right: 16px; height: 0;
+      border-top: 2px dashed rgba(31, 41, 55, 0.18);
+    }
+    .fortune-result::before { top: 13px; }
+    .fortune-result::after { bottom: 13px; }
     .fortune-result.show {
+      pointer-events: auto;
       opacity: 1;
-      transform: translate(-50%, -50%) rotateY(0) scale(1);
+      clip-path: inset(0 0 0 0);
+      transition: clip-path 0.6s cubic-bezier(0.22, 0.8, 0.36, 1), opacity 0.3s ease;
     }
     .fortune-result.grand { border-color: var(--or-red); }
+    /* 銘謝惠顧：溫和呼吸動效（不放紙花） */
+    @keyframes soothe {
+      0%, 100% { transform: translate(-50%, -50%) scale(1); }
+      50%      { transform: translate(-50%, -50%) scale(1.015); }
+    }
+    .fortune-result.soothe { animation: soothe 2.4s ease-in-out 2; }
+
+    /* 內容交錯揭曉：先運勢字樣，再獎品 */
+    .fortune-result .r-item { opacity: 0; transform: translateY(8px); }
+    .fortune-result.show .r-item {
+      opacity: 1; transform: translateY(0);
+      transition: opacity 0.4s ease, transform 0.45s cubic-bezier(0.22, 0.8, 0.36, 1);
+    }
+    .fortune-result.show .fortune-rank       { transition-delay: 0.15s; }
+    .fortune-result.show .fortune-glyph-wrap { transition-delay: 0.5s; }
+    .fortune-result.show .fortune-name       { transition-delay: 0.62s; }
+    .fortune-result.show .fortune-desc       { transition-delay: 0.74s; }
+    .fortune-result.show .fortune-seal       { transition-delay: 0.86s; opacity: 0.92; }
 
     .fortune-rank {
-      font-size: 12px;
+      font-size: 13px;
       font-weight: 700;
-      letter-spacing: 0.18em;
+      letter-spacing: 0.22em;
       color: var(--or-red);
-      padding: 3px 10px;
+      padding: 4px 12px;
       background: rgba(225, 29, 39, 0.08);
       border-radius: 999px;
       margin-bottom: 18px;
@@ -165,6 +280,7 @@
       margin-bottom: 14px;
       font-size: 32px;
       font-weight: 700;
+      box-shadow: inset 0 -3px 0 rgba(15, 15, 16, 0.08);
     }
     .fortune-result.grand .fortune-glyph-wrap {
       background: linear-gradient(135deg, var(--or-red), #B61118);
@@ -183,8 +299,17 @@
       font-size: 13px;
       color: var(--ink-2);
       line-height: 1.55;
-      max-height: 80px;
+      max-height: 76px;
       overflow-y: auto;
+    }
+    /* 紅印章（籤詩紙落款） */
+    .fortune-seal {
+      position: absolute; right: 18px; bottom: 22px;
+      width: 26px; height: 26px; border-radius: 6px;
+      background: var(--or-red); color: #fff;
+      font-size: 13px; font-weight: 700;
+      display: flex; align-items: center; justify-content: center;
+      transform: rotate(-6deg);
     }
 
     /* 抽籤按鈕 */
@@ -207,9 +332,15 @@
       box-shadow: 0 6px 16px -4px rgba(252, 199, 38, 0.5);
       transition: background 0.15s ease, transform 0.18s cubic-bezier(0.34, 1.56, 0.64, 1);
     }
+    /* 可以玩時的呼吸光暈 */
+    @keyframes btn-breathe {
+      0%, 100% { box-shadow: 0 6px 16px -4px rgba(252, 199, 38, 0.5), 0 0 0 0 rgba(252, 199, 38, 0.4); }
+      50%      { box-shadow: 0 8px 22px -4px rgba(252, 199, 38, 0.65), 0 0 0 10px rgba(252, 199, 38, 0); }
+    }
+    .draw-btn:not(:disabled) { animation: btn-breathe 2.2s ease-in-out infinite; }
     .draw-btn:hover:not(:disabled) { background: var(--or-yellow-d); }
-    .draw-btn:active:not(:disabled) { transform: scale(0.96); }
-    .draw-btn:disabled { background: #F0F0F2; color: var(--ink-3); cursor: default; box-shadow: none; }
+    .draw-btn:active:not(:disabled) { transform: scale(0.97); }
+    .draw-btn:disabled { background: #F0F0F2; color: var(--ink-3); cursor: default; box-shadow: none; animation: none; }
 
     /* Status */
     .status-row { display: flex; align-items: center; justify-content: center; gap: 8px; margin-top: 16px; font-size: 13px; color: var(--ink-2); min-height: 22px; }
@@ -221,7 +352,7 @@
     .section-head h2 { margin: 0; font-size: 17px; font-weight: 700; letter-spacing: -0.015em; }
     .section-head .meta { font-size: 11px; color: var(--ink-2); font-weight: 500; }
     .prize-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
-    .prize-card { background: var(--surface); border: 1px solid var(--border); border-radius: 14px; padding: 14px; position: relative; }
+    .prize-card { background: var(--surface); border: 1px solid var(--border); border-radius: 16px; padding: 14px; position: relative; box-shadow: 0 1px 2px rgba(15, 15, 16, 0.03); }
     .prize-card.grand { grid-column: span 2; border-color: var(--or-red); background: linear-gradient(180deg, rgba(225, 29, 39, 0.04), transparent); }
     .prize-card .top { display: flex; align-items: center; justify-content: space-between; margin-bottom: 8px; }
     .prize-card .icon { width: 32px; height: 32px; border-radius: 10px; background: linear-gradient(135deg, #FFF7DA, var(--or-yellow)); display: flex; align-items: center; justify-content: center; color: var(--ink); font-weight: 700; font-size: 14px; flex-shrink: 0; }
@@ -231,10 +362,25 @@
     .prize-card .desc { margin-top: 3px; font-size: 12px; color: var(--ink-2); line-height: 1.4; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
 
     /* Footer */
-    .foot { margin-top: 28px; padding: 14px 16px; background: var(--surface); border: 1px solid var(--border); border-radius: 14px; display: flex; align-items: center; justify-content: space-between; font-size: 12px; color: var(--ink-2); }
+    .foot { margin-top: 28px; padding: 14px 16px; background: var(--surface); border: 1px solid var(--border); border-radius: 16px; display: flex; align-items: center; justify-content: space-between; font-size: 12px; color: var(--ink-2); }
     .foot .l { display: flex; align-items: center; gap: 8px; }
     .foot .i { width: 20px; height: 20px; border-radius: 6px; background: var(--bg); border: 1px solid var(--border); display: inline-flex; align-items: center; justify-content: center; font-size: 11px; color: var(--ink-2); }
     .foot .r { font-weight: 600; color: var(--ink); }
+
+    /* 減少動態偏好：關閉大型動畫 */
+    @media (prefers-reduced-motion: reduce) {
+      .brand-bar, .hero, .stats, .invite-card, .stage-card, .section, .foot { animation: none; }
+      .fortune-halo { animation: none; }
+      .draw-btn:not(:disabled) { animation: none; }
+      .stat .v.pop { animation: none; }
+      .fortune-jar.shake { animation: none; }
+      .fortune-result.soothe { animation: none; }
+      .fortune-stick.out { animation: none; opacity: 1; transform: translateY(-66px); }
+      .fortune-result.show { transition: opacity 0.2s ease; }
+      .fortune-result { clip-path: none; }
+      .fortune-result .r-item { opacity: 1; transform: none; }
+      .fortune-result.show .r-item { transition: none; }
+    }
   </style>
 </head>
 <body>
@@ -270,15 +416,18 @@
     </section>
 
     <section class="invite-card" id="invite-card">
-      <div class="invite-left">
-        <% if (activity.referral_bonus_per && activity.referral_bonus_per > 0) { %>
-          <div class="invite-title">邀請朋友 +<%= activity.referral_bonus_per %> 次抽籤</div>
+      <% if (activity.referral_bonus_per && activity.referral_bonus_per > 0) { %>
+        <div class="invite-bonus"><span class="plus">+<%= activity.referral_bonus_per %></span><span class="bl">次</span></div>
+        <div class="invite-left">
+          <div class="invite-title">邀 1 位好友，多抽 <%= activity.referral_bonus_per %> 次</div>
           <div class="invite-sub" id="invite-sub">最多再加 <%= activity.referral_bonus_max %> 次</div>
-        <% } else { %>
+        </div>
+      <% } else { %>
+        <div class="invite-left">
           <div class="invite-title">分享給朋友一起求籤</div>
           <div class="invite-sub" id="invite-sub">把這個活動傳出去</div>
-        <% } %>
-      </div>
+        </div>
+      <% } %>
       <button type="button" class="invite-btn" id="invite-btn">
         <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" style="margin-right:5px;vertical-align:-2px;"><path d="M4 12v8a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-8"/><polyline points="16 6 12 2 8 6"/><line x1="12" y1="2" x2="12" y2="15"/></svg>分享
       </button>
@@ -286,12 +435,16 @@
 
     <section class="stage-card">
       <div class="stage-head">
-        <span class="label">抽籤</span>
-        <span class="count">點下方按鈕求籤</span>
+        <span class="label">每日求籤</span>
+        <span class="count">點按鈕，誠心搖一搖</span>
       </div>
       <div class="fortune-stage" id="stage">
+        <div class="fortune-halo"></div>
+
         <!-- 籤筒 SVG -->
         <div class="fortune-jar" id="jar">
+          <!-- 出籤籤條（藏在筒身後，從筒口彈出） -->
+          <div class="fortune-stick" id="stick"></div>
           <svg viewBox="0 0 84 130" width="84" height="130" fill="none">
             <!-- jar body -->
             <path d="M14 30 Q14 24 20 24 L64 24 Q70 24 70 30 L66 122 Q66 128 60 128 L24 128 Q18 128 18 122 Z"
@@ -307,12 +460,13 @@
           </svg>
         </div>
 
-        <!-- 抽出的籤紙（reveal）-->
+        <!-- 抽出的籤詩紙（reveal）-->
         <div class="fortune-result" id="result" hidden>
-          <div class="fortune-rank" id="result-rank">—</div>
-          <div class="fortune-glyph-wrap"><span id="result-glyph">籤</span></div>
-          <div class="fortune-name" id="result-name">—</div>
-          <div class="fortune-desc" id="result-desc"></div>
+          <div class="fortune-rank r-item" id="result-rank">—</div>
+          <div class="fortune-glyph-wrap r-item"><span id="result-glyph">籤</span></div>
+          <div class="fortune-name r-item" id="result-name">—</div>
+          <div class="fortune-desc r-item" id="result-desc"></div>
+          <div class="fortune-seal r-item">籤</div>
         </div>
       </div>
 
@@ -362,6 +516,7 @@
       }) %>;
 
       var jarEl = document.getElementById('jar');
+      var stickEl = document.getElementById('stick');
       var resultEl = document.getElementById('result');
       var drawBtn = document.getElementById('draw-btn');
       var statusEl = document.getElementById('status');
@@ -371,6 +526,85 @@
       var profile = null;
       var idToken = null;
       var liffReady = false;
+
+      var reducedMotion = false;
+      try {
+        reducedMotion = !!(window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches);
+      } catch (e) {}
+
+      function wait(ms) { return new Promise(function (r) { setTimeout(r, ms); }); }
+
+      // 觸覺回饋（guard）
+      function buzz(pattern) {
+        try { if (navigator.vibrate) navigator.vibrate(pattern); } catch (e) {}
+      }
+
+      // 輕量 canvas 紙花：黃/墨/白 小方塊+圓點，~80 顆，約 1.8 秒，自動清理
+      function fireConfetti(opts) {
+        if (reducedMotion) return;
+        opts = opts || {};
+        var canvas = document.createElement('canvas');
+        canvas.style.cssText = 'position:fixed;top:0;left:0;width:100%;height:100%;pointer-events:none;z-index:9999;';
+        document.body.appendChild(canvas);
+        var dpr = Math.min(window.devicePixelRatio || 1, 2);
+        var W = window.innerWidth, H = window.innerHeight;
+        canvas.width = W * dpr; canvas.height = H * dpr;
+        var ctx = canvas.getContext('2d');
+        ctx.scale(dpr, dpr);
+        var colors = opts.grand
+          ? ['#FCC726', '#1F2937', '#FFFFFF', '#E11D27']
+          : ['#FCC726', '#1F2937', '#FFFFFF'];
+        var parts = [];
+        for (var i = 0; i < 80; i++) {
+          parts.push({
+            x: W / 2 + (Math.random() - 0.5) * W * 0.5,
+            y: H * 0.36 + (Math.random() - 0.5) * 50,
+            vx: (Math.random() - 0.5) * 7,
+            vy: -(4 + Math.random() * 7),
+            s: 4 + Math.random() * 5,
+            c: colors[i % colors.length],
+            round: Math.random() < 0.35,
+            rot: Math.random() * Math.PI,
+            vr: (Math.random() - 0.5) * 0.3
+          });
+        }
+        var t0 = null, DUR = 1800;
+        function frame(ts) {
+          if (t0 === null) t0 = ts;
+          var k = ts - t0;
+          ctx.clearRect(0, 0, W, H);
+          ctx.globalAlpha = k > DUR - 400 ? Math.max(0, (DUR - k) / 400) : 1;
+          for (var i = 0; i < parts.length; i++) {
+            var p = parts[i];
+            p.vy += 0.28; p.x += p.vx; p.y += p.vy; p.rot += p.vr; p.vx *= 0.99;
+            ctx.save();
+            ctx.translate(p.x, p.y);
+            ctx.rotate(p.rot);
+            ctx.fillStyle = p.c;
+            if (p.round) { ctx.beginPath(); ctx.arc(0, 0, p.s / 2, 0, 6.2832); ctx.fill(); }
+            else { ctx.fillRect(-p.s / 2, -p.s / 2, p.s, p.s * 0.6); }
+            ctx.restore();
+          }
+          if (k < DUR) { requestAnimationFrame(frame); }
+          else if (canvas.parentNode) { canvas.parentNode.removeChild(canvas); }
+        }
+        requestAnimationFrame(frame);
+      }
+
+      // 「銘謝惠顧」類判斷（純演出用，不影響後端邏輯）
+      function isConsolation(prize) {
+        if (!prize) return true;
+        if (prize.prize_type === 'none') return true;
+        return /銘謝|謝謝惠顧|再接再厲|未中|下次再來/.test(String(prize.name || ''));
+      }
+
+      // 數字變化 pop 動畫
+      function popStat(el) {
+        if (!el) return;
+        el.classList.remove('pop');
+        void el.offsetWidth;
+        el.classList.add('pop');
+      }
 
       async function initLiff() {
         var qs = new URLSearchParams(location.search);
@@ -416,8 +650,14 @@
       }
 
       function renderQuota(q) {
-        document.getElementById('stat-remaining').innerHTML = q.remaining + '<span class="unit">/ ' + q.total + '</span>';
-        document.getElementById('stat-referrals').innerHTML = q.referrals + '<span class="unit">人</span>';
+        var remEl = document.getElementById('stat-remaining');
+        var refEl = document.getElementById('stat-referrals');
+        var prevRem = remEl.textContent;
+        var prevRef = refEl.textContent;
+        remEl.innerHTML = q.remaining + '<span class="unit">/ ' + q.total + '</span>';
+        refEl.innerHTML = q.referrals + '<span class="unit">人</span>';
+        if (prevRem !== remEl.textContent && prevRem !== '—') popStat(remEl);
+        if (prevRef !== refEl.textContent && prevRef !== '—') popStat(refEl);
         if (q.remaining <= 0) {
           drawBtn.disabled = true;
           var canMore = q.referral_bonus_per > 0 && q.referral_bonus < q.referral_bonus_max;
@@ -445,15 +685,17 @@
         if (!liffReady || !profile) { statusEl.textContent = '請稍候'; return; }
         drawing = true;
         drawBtn.disabled = true;
-        statusEl.textContent = '抽籤中⋯';
+        statusEl.textContent = '誠心搖籤中⋯';
 
         // 重置 reveal 狀態：先隱藏籤紙、籤筒顯示
-        resultEl.classList.remove('show');
+        resultEl.classList.remove('show', 'grand', 'soothe');
         resultEl.hidden = true;
         jarEl.classList.remove('hidden', 'tilt');
+        stickEl.classList.remove('out');
 
-        // 搖籤動畫
+        // 搖籤儀式：衰減搖 1.2s + 短震
         jarEl.classList.add('shake');
+        buzz([18, 70, 18, 70, 18, 70, 14]);
 
         try {
           var resp = await fetch('/api/games/fortune/' + encodeURIComponent(slug) + '/play', {
@@ -469,14 +711,20 @@
             return;
           }
 
-          // 等搖完
-          await new Promise(function (r) { setTimeout(r, 1800); });
+          // 等搖完（停頓，醞釀期待感）
+          await wait(reducedMotion ? 150 : 1250);
           jarEl.classList.remove('shake');
+
+          // 出籤：籤條從筒口彈出
+          stickEl.classList.add('out');
+          buzz(25);
+          await wait(reducedMotion ? 120 : 620);
+
           // 籤筒傾斜倒出
           jarEl.classList.add('tilt');
-          await new Promise(function (r) { setTimeout(r, 350); });
+          await wait(reducedMotion ? 80 : 320);
 
-          // 籤筒淡出 + 籤紙出現
+          // 籤筒淡出 + 籤詩紙展開揭曉
           jarEl.classList.add('hidden');
           showResult(resp.prize);
 
@@ -512,8 +760,22 @@
         if (prize.is_grand_prize) resultEl.classList.add('grand');
         else resultEl.classList.remove('grand');
 
-        // 用 requestAnimationFrame 觸發 transition
+        resultEl.hidden = false;
+        var consolation = isConsolation(prize);
+
+        // 用 requestAnimationFrame 觸發 transition（先展開籤詩、運勢字樣，再揭曉獎品）
         requestAnimationFrame(function () { resultEl.classList.add('show'); });
+        buzz(35);
+
+        // 揭曉完成後的慶祝節奏
+        setTimeout(function () {
+          if (consolation) {
+            resultEl.classList.add('soothe');
+          } else {
+            fireConfetti({ grand: !!prize.is_grand_prize });
+            buzz([30, 50, 90]);
+          }
+        }, reducedMotion ? 200 : 750);
       }
 
       var inviteBtn = document.getElementById('invite-btn');

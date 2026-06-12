@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, viewport-fit=cover" />
-  <meta name="theme-color" content="#FAFAFA" />
+  <meta name="theme-color" content="#FFFBEB" />
   <title><%= title %></title>
   <script src="https://static.line-scdn.net/liff/edge/2/sdk.js"></script>
   <style>
@@ -15,7 +15,7 @@
     }
     * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
     html, body { margin: 0; padding: 0; }
-    body { background: var(--bg); color: var(--ink); min-height: 100vh; font-family: -apple-system, BlinkMacSystemFont, "SF Pro Display", "Inter", "PingFang TC", sans-serif; letter-spacing: -0.011em; -webkit-font-smoothing: antialiased; }
+    body { background: radial-gradient(420px 420px at 88% -80px, rgba(252, 199, 38, 0.20), transparent 70%), linear-gradient(180deg, #FFFBEB 0%, #FAFAFA 420px), var(--bg); color: var(--ink); min-height: 100vh; font-family: -apple-system, BlinkMacSystemFont, "SF Pro Display", "Inter", "PingFang TC", sans-serif; letter-spacing: -0.011em; -webkit-font-smoothing: antialiased; }
     .page { max-width: 480px; margin: 0 auto; padding: 16px 16px 56px; }
 
     .brand-bar { display: flex; align-items: center; justify-content: space-between; padding: 6px 0 16px; }
@@ -39,16 +39,17 @@
     .stat .v .unit { font-size: 11px; color: var(--ink-2); margin-left: 2px; font-weight: 500; }
     .stat .k { font-size: 11px; color: var(--ink-2); margin-top: 5px; font-weight: 500; }
 
-    .invite-card { margin-top: 8px; background: var(--ink); border-radius: 16px; padding: 14px 16px; display: flex; align-items: center; justify-content: space-between; gap: 12px; position: relative; overflow: hidden; color: #fff; }
-    .invite-card::before { content: ''; position: absolute; top: -40px; right: -30px; width: 140px; height: 140px; background: radial-gradient(circle, rgba(252, 199, 38, 0.32), transparent 70%); }
+    .invite-card { margin-top: 8px; background: linear-gradient(135deg, #FFD75A 0%, var(--or-yellow) 58%, #F2B900 100%); border-radius: 18px; padding: 16px 18px; display: flex; align-items: center; justify-content: space-between; gap: 12px; position: relative; overflow: hidden; color: var(--ink); box-shadow: 0 12px 28px -12px rgba(232, 180, 0, 0.6); }
+    .invite-card::before { content: ''; position: absolute; top: -48px; right: -34px; width: 150px; height: 150px; border-radius: 50%; background: rgba(255, 255, 255, 0.3); }
+    .invite-card::after { content: ''; position: absolute; bottom: -60px; left: -28px; width: 120px; height: 120px; border-radius: 50%; background: rgba(31, 41, 55, 0.08); }
     .invite-left { flex: 1; z-index: 1; }
-    .invite-title { font-size: 14px; font-weight: 700; }
-    .invite-sub { font-size: 11px; color: rgba(255, 255, 255, 0.62); margin-top: 3px; }
-    .invite-btn { flex-shrink: 0; background: var(--or-yellow); color: var(--ink); border: none; border-radius: 999px; padding: 8px 16px; font-family: inherit; font-weight: 700; font-size: 13px; cursor: pointer; z-index: 1; transition: background 0.15s ease, transform 0.15s cubic-bezier(0.34, 1.56, 0.64, 1); display: inline-flex; align-items: center; }
-    .invite-btn:hover { background: var(--or-yellow-d); }
+    .invite-title { font-size: 15px; font-weight: 800; letter-spacing: -0.01em; }
+    .invite-sub { font-size: 12px; color: rgba(31, 41, 55, 0.68); margin-top: 3px; font-weight: 500; }
+    .invite-btn { flex-shrink: 0; background: var(--ink); color: var(--or-yellow); border: none; border-radius: 999px; padding: 10px 18px; font-family: inherit; font-weight: 700; font-size: 13px; cursor: pointer; z-index: 1; transition: transform 0.15s cubic-bezier(0.34, 1.56, 0.64, 1), box-shadow 0.2s ease; box-shadow: 0 6px 14px -4px rgba(15, 15, 16, 0.45); display: inline-flex; align-items: center; }
+    .invite-btn:hover { box-shadow: 0 8px 18px -4px rgba(15, 15, 16, 0.55); }
     .invite-btn:active { transform: scale(0.96); }
-    .invite-card.maxed { opacity: 0.6; }
-    .invite-card.maxed .invite-btn { background: var(--ink-3); cursor: default; pointer-events: none; }
+    .invite-card.maxed { opacity: 0.6; box-shadow: none; }
+    .invite-card.maxed .invite-btn { background: var(--ink-3); color: #fff; cursor: default; pointer-events: none; box-shadow: none; }
 
     /* ========== Slot stage ========== */
     .stage-card { margin-top: 12px; background: var(--surface); border: 1px solid var(--border); border-radius: 24px; padding: 24px 20px 22px; position: relative; overflow: hidden; }
@@ -58,12 +59,15 @@
 
     /* 三軸機台 */
     .slot-machine {
-      background: linear-gradient(180deg, #1A1A1F, #0F0F10);
+      background: linear-gradient(180deg, #2B2B33 0%, #17171B 52%, #0E0E10 100%);
       border-radius: 20px;
-      padding: 24px 18px;
+      padding: 18px 16px 20px;
       box-shadow:
         inset 0 0 0 3px var(--or-yellow),
-        0 16px 36px -8px rgba(15,15,16,0.3);
+        inset 0 0 0 5px rgba(0, 0, 0, 0.55),
+        inset 0 18px 28px rgba(255, 255, 255, 0.05),
+        0 24px 48px -16px rgba(15, 15, 16, 0.5),
+        0 10px 18px -10px rgba(232, 180, 0, 0.35);
       position: relative;
       overflow: hidden;
     }
@@ -99,9 +103,21 @@
       transition: transform 0s linear;
       display: flex;
       flex-direction: column;
+      will-change: transform, filter;
     }
     .slot-strip.spinning {
       transition: none;
+    }
+    /* 滾動中的 motion blur 殘影感 */
+    .slot-strip.motion { filter: blur(1.6px); }
+    /* 軸窗上下內陰影，加深機械感 */
+    .slot-reel::after {
+      content: '';
+      position: absolute;
+      inset: 0;
+      border-radius: 12px;
+      pointer-events: none;
+      background: linear-gradient(180deg, rgba(15, 15, 16, 0.2), transparent 24%, transparent 76%, rgba(15, 15, 16, 0.2));
     }
     .slot-symbol {
       height: 110px;
@@ -179,8 +195,15 @@
       transition: background 0.15s, transform 0.18s cubic-bezier(0.34, 1.56, 0.64, 1);
     }
     .slot-spin-btn:hover:not(:disabled) { background: var(--or-yellow-d); }
-    .slot-spin-btn:active:not(:disabled) { transform: scale(0.94); }
+    /* 拉桿感：按下時往下壓 */
+    .slot-spin-btn:active:not(:disabled) { transform: scale(0.96) translateY(3px); }
     .slot-spin-btn:disabled { background: #F0F0F2; color: var(--ink-3); cursor: default; box-shadow: none; }
+    /* 可以玩時的呼吸光暈 */
+    .slot-spin-btn:not(:disabled) { animation: btnBreath 2.4s ease-in-out infinite; }
+    @keyframes btnBreath {
+      0%, 100% { box-shadow: 0 8px 20px -4px rgba(252, 199, 38, 0.55); }
+      50% { box-shadow: 0 8px 26px -2px rgba(252, 199, 38, 0.85), 0 0 0 8px rgba(252, 199, 38, 0.12); }
+    }
 
     .status-row { display: flex; align-items: center; justify-content: center; gap: 8px; margin-top: 16px; font-size: 13px; color: var(--ink-2); min-height: 22px; }
     .status-row .name { color: var(--ink); font-weight: 600; }
@@ -220,6 +243,92 @@
     .modal-desc { text-align: center; color: var(--ink-2); font-size: 14px; line-height: 1.55; margin-bottom: 24px; }
     .modal-btn { display: block; width: 100%; padding: 15px; background: var(--ink); color: #fff; border: none; border-radius: 14px; font-size: 15px; font-weight: 600; font-family: inherit; cursor: pointer; transition: transform 0.15s cubic-bezier(0.34, 1.56, 0.64, 1); }
     .modal-btn:active { transform: scale(0.98); }
+
+    /* ========== 體驗升級：動效層 ========== */
+    /* 進場：卡片柔和 fade + up，依序錯開 */
+    @keyframes enterUp { from { opacity: 0; transform: translateY(16px); } to { opacity: 1; transform: translateY(0); } }
+    .hero, .stats, .invite-card, .stage-card, .section, .foot { animation: enterUp 0.38s cubic-bezier(0.22, 0.9, 0.3, 1) backwards; }
+    .stats { animation-delay: 0.05s; }
+    .invite-card { animation-delay: 0.1s; }
+    .stage-card { animation-delay: 0.15s; }
+    .section { animation-delay: 0.2s; }
+    .foot { animation-delay: 0.25s; }
+
+    /* 卡片陰影層次 + 圓角統一 */
+    .hero, .stage-card { box-shadow: 0 1px 2px rgba(15, 15, 16, 0.03), 0 12px 32px -18px rgba(15, 15, 16, 0.14); }
+    .stat, .prize-card, .foot { box-shadow: 0 1px 2px rgba(15, 15, 16, 0.03), 0 8px 20px -14px rgba(15, 15, 16, 0.12); }
+    .stat, .prize-card, .foot { border-radius: 16px; }
+
+    /* 剩餘次數變化 pop */
+    .stat .v { display: inline-block; }
+    .stat .v.pop { animation: statPop 0.45s cubic-bezier(0.34, 1.56, 0.64, 1); }
+    @keyframes statPop { 0% { transform: scale(1.3); } 100% { transform: scale(1); } }
+
+    /* 機台跑馬燈 */
+    .slot-lamps { display: flex; justify-content: center; gap: 9px; margin-bottom: 14px; position: relative; z-index: 1; }
+    .slot-lamps span { width: 6px; height: 6px; border-radius: 50%; background: rgba(255, 255, 255, 0.16); transition: background 0.25s ease, box-shadow 0.25s ease; }
+    .slot-machine.running .slot-lamps span { animation: lampBlink 0.5s ease-in-out infinite; }
+    .slot-machine.running .slot-lamps span:nth-child(even) { animation-delay: 0.25s; }
+    @keyframes lampBlink {
+      0%, 100% { background: rgba(255, 255, 255, 0.16); box-shadow: none; }
+      50% { background: var(--or-yellow); box-shadow: 0 0 8px rgba(252, 199, 38, 0.9); }
+    }
+    .slot-machine.celebrate .slot-lamps span { background: var(--or-yellow); box-shadow: 0 0 8px rgba(252, 199, 38, 0.9); }
+
+    /* 機身黃色飾條 */
+    .slot-trim { margin-top: 16px; height: 4px; border-radius: 999px; background: linear-gradient(90deg, transparent, var(--or-yellow), transparent); opacity: 0.45; }
+
+    /* 拉桿機身震動 */
+    .slot-machine.shake { animation: machineShake 0.2s ease; }
+    @keyframes machineShake {
+      0%, 100% { transform: none; }
+      25% { transform: translate(-2px, 1px) rotate(-0.35deg); }
+      50% { transform: translate(2px, -1px) rotate(0.35deg); }
+      75% { transform: translate(-1px, 1px); }
+    }
+
+    /* near-miss 心跳：第三軸停止前的紅光快閃 */
+    .slot-machine.near-miss { animation: nearMissFlash 0.17s linear 3; }
+    @keyframes nearMissFlash {
+      0%, 100% { box-shadow: inset 0 0 0 3px var(--or-yellow), inset 0 0 0 5px rgba(0, 0, 0, 0.55), 0 24px 48px -16px rgba(15, 15, 16, 0.5); }
+      50% { box-shadow: inset 0 0 0 3px var(--or-red), inset 0 0 0 5px rgba(0, 0, 0, 0.55), 0 0 30px rgba(225, 29, 39, 0.55), 0 24px 48px -16px rgba(15, 15, 16, 0.5); }
+    }
+
+    /* 軸停止回彈 */
+    .slot-reel.settle { animation: reelSettle 0.32s cubic-bezier(0.34, 1.56, 0.64, 1); }
+    @keyframes reelSettle { 0% { transform: translateY(0); } 35% { transform: translateY(5px); } 100% { transform: translateY(0); } }
+
+    /* 中獎三格黃光 pulse */
+    .slot-reel.win-glow { animation: winPulse 0.55s ease-in-out 3; }
+    @keyframes winPulse {
+      0%, 100% { box-shadow: inset 0 0 0 2px rgba(255, 255, 255, 0.4); }
+      50% { box-shadow: inset 0 0 0 3px var(--or-yellow), 0 0 0 2px var(--or-yellow), 0 0 22px rgba(252, 199, 38, 0.9); }
+    }
+
+    /* 揭曉 modal 內容節奏 */
+    .modal.open .modal-img-wrap { animation: prizePop 0.55s cubic-bezier(0.34, 1.56, 0.64, 1) 0.12s backwards; }
+    @keyframes prizePop { 0% { opacity: 0; transform: scale(0.5); } 100% { opacity: 1; transform: scale(1); } }
+    .modal.open .modal-prize { animation: riseIn 0.4s ease 0.22s backwards; }
+    .modal.open .modal-desc { animation: riseIn 0.4s ease 0.3s backwards; }
+    @keyframes riseIn { 0% { opacity: 0; transform: translateY(10px); } 100% { opacity: 1; transform: translateY(0); } }
+
+    /* 銘謝惠顧類：溫和版 modal */
+    .modal.consolation .modal-eyebrow { color: var(--ink-3); }
+    .modal.consolation .modal-img-wrap { background: linear-gradient(135deg, #F4F4F6, #E9E9EE); }
+    .modal.consolation .modal-img-wrap .glyph { color: var(--ink-2); }
+
+    @media (prefers-reduced-motion: reduce) {
+      .hero, .stats, .invite-card, .stage-card, .section, .foot,
+      .slot-spin-btn:not(:disabled),
+      .slot-machine.shake, .slot-machine.near-miss,
+      .slot-machine.running .slot-lamps span,
+      .slot-reel.settle, .slot-reel.win-glow,
+      .stat .v.pop,
+      .modal.open .modal-img-wrap, .modal.open .modal-prize, .modal.open .modal-desc { animation: none !important; }
+      .slot-strip { transition-duration: 1ms !important; }
+      .slot-strip.motion { filter: none; }
+      .sheet { transition-duration: 1ms; }
+    }
   </style>
 </head>
 <body>
@@ -248,7 +357,7 @@
     <section class="invite-card" id="invite-card">
       <div class="invite-left">
         <% if (activity.referral_bonus_per && activity.referral_bonus_per > 0) { %>
-          <div class="invite-title">邀請朋友 +<%= activity.referral_bonus_per %> 次</div>
+          <div class="invite-title">邀 1 位朋友，立得 +<%= activity.referral_bonus_per %> 次</div>
           <div class="invite-sub" id="invite-sub">最多再加 <%= activity.referral_bonus_max %> 次</div>
         <% } else { %>
           <div class="invite-title">分享給朋友一起玩</div>
@@ -263,7 +372,8 @@
     <section class="stage-card">
       <div class="stage-head"><span class="label">老虎機</span><span class="count">三軸對齊就中獎</span></div>
 
-      <div class="slot-machine">
+      <div class="slot-machine" id="slot-machine">
+        <div class="slot-lamps" aria-hidden="true"><span></span><span></span><span></span><span></span><span></span><span></span></div>
         <div class="slot-frame" id="slot-frame">
           <div class="slot-reels">
             <div class="slot-reel"><div class="slot-strip" id="reel-0"></div></div>
@@ -271,6 +381,7 @@
             <div class="slot-reel"><div class="slot-strip" id="reel-2"></div></div>
           </div>
         </div>
+        <div class="slot-trim" aria-hidden="true"></div>
       </div>
 
       <div class="slot-spin-row">
@@ -307,7 +418,7 @@
   <div id="modal" class="modal" aria-hidden="true">
     <div class="sheet">
       <div class="handle"></div>
-      <div class="modal-eyebrow">中 獎</div>
+      <div class="modal-eyebrow" id="modal-eyebrow">中 獎</div>
       <div class="modal-img-wrap"><span class="glyph" id="modal-glyph">★</span></div>
       <div class="modal-prize" id="modal-prize">—</div>
       <div class="modal-desc" id="modal-desc"></div>
@@ -336,6 +447,11 @@
       var idToken = null;
       var liffReady = false;
       var spinning = false;
+
+      var machineEl = document.getElementById('slot-machine');
+      var reducedMotion = !!(window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches);
+      function buzz(pattern) { if (navigator.vibrate) { try { navigator.vibrate(pattern); } catch (e) {} } }
+      function wait(ms) { return new Promise(function (r) { setTimeout(r, ms); }); }
 
       function escapeHtml(s) {
         return String(s == null ? '' : s)
@@ -398,7 +514,9 @@
       function reelStripFor(r) { return document.getElementById('reel-' + r); }
 
       // 把第 r 個軸轉到指定獎品 index，帶 spin 動畫
-      function spinReel(r, targetIndex, duration) {
+      // opts: { ease 自訂緩動, keepMotion 滾完保留殘影（預轉用）, tick 停止時輕震 }
+      function spinReel(r, targetIndex, duration, opts) {
+        opts = opts || {};
         return new Promise(function (resolve) {
           var strip = reelStripFor(r);
           if (!strip) { resolve(); return; }
@@ -407,14 +525,142 @@
           // 目標位置：第 5 圈的 targetIndex（5*n + targetIndex）讓動畫感覺多
           var finalIndex = 5 * n + targetIndex;
           var finalY = -finalIndex * symbolHeight;
-          // 第一階段：快速滾動
-          strip.style.transition = 'transform ' + duration + 'ms cubic-bezier(0.2, 0.7, 0.2, 1)';
+          // 滾動中加 motion blur 殘影
+          if (!reducedMotion) strip.classList.add('motion');
+          strip.style.transition = 'transform ' + duration + 'ms ' + (opts.ease || 'cubic-bezier(0.2, 0.7, 0.2, 1)');
           // requestAnimationFrame 確保 transition 生效
           requestAnimationFrame(function () {
             strip.style.transform = 'translateY(' + finalY + 'px)';
           });
-          setTimeout(resolve, duration + 50);
+          setTimeout(function () {
+            if (!opts.keepMotion) {
+              // 停止：移除殘影 + 回彈
+              strip.classList.remove('motion');
+              var reel = strip.parentElement;
+              if (reel && !reducedMotion) {
+                reel.classList.remove('settle');
+                void reel.offsetWidth;
+                reel.classList.add('settle');
+              }
+              if (opts.tick) buzz(10);
+            }
+            resolve();
+          }, duration + 50);
         });
+      }
+
+      // ===== 慶祝特效（inline、零依賴、自動清理）=====
+      function runParticles(parts, duration) {
+        if (reducedMotion || !parts.length) return;
+        var canvas = document.createElement('canvas');
+        canvas.style.cssText = 'position:fixed;inset:0;width:100%;height:100%;pointer-events:none;z-index:300;';
+        document.body.appendChild(canvas);
+        var dpr = Math.min(window.devicePixelRatio || 1, 2);
+        var W = window.innerWidth, H = window.innerHeight;
+        canvas.width = W * dpr;
+        canvas.height = H * dpr;
+        var ctx = canvas.getContext('2d');
+        ctx.scale(dpr, dpr);
+        var last = null, elapsed = 0;
+        function frame(t) {
+          if (last === null) last = t;
+          var dt = Math.min((t - last) / 1000, 0.05);
+          last = t;
+          elapsed += dt * 1000;
+          ctx.clearRect(0, 0, W, H);
+          var fade = elapsed > duration - 400 ? Math.max(0, (duration - elapsed) / 400) : 1;
+          for (var i = 0; i < parts.length; i++) {
+            var p = parts[i];
+            p.vy += p.g * dt;
+            p.x += p.vx * dt;
+            p.y += p.vy * dt;
+            p.rot += p.vr * dt;
+            if (p.y > H + 40) continue;
+            ctx.save();
+            ctx.globalAlpha = fade;
+            ctx.translate(p.x, p.y);
+            ctx.rotate(p.rot);
+            ctx.fillStyle = p.color;
+            if (p.shape === 'dot') {
+              ctx.beginPath();
+              ctx.arc(0, 0, p.w / 2, 0, Math.PI * 2);
+              ctx.fill();
+            } else {
+              ctx.fillRect(-p.w / 2, -p.w / 2, p.w, p.w * 0.62);
+            }
+            ctx.restore();
+          }
+          if (elapsed < duration) requestAnimationFrame(frame);
+          else if (canvas.parentNode) canvas.parentNode.removeChild(canvas);
+        }
+        requestAnimationFrame(frame);
+      }
+      // 紙花：黃/墨/白 小方塊 + 圓點，約 80 顆，自頂落下
+      function launchConfetti() {
+        var colors = ['#FCC726', '#1F2937', '#FFFFFF'];
+        var W = window.innerWidth;
+        var parts = [];
+        for (var i = 0; i < 80; i++) {
+          parts.push({
+            x: Math.random() * W,
+            y: -30 - Math.random() * 120,
+            w: 5 + Math.random() * 5,
+            vx: -50 + Math.random() * 100,
+            vy: 120 + Math.random() * 200,
+            g: 260,
+            rot: Math.random() * Math.PI,
+            vr: -5 + Math.random() * 10,
+            shape: Math.random() < 0.45 ? 'dot' : 'rect',
+            color: colors[i % colors.length]
+          });
+        }
+        runParticles(parts, 1900);
+      }
+      // 金幣噴出感：黃色圓點從機台往上噴灑落下
+      function coinBurst() {
+        if (!machineEl) return;
+        var rect = machineEl.getBoundingClientRect();
+        var cx = rect.left + rect.width / 2;
+        var cy = rect.top + rect.height * 0.35;
+        var colors = ['#FCC726', '#FFD95C', '#E8B400'];
+        var parts = [];
+        for (var i = 0; i < 26; i++) {
+          var ang = -Math.PI / 2 + (-0.9 + Math.random() * 1.8) * 0.7;
+          var speed = 300 + Math.random() * 320;
+          parts.push({
+            x: cx + (-44 + Math.random() * 88),
+            y: cy,
+            w: 7 + Math.random() * 6,
+            vx: Math.cos(ang) * speed * 0.55,
+            vy: Math.sin(ang) * speed,
+            g: 780,
+            rot: 0,
+            vr: 0,
+            shape: 'dot',
+            color: colors[i % colors.length]
+          });
+        }
+        runParticles(parts, 1700);
+      }
+      // 「銘謝惠顧」類獎項：不放紙花，改溫和動效
+      function isConsolation(p) {
+        if (!p) return true;
+        if (p.is_grand_prize) return false;
+        return /銘謝|惠顧|再接再厲|未中|沒中|下次|殘念|謝謝參/.test(String(p.name || ''));
+      }
+      function setReelGlow(on) {
+        var reels = document.querySelectorAll('.slot-reel');
+        for (var i = 0; i < reels.length; i++) {
+          reels[i].classList.remove('win-glow');
+          if (on) { void reels[i].offsetWidth; reels[i].classList.add('win-glow'); }
+        }
+      }
+      function stopSpinVisuals() {
+        if (machineEl) machineEl.classList.remove('running');
+        for (var r = 0; r < 3; r++) {
+          var s = reelStripFor(r);
+          if (s) s.classList.remove('motion');
+        }
       }
 
       async function initLiff() {
@@ -460,9 +706,23 @@
         } catch (e) {}
       }
 
+      var lastStat = { remaining: null, referrals: null };
+      function popStat(el) {
+        if (!el || reducedMotion) return;
+        el.classList.remove('pop');
+        void el.offsetWidth;
+        el.classList.add('pop');
+      }
       function renderQuota(q) {
-        document.getElementById('stat-remaining').innerHTML = q.remaining + '<span class="unit">/ ' + q.total + '</span>';
-        document.getElementById('stat-referrals').innerHTML = q.referrals + '<span class="unit">人</span>';
+        var remEl = document.getElementById('stat-remaining');
+        var refEl = document.getElementById('stat-referrals');
+        remEl.innerHTML = q.remaining + '<span class="unit">/ ' + q.total + '</span>';
+        refEl.innerHTML = q.referrals + '<span class="unit">人</span>';
+        // 數字變化時 pop（讓 +2 次有感）
+        if (lastStat.remaining !== null && lastStat.remaining !== q.remaining) popStat(remEl);
+        if (lastStat.referrals !== null && lastStat.referrals !== q.referrals) popStat(refEl);
+        lastStat.remaining = q.remaining;
+        lastStat.referrals = q.referrals;
         if (q.remaining <= 0) {
           spinBtn.disabled = true;
           var canMore = q.referral_bonus_per > 0 && q.referral_bonus < q.referral_bonus_max;
@@ -492,16 +752,28 @@
         spinBtn.disabled = true;
         statusEl.textContent = '轉動中⋯';
         slotFrame.classList.remove('win');
+        setReelGlow(false);
+        // 拉桿動效：機身微震 + 跑馬燈 + 觸覺
+        if (machineEl) {
+          machineEl.classList.remove('celebrate');
+          machineEl.classList.add('running');
+          if (!reducedMotion) {
+            machineEl.classList.remove('shake');
+            void machineEl.offsetWidth;
+            machineEl.classList.add('shake');
+          }
+        }
+        buzz(15);
 
-        // 立即啟動三軸隨機滾動（先給用戶視覺感）
+        // 立即啟動三軸隨機滾動（先給用戶視覺感；keepMotion 保留殘影遮住稍後的瞬移 reset）
         var preTargets = [
           Math.floor(Math.random() * prizes.length),
           Math.floor(Math.random() * prizes.length),
           Math.floor(Math.random() * prizes.length)
         ];
-        spinReel(0, preTargets[0], 600);
-        spinReel(1, preTargets[1], 800);
-        spinReel(2, preTargets[2], 1000);
+        spinReel(0, preTargets[0], 600, { keepMotion: true });
+        spinReel(1, preTargets[1], 800, { keepMotion: true });
+        spinReel(2, preTargets[2], 1000, { keepMotion: true });
 
         try {
           var resp = await fetch('/api/games/slot/' + encodeURIComponent(slug) + '/play', {
@@ -510,6 +782,7 @@
           }).then(function (r) { return r.json(); });
 
           if (!resp.ok) {
+            stopSpinVisuals();
             statusEl.textContent = resp.detail || resp.error || '抽獎失敗';
             spinning = false;
             spinBtn.disabled = false;
@@ -532,17 +805,37 @@
           var winIdx = prizes.findIndex(function (p) { return p.id === resp.prize.id; });
           if (winIdx < 0) winIdx = 0;
 
-          // 三軸依序停在中獎獎品（三軸相同 = 中獎）
-          await Promise.all([
-            spinReel(0, winIdx, 2400),
-            spinReel(1, winIdx, 3000),
-            spinReel(2, winIdx, 3600)
-          ]);
+          // 三軸錯開停止（三軸相同 = 中獎）：第 1 軸先停，第 2 軸 +400ms，第 3 軸 +800ms（放慢收尾、拉期待感）
+          var stop0 = spinReel(0, winIdx, 2000, { tick: true });
+          var stop1 = spinReel(1, winIdx, 2400, { tick: true });
+          var stop2 = spinReel(2, winIdx, 2800, { tick: true, ease: 'cubic-bezier(0.12, 0.82, 0.16, 1)' });
+          // near-miss 心跳：前兩軸已對齊，第三軸停止前機身紅光快閃（純視覺）
+          stop1.then(function () {
+            if (machineEl && !reducedMotion) {
+              machineEl.classList.add('near-miss');
+              setTimeout(function () { machineEl.classList.remove('near-miss'); }, 540);
+            }
+          });
+          await Promise.all([stop0, stop1, stop2]);
+          stopSpinVisuals();
 
+          // 揭曉節奏：停頓 → 揭曉 → 慶祝
+          await wait(450);
           slotFrame.classList.add('win');
+          setReelGlow(true);
+          if (isConsolation(resp.prize)) {
+            buzz(15);
+          } else {
+            if (machineEl) machineEl.classList.add('celebrate');
+            buzz([30, 50, 30]);
+            launchConfetti();
+            coinBurst();
+          }
+          await wait(650);
           showResult(resp.prize);
           setTimeout(refreshQuota, 800);
         } catch (e) {
+          stopSpinVisuals();
           statusEl.textContent = '錯誤';
         } finally {
           spinning = false;
@@ -552,6 +845,10 @@
 
       function showResult(prize) {
         statusEl.textContent = '';
+        var consolation = isConsolation(prize);
+        var eyebrow = document.getElementById('modal-eyebrow');
+        if (eyebrow) eyebrow.textContent = consolation ? '再接再厲' : (prize.is_grand_prize ? '頭 獎' : '中 獎');
+        if (consolation) modal.classList.add('consolation'); else modal.classList.remove('consolation');
         document.getElementById('modal-prize').textContent = prize.name || '—';
         document.getElementById('modal-glyph').textContent = prize.is_grand_prize ? '★' : '◆';
         var descParts = [];
