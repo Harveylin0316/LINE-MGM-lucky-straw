@@ -1,0 +1,130 @@
+<%-
+  include('layout', {
+    user: user,
+    isAdmin: isAdmin,
+    bodyClass: bodyClass,
+    body: `
+    <section class="card">
+      <h1 style="margin-bottom:4px;">歡迎回來</h1>
+      <p class="muted" style="line-height:1.7;">這裡是 OpenRice LINE CRM 後台。想發訊息給會員，照下面三步驟走就對了。</p>
+      <div class="db-stats" id="db-stats">
+        <div class="db-stat"><div class="v" id="st-friends">—</div><div class="k">可發送好友</div></div>
+        <div class="db-stat"><div class="v" id="st-friends7">—</div><div class="k">近 7 天新好友</div></div>
+        <div class="db-stat"><div class="v" id="st-activities">—</div><div class="k">進行中活動</div></div>
+        <div class="db-stat"><div class="v" id="st-flows">—</div><div class="k">運作中自動流程</div></div>
+        <div class="db-stat db-stat-wide"><div class="v" id="st-last" style="font-size:15px;line-height:1.5;">—</div><div class="k">最近一次發送</div></div>
+      </div>
+    </section>
+
+    <section class="card">
+      <h2 style="margin:0 0 4px;">發一則訊息給會員，只要三步</h2>
+      <p class="muted" style="font-size:13px;margin-bottom:14px;">第一次用？照順序點下面三張卡就能完成。</p>
+      <div class="db-steps">
+        <a class="db-step" href="/admin/messages">
+          <div class="db-step-num">1</div>
+          <div class="db-step-body">
+            <div class="db-step-title">準備訊息</div>
+            <div class="db-step-desc">到「訊息庫」挑一張現成的設計模板（已有 29 則），或自己建一則。挑好按卡片上的「用這則去群發」。</div>
+          </div>
+          <div class="db-step-go">前往訊息庫</div>
+        </a>
+        <a class="db-step" href="/admin/recipient-lists">
+          <div class="db-step-num">2</div>
+          <div class="db-step-body">
+            <div class="db-step-title">決定發給誰</div>
+            <div class="db-step-desc">到「名單庫」建立或挑一份名單。不確定的話，群發頁也可以直接選「全部會員」。</div>
+          </div>
+          <div class="db-step-go">前往名單庫</div>
+        </a>
+        <a class="db-step" href="/admin/broadcast">
+          <div class="db-step-num">3</div>
+          <div class="db-step-body">
+            <div class="db-step-title">預覽並發送</div>
+            <div class="db-step-desc">在「群發訊息」確認右側預覽長得對、先發測試給自己看，最後才正式送出。系統會在送出前再次跟你確認人數。</div>
+          </div>
+          <div class="db-step-go">前往群發訊息</div>
+        </a>
+      </div>
+      <details class="db-guide">
+        <summary>第一次使用？看 3 分鐘上手說明</summary>
+        <div class="db-guide-body">
+          <p><strong>這個系統在做什麼？</strong><br>把訊息（圖文卡片）發給加了 OpenRice LINE 官方帳號的會員，並且可以設定自動化（例如有人加好友就自動發歡迎訊息）。</p>
+          <p><strong>各頁面的分工：</strong></p>
+          <ul>
+            <li><strong>訊息庫</strong>：存放做好的訊息設計，像範本櫃。每張卡都能預覽會員實際看到的樣子。</li>
+            <li><strong>名單庫</strong>：管理「要發給誰」。可以貼名單、也可以設定自動規則（例如玩過遊戲的人自動進名單）。</li>
+            <li><strong>群發訊息</strong>：把訊息發出去的地方。一定先「發送測試」給自己，看過沒問題再正式送出。</li>
+            <li><strong>自動化流程</strong>：設定「某件事發生時，自動做某些事」，例如加好友後自動發優惠券。</li>
+            <li><strong>活動管理</strong>：建立刮刮樂、轉盤這類抽獎遊戲，可設定邀請好友加抽次數。</li>
+            <li><strong>用戶檔案 / 會員分級分析</strong>：查單一會員做過什麼、看會員的消費分級。</li>
+          </ul>
+          <p><strong>三個安心點：</strong></p>
+          <ul>
+            <li>正式送出前系統一定會再次確認人數，並擋下還沒設定完成的圖片或連結。</li>
+            <li>「發送測試」只會發給你自己指定的測試帳號，不會打擾會員。</li>
+            <li>看不懂的地方，每頁上方都有一句話說明這頁在做什麼。</li>
+          </ul>
+        </div>
+      </details>
+    </section>
+
+    <section class="card">
+      <h2 style="margin:0 0 10px;">常用捷徑</h2>
+      <div class="db-links">
+        <a href="/admin/broadcast/history">發送紀錄<span>看之前發出去的成效</span></a>
+        <a href="/admin/flows">自動化流程<span>加好友自動歡迎、點擊追發</span></a>
+        <a href="/admin/activities">活動管理<span>刮刮樂、轉盤等抽獎遊戲</span></a>
+        <a href="/admin/referrals">邀請成效<span>誰幫你帶來新好友</span></a>
+        <a href="/admin/users">用戶檔案<span>查單一會員的完整紀錄</span></a>
+        <a href="/admin/rfm">會員分級分析<span>會員消費分級總覽</span></a>
+      </div>
+    </section>
+
+    <style>
+      .db-stats{display:grid;grid-template-columns:repeat(auto-fit,minmax(140px,1fr));gap:10px;margin-top:16px;}
+      .db-stat{border:1px solid #ECECEE;border-radius:10px;padding:14px;background:#FAFAFA;}
+      .db-stat .v{font-size:26px;font-weight:700;color:#1f2937;font-variant-numeric:tabular-nums;letter-spacing:-0.02em;}
+      .db-stat .k{font-size:12px;color:#6B6B70;margin-top:4px;}
+      .db-stat-wide{grid-column:span 2;min-width:200px;}
+      .db-steps{display:grid;grid-template-columns:repeat(auto-fit,minmax(240px,1fr));gap:12px;}
+      .db-step{display:flex;flex-direction:column;gap:10px;border:1px solid #ECECEE;border-radius:12px;padding:18px;text-decoration:none;color:inherit;background:#fff;transition:border-color .15s, box-shadow .15s;}
+      .db-step:hover{border-color:#FCC726;box-shadow:0 4px 14px rgba(0,0,0,.06);text-decoration:none;}
+      .db-step-num{width:34px;height:34px;border-radius:50%;background:#FCC726;color:#1f2937;font-weight:700;font-size:16px;display:flex;align-items:center;justify-content:center;}
+      .db-step-title{font-size:15px;font-weight:700;color:#1f2937;margin-bottom:4px;}
+      .db-step-desc{font-size:13px;color:#6B6B70;line-height:1.6;}
+      .db-step-go{margin-top:auto;align-self:flex-start;font-size:13px;font-weight:600;color:#1f2937;background:#FFFBEB;border:1px solid #FCC726;border-radius:999px;padding:6px 14px;}
+      .db-guide{margin-top:16px;border:1px solid #ECECEE;border-radius:10px;padding:12px 14px;background:#FAFAFA;}
+      .db-guide summary{cursor:pointer;font-size:13px;font-weight:600;color:#374151;}
+      .db-guide-body{margin-top:10px;font-size:13px;color:#4B5563;line-height:1.8;}
+      .db-guide-body ul{padding-left:18px;margin:6px 0;}
+      .db-links{display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:10px;}
+      .db-links a{display:flex;flex-direction:column;gap:3px;border:1px solid #ECECEE;border-radius:10px;padding:12px 14px;text-decoration:none;color:#1f2937;font-size:14px;font-weight:600;background:#fff;transition:border-color .15s;}
+      .db-links a:hover{border-color:#1f2937;text-decoration:none;}
+      .db-links a span{font-size:12px;color:#9ca3af;font-weight:400;}
+    </style>
+
+    <script>
+      (function(){
+        function $(id){return document.getElementById(id);}
+        function num(v){return Number(v||0).toLocaleString();}
+        fetch('/admin/api/dashboard').then(function(r){return r.json();}).then(function(d){
+          if(!d.ok){return;}
+          var s=d.stats||{};
+          $('st-friends').textContent=num(s.friends);
+          $('st-friends7').textContent='+'+num(s.friends_7d);
+          $('st-activities').textContent=num(s.active_activities);
+          $('st-flows').textContent=num(s.active_flows);
+          var lb=d.lastBroadcast;
+          if(lb){
+            var when=new Date(lb.created_at).toLocaleDateString('zh-TW',{month:'numeric',day:'numeric'});
+            var stMap={done:'已完成',sending:'發送中',running:'發送中',scheduled:'已排程',failed:'有失敗'};
+            $('st-last').innerHTML=when+' · '+(stMap[lb.status]||lb.status)+'<br>'+num(lb.recipient_ok)+' / '+num(lb.recipient_total)+' 送達';
+          }else{
+            $('st-last').textContent='還沒發過訊息';
+          }
+        }).catch(function(){});
+      })();
+    </script>
+    `
+  })
+%>
