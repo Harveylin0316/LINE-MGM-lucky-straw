@@ -19,6 +19,9 @@
           <button type="button" class="msg-toggle-all" id="btn-expand-all">全部展開</button>
         </div>
       </div>
+      <div style="margin-top:12px;">
+        <input type="text" id="msg-search" class="msg-search-input" placeholder="搜尋訊息名稱或說明…" autocomplete="off">
+      </div>
     </section>
 
     <div id="msg-list"><p class="muted" style="padding:20px;">載入中…</p></div>
@@ -26,6 +29,8 @@
     <style>
       .msg-hero-inner{display:flex;align-items:flex-start;justify-content:space-between;gap:16px;flex-wrap:wrap;}
       .msg-primary-btn{padding:9px 16px;background:#FCC726;color:#1f2937;font-weight:700;border:0;border-radius:8px;cursor:pointer;font-size:14px;text-decoration:none;display:inline-block;}
+      .msg-search-input{width:100%;max-width:360px;padding:9px 12px;border:1px solid #ECECEE;border-radius:8px;font-size:14px;color:#1f2937;outline:none;}
+      .msg-search-input:focus{border-color:#1f2937;}
       .msg-gallery{column-count:3;column-gap:18px;}
       @media(max-width:1100px){.msg-gallery{column-count:2;}}
       @media(max-width:680px){.msg-gallery{column-count:1;}}
@@ -180,6 +185,7 @@
         }
         function card(m){
           var div=document.createElement('div');div.className='msg-card';
+          div._search=((m.name||'')+' '+(m.description||'')).toLowerCase();
           // 標題列（一直顯示）：名稱 + 通道 + 收合鈕
           var head=document.createElement('div');head.className='msg-cardhead';
           var nm=document.createElement('div');nm.className='nm';nm.textContent=m.name||'';
@@ -206,17 +212,39 @@
           return div;
         }
 
+        var TOTAL=0;
+        function applyFilter(){
+          var inp=$('msg-search');
+          var q=inp?inp.value.trim().toLowerCase():'';
+          var cards=document.querySelectorAll('#msg-list .msg-card');
+          var shown=0;
+          cards.forEach(function(div){
+            var hit=!q||(div._search||'').indexOf(q)!==-1;
+            div.style.display=hit?'':'none';
+            if(hit)shown++;
+          });
+          // 空狀態提示
+          var empty=$('msg-empty');
+          if(q&&shown===0){
+            if(!empty){empty=document.createElement('p');empty.id='msg-empty';empty.className='muted';empty.style.padding='20px';empty.textContent='找不到符合的訊息';var box=$('msg-list');if(box&&box.parentNode)box.parentNode.insertBefore(empty,box.nextSibling);}
+            empty.style.display='';
+          }else if(empty){empty.style.display='none';}
+          // 數量顯示
+          var cnt=$('msg-count');
+          if(cnt&&TOTAL>0){cnt.textContent=q?('顯示 '+shown+' / 共 '+TOTAL+' 則'):('共 '+TOTAL+' 則訊息');}
+        }
         function loadList(){
           fetch('/admin/messages/api/list').then(function(r){return r.json();}).then(function(d){
             var box=$('msg-list');
             if(!d.ok){box.innerHTML='<p class="muted" style="padding:20px;">載入失敗：'+esc(d.error||'')+'</p>';return;}
-            if(!d.messages.length){box.innerHTML='<p class="muted" style="padding:20px;">還沒有訊息。點右上「新增訊息」用編輯器建立第一則。</p>';return;}
-            $('msg-count').textContent='共 '+d.messages.length+' 則訊息';
+            if(!d.messages.length){TOTAL=0;box.innerHTML='<p class="muted" style="padding:20px;">還沒有訊息。點右上「新增訊息」用編輯器建立第一則。</p>';return;}
+            TOTAL=d.messages.length;
             box.className='msg-gallery';box.innerHTML='';
             d.messages.forEach(function(m){box.appendChild(card(m));});
             box.querySelectorAll('[data-del]').forEach(function(b){b.addEventListener('click',function(){delMsg(b.getAttribute('data-del'));});});
             // 套用記住的收合偏好（預設展開）
             if(getPref())setAll(true);
+            applyFilter();
           }).catch(function(e){var box=$('msg-list');if(box)box.innerHTML='<p class="muted" style="padding:20px;">載入失敗，請重新整理</p>';});
         }
         function setAll(collapsed){
@@ -226,6 +254,7 @@
         function setPref(v){try{localStorage.setItem('msglib_collapsed',v?'1':'0');}catch(e){}}
         $('btn-collapse-all').addEventListener('click',function(){setAll(true);setPref(true);});
         $('btn-expand-all').addEventListener('click',function(){setAll(false);setPref(false);});
+        (function(){var si=$('msg-search');if(si)si.addEventListener('input',applyFilter);})();
         function delMsg(id){
           if(!window.confirm('確定刪除這則訊息？若被流程引用會擋下不刪。'))return;
           fetch('/admin/messages/api/'+id,{method:'DELETE'}).then(function(r){return r.json();}).then(function(d){

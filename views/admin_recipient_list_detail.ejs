@@ -13,9 +13,13 @@
       <p class="muted" id="rld-desc" style="font-size:13px;margin-top:6px;">${(list.description || '').replace(/</g,'&lt;')}</p>
       <div class="rld-stats">
         <div class="rld-stat"><div class="v" id="rld-total">${list.total || 0}</div><div class="k">成員數</div></div>
+        <div class="rld-stat"><div class="v" id="rld-line-sendable" style="color:#16a34a;">—</div><div class="k">LINE 可發送</div></div>
+        <div class="rld-stat"><div class="v" id="rld-email-only">—</div><div class="k">僅 Email</div></div>
+        <div class="rld-stat"><div class="v" id="rld-unknown" style="color:#9CA3AF;">—</div><div class="k">查無資料</div></div>
         <div class="rld-stat"><div class="v" style="font-size:13px;">${String(list.created_by || '').replace(/</g,'&lt;')}</div><div class="k">建立者</div></div>
         <div class="rld-stat"><div class="v" style="font-size:13px;font-variant-numeric:tabular-nums;">${new Date(list.created_at).toLocaleString('sv-SE', { timeZone: 'Asia/Taipei' }).slice(0,16)}</div><div class="k">建立時間</div></div>
       </div>
+      <p class="muted" style="font-size:12px;margin-top:10px;">LINE 群發只會發給「LINE 可發送」的成員；Email 群發只會發給有 Email 的成員。</p>
     </section>
 
     <section class="card">
@@ -161,6 +165,11 @@
             }
             totalMembers = resp.total;
             $('rld-total').textContent = totalMembers;
+            if (resp.breakdown) {
+              $('rld-line-sendable').textContent = resp.breakdown.line_sendable;
+              $('rld-email-only').textContent = resp.breakdown.email_only;
+              $('rld-unknown').textContent = resp.breakdown.unknown;
+            }
             renderMembers(resp.members || []);
             renderPagination();
           });

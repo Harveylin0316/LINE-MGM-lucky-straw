@@ -91,7 +91,47 @@ function registerAdminRecipientListsRoutes(app, deps) {
          WHERE m.list_id = $1${cntSearch}`,
         cntParams
       );
-      res.json({ ok: true, members: rows, total: Number(cntRs.rows[0]?.n || 0) });
+      // 可發送口徑拆分（不受搜尋影響，永遠算整份名單）：
+      //   line_sendable：line_user_id 有值且非空白，且未被封鎖（口徑對齊 broadcastAudience.js
+      //                  LINE saved_list 的 LINE_FILTER：u.blocked_at IS NULL OR u.id IS NULL）
+      //   email_only   ：不符合 LINE 可發送條件，但有 email（口徑對齊 email channel 的 email 篩選）
+      //   unknown      ：兩者皆無（含「line_user_id 有值卻被封鎖且無 email」這種真實不可發送者）
+      const breakdownRs = await query(
+        `SELECT
+           COUNT(*) FILTER (
+             WHERE m.line_user_id IS NOT NULL AND BTRIM(m.line_user_id) <> ''
+               AND (u.blocked_at IS NULL OR u.id IS NULL)
+           )::int AS line_sendable,
+           COUNT(*) FILTER (
+             WHERE NOT (
+               m.line_user_id IS NOT NULL AND BTRIM(m.line_user_id) <> ''
+               AND (u.blocked_at IS NULL OR u.id IS NULL)
+             )
+             AND m.email IS NOT NULL AND BTRIM(m.email) <> ''
+           )::int AS email_only,
+           COUNT(*) FILTER (
+             WHERE NOT (
+               m.line_user_id IS NOT NULL AND BTRIM(m.line_user_id) <> ''
+               AND (u.blocked_at IS NULL OR u.id IS NULL)
+             )
+             AND (m.email IS NULL OR BTRIM(m.email) = '')
+           )::int AS unknown
+         FROM admin_recipient_list_members m
+         LEFT JOIN users u ON u.line_user_id = m.line_user_id
+         WHERE m.list_id = $1`,
+        [id]
+      );
+      const bd = breakdownRs.rows[0] || {};
+      res.json({
+        ok: true,
+        members: rows,
+        total: Number(cntRs.rows[0]?.n || 0),
+        breakdown: {
+          line_sendable: Number(bd.line_sendable || 0),
+          email_only: Number(bd.email_only || 0),
+          unknown: Number(bd.unknown || 0)
+        }
+      });
     } catch (err) {
       console.error('list members error:', err && err.message);
       return safeJson(res, 500, 'list_members_failed', { detail: err && err.message });

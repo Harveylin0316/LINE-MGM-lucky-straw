@@ -18,6 +18,32 @@
       <div id="fl-run-status" class="muted" style="font-size:13px;margin-top:8px;"></div>
     </section>
 
+    <section class="card" id="fl-examples-card">
+      <div class="fl-ex-head">
+        <div>
+          <h2 class="fl-ex-title">不知道從哪開始？從範例改起</h2>
+          <p class="muted" style="margin-top:4px;font-size:13px;">點一張卡片，編輯器會自動填好「觸發＋步驟」的骨架，你只要改細節、選好要發的訊息就完成。</p>
+        </div>
+      </div>
+      <div class="fl-ex-grid">
+        <div class="fl-ex-card">
+          <div class="fl-ex-card-title">新好友歡迎</div>
+          <p class="fl-ex-card-desc">有人加你 LINE 好友時，自動發一則歡迎訊息。記得在編輯器裡選一則要發的歡迎訊息。</p>
+          <button type="button" class="fl-ex-btn" data-example="welcome">用這個範例</button>
+        </div>
+        <div class="fl-ex-card">
+          <div class="fl-ex-card-title">玩過遊戲再追一則</div>
+          <p class="fl-ex-card-desc">有人玩了活動遊戲後，等 1 天再發一則訊息追蹤。記得指定要發的訊息。</p>
+          <button type="button" class="fl-ex-btn" data-example="game_followup">用這個範例</button>
+        </div>
+        <div class="fl-ex-card">
+          <div class="fl-ex-card-title">點了群發連結就加進名單</div>
+          <p class="fl-ex-card-desc">有人點了群發訊息裡的連結，就自動把他加進指定名單。記得指定要加入的名單。</p>
+          <button type="button" class="fl-ex-btn" data-example="click_to_list">用這個範例</button>
+        </div>
+      </div>
+    </section>
+
     <section class="card" id="fl-list-card">
       <div id="fl-list"><p class="muted">載入中…</p></div>
     </section>
@@ -108,6 +134,15 @@
       .fl-add-row{display:flex;gap:8px;margin-top:6px;}
       .fl-add-btn{padding:8px 14px;border:1px dashed #d1d5db;background:#fff;border-radius:8px;cursor:pointer;font-size:13px;color:#374151;}
       .fl-add-btn:hover{border-color:#1f2937;color:#1f2937;}
+      .fl-ex-head{margin-bottom:14px;}
+      .fl-ex-title{font-size:16px;font-weight:700;color:#1f2937;margin:0;}
+      .fl-ex-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:12px;}
+      .fl-ex-card{border:1px solid #e5e7eb;border-radius:10px;padding:14px;background:#fff;display:flex;flex-direction:column;}
+      .fl-ex-card-title{font-size:15px;font-weight:700;color:#1f2937;margin-bottom:6px;}
+      .fl-ex-card-desc{font-size:13px;color:#6b7280;line-height:1.6;margin:0 0 12px;flex:1;}
+      .fl-ex-btn{align-self:flex-start;padding:8px 14px;background:#1f2937;color:#fff;border:0;border-radius:8px;cursor:pointer;font-size:13px;font-weight:600;}
+      .fl-ex-btn:hover{background:#111827;}
+      @media (max-width:720px){.fl-ex-grid{grid-template-columns:1fr;}}
     </style>
 
     <script>
@@ -425,6 +460,33 @@
             loadList();
           }).catch(function(e){btn.disabled=false;s.textContent='錯誤：'+e.message;});
         });
+        // ---------- 範例流程 ----------
+        function exampleFlow(key){
+          if(key==='welcome'){
+            return {name:'新好友歡迎',re_enroll:false,trigger:{type:'follow',config:{}},steps:[{type:'send',message_id:null}]};
+          }
+          if(key==='game_followup'){
+            return {name:'玩過遊戲再追一則',re_enroll:false,trigger:{type:'game_play',config:{}},steps:[{type:'wait',amount:1,unit:'days'},{type:'send',message_id:null}]};
+          }
+          if(key==='click_to_list'){
+            return {name:'點了群發連結就加進名單',re_enroll:false,trigger:{type:'broadcast_click',config:{}},steps:[{type:'add_to_list',list_id:null}]};
+          }
+          return null;
+        }
+        function openEditorFromExample(key){
+          var preset=exampleFlow(key);
+          if(!preset)return;
+          editingId=null;
+          $('fl-save-status').textContent='從範例帶入。記得指定要發的訊息或要加入的名單，再儲存。';
+          flow=preset;
+          renderEditor();showEditor(true);
+          initialSnapshot=JSON.stringify(collectFlow());
+          $('fl-editor').scrollIntoView({behavior:'smooth',block:'start'});
+        }
+        document.querySelectorAll('[data-example]').forEach(function(b){
+          b.addEventListener('click',function(){openEditorFromExample(b.getAttribute('data-example'));});
+        });
+
         $('fl-new').addEventListener('click',function(){openEditor(null);});
         $('fl-back').addEventListener('click',backToList);
         $('fl-save').addEventListener('click',function(){save(false);});
