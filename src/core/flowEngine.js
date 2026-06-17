@@ -21,9 +21,35 @@
  * 推進：cron 每 5 分鐘呼叫 run()：先跑 schedule/event 觸發建 enrollment，再 advance 到期的 enrollment。
  */
 
+// 設定錯誤（訊息不存在、節點設定有誤）→ 不可重試，直接標 failed。
+// 與「暫時性錯誤」（推播 5xx/逾時/DB 連線抖動）區分：後者重試、達上限才 failed。
+class FlowConfigError extends Error {
+  constructor(message) { super(message); this.name = 'FlowConfigError'; this.permanent = true; }
+}
+// 暫時性推播失敗（LINE 端回傳失敗、逾時、網路抖動）→ 可重試，不前進節點、不終態。
+class FlowTransientError extends Error {
+  constructor(message) { super(message); this.name = 'FlowTransientError'; this.permanent = false; }
+}
+
 function createFlowEngine({ query, pool, linePush, buildLineMessages }) {
   const MAX_STEPS_PER_TICK = 12;
   const CLAIM_LEASE_MS = 10 * 60 * 1000; // 處理租約 10 分鐘
+
+  // ---------- 可靠性參數（重試 / 退避 / 時間預算） ----------
+  // 推播暫時性失敗（LINE 端 5xx/逾時/網路）時不前進節點、不終態，
+  // 改排到未來重試；retry_count 達上限才標 failed。
+  const SEND_MAX_RETRIES = 5; // 第 6 次（retry_count >= 5）仍失敗才放棄
+  // 遞增退避（分鐘）：第 1 次失敗等 5 分、第 2 次 15、第 3 次 45、之後 120/360。
+  // 用 cron 每 5 分鐘 tick 推進，所以全是 5 的倍數。
+  const SEND_BACKOFF_MIN = [5, 15, 45, 120, 360];
+  // run() 整體時間預算：單一 serverless function 10s timeout，留 2s 餘裕給收尾/回應。
+  // advanceDue 迴圈每筆檢查，超時就停（剩下的下個 cron tick 繼續），避免逾時把整批中斷。
+  const RUN_DEADLINE_MS = 8000;
+
+  function backoffMs(retryCount) {
+    const i = Math.min(Math.max(0, retryCount), SEND_BACKOFF_MIN.length - 1);
+    return SEND_BACKOFF_MIN[i] * 60 * 1000;
+  }
 
   // ---------- 共用查詢 ----------
   async function getActiveFlowsByTrigger(triggerType) {
@@ -461,14 +487,40 @@ function createFlowEngine({ query, pool, linePush, buildLineMessages }) {
     }
   }
 
+  // ---------- 個人化收件人名稱 ----------
+  // token 格式同群發（A 定義）：{暱稱}/{name}，fallback「饕客」。
+  // 來源：enrollment 對應用戶的 users.line_display_name（先用 user_id，缺再用 line_user_id 查）。
+  // 查不到回 null —— 讓 buildLineMessages 端套用統一 fallback「饕客」。
+  async function resolveRecipientName(userId, lineUserId) {
+    try {
+      if (userId) {
+        const r = await query(`SELECT line_display_name FROM users WHERE id = $1 LIMIT 1`, [userId]);
+        const n = r.rows[0] && String(r.rows[0].line_display_name || '').trim();
+        if (n) return n;
+      }
+      const luid = String(lineUserId || '').trim();
+      if (luid) {
+        const r = await query(`SELECT line_display_name FROM users WHERE line_user_id = $1 LIMIT 1`, [luid]);
+        const n = r.rows[0] && String(r.rows[0].line_display_name || '').trim();
+        if (n) return n;
+      }
+    } catch (e) {
+      console.error('flow resolveRecipientName failed:', e && e.message);
+    }
+    return null;
+  }
+
   // ---------- 發訊息 ----------
+  // 回傳 true=已送達 / false=失敗（暫時性，呼叫端應重試，不前進節點）。
+  // 設定錯誤（訊息不存在 / 內容組不出來）會 throw FlowConfigError，呼叫端直接標 failed。
   async function sendMessage(lineUserId, userId, messageId, opts = {}) {
-    if (!messageId) return false;
+    if (!messageId) throw new FlowConfigError('send_node_missing_message');
     const rs = await query(`SELECT message_config FROM admin_message_templates WHERE id = $1`, [messageId]);
-    if (rs.rowCount === 0) return false;
+    if (rs.rowCount === 0) throw new FlowConfigError('message_template_not_found');
     const cfg = rs.rows[0].message_config;
-    const built = buildLineMessages(cfg);
-    if (!built.ok) return false;
+    const recipientName = await resolveRecipientName(userId, lineUserId);
+    const built = buildLineMessages(cfg, { recipientName });
+    if (!built.ok) throw new FlowConfigError('message_build_failed:' + (built.error || ''));
     // 點擊追蹤：template 模式有 CTA 連結時，把連結換成 /rf/:enrollmentId/:messageId 中轉
     const origin = getOrigin();
     if (opts.enrollmentId && origin && cfg && cfg.mode === 'template' && cfg.template && cfg.template.ctaUrl) {
@@ -549,14 +601,18 @@ function createFlowEngine({ query, pool, linePush, buildLineMessages }) {
             }
           }
           const msgId = node.config && node.config.message_id;
-          await sendMessage(en.line_user_id, en.user_id, msgId, { enrollmentId: en.id, nodeKey: node.node_key });
+          // 推播失敗（暫時性）→ 丟 FlowTransientError，由 catch 排重試退避、不前進節點。
+          // 訊息設定錯誤 → sendMessage 內丟 FlowConfigError，由 catch 直接標 failed。
+          const sent = await sendMessage(en.line_user_id, en.user_id, msgId, { enrollmentId: en.id, nodeKey: node.node_key });
+          if (!sent) throw new FlowTransientError('line_push_failed');
           lastMsgId = msgId || lastMsgId;
           lastSentAt = new Date();
           nodeKey = node.next_key || null;
-          // 送出後立即落地進度，避免崩潰/逾時後從本 send 重跑（重發已送訊息）
+          // 送出成功 → 進度落地（含 retry_count/last_error 歸零），
+          // 避免崩潰/逾時後從本 send 重跑（重發已送訊息）。
           await query(
             `UPDATE admin_flow_enrollments SET current_node_key = $2, last_message_id = $3,
-                    last_message_sent_at = $4, updated_at = now() WHERE id = $1`,
+                    last_message_sent_at = $4, retry_count = 0, last_error = NULL, updated_at = now() WHERE id = $1`,
             [en.id, nodeKey, lastMsgId, lastSentAt.toISOString()]
           ).catch(e => console.error('flow send progress persist failed:', e.message));
           continue;
@@ -594,11 +650,36 @@ function createFlowEngine({ query, pool, linePush, buildLineMessages }) {
         [en.id, nodeKey, lastMsgId, lastSentAt]
       );
     } catch (err) {
-      console.error('flow processEnrollment error:', err && err.message);
-      await query(
-        `UPDATE admin_flow_enrollments SET status = 'failed', context = context || $2::jsonb, updated_at = now() WHERE id = $1`,
-        [en.id, JSON.stringify({ error: String(err && err.message || err).slice(0, 300) })]
-      ).catch(() => {});
+      const errMsg = String((err && err.message) || err || '').slice(0, 500);
+      console.error('flow processEnrollment error:', errMsg);
+      // 設定錯誤（FlowConfigError）→ 不可重試，直接標 failed。
+      if (err && err.permanent) {
+        await query(
+          `UPDATE admin_flow_enrollments
+           SET status = 'failed', last_error = $2, context = context || $3::jsonb, updated_at = now()
+           WHERE id = $1`,
+          [en.id, errMsg, JSON.stringify({ error: errMsg, failed_reason: 'config' })]
+        ).catch(() => {});
+        return;
+      }
+      // 暫時性錯誤（推播失敗 / DB 抖動）→ 重試退避；達上限才 failed。
+      const nextRetry = (Number(en.retry_count) || 0) + 1;
+      if (nextRetry >= SEND_MAX_RETRIES) {
+        await query(
+          `UPDATE admin_flow_enrollments
+           SET status = 'failed', retry_count = $2, last_error = $3, context = context || $4::jsonb, updated_at = now()
+           WHERE id = $1`,
+          [en.id, nextRetry, errMsg, JSON.stringify({ error: errMsg, failed_reason: 'max_retries' })]
+        ).catch(() => {});
+      } else {
+        const nextAt = new Date(Date.now() + backoffMs(nextRetry - 1));
+        await query(
+          `UPDATE admin_flow_enrollments
+           SET retry_count = $2, last_error = $3, next_run_at = $4, updated_at = now()
+           WHERE id = $1`,
+          [en.id, nextRetry, errMsg, nextAt.toISOString()]
+        ).catch(() => {});
+      }
     }
   }
 
@@ -610,7 +691,10 @@ function createFlowEngine({ query, pool, linePush, buildLineMessages }) {
   }
 
   // ---------- 推進到期的 enrollment（claim + 處理） ----------
-  async function advanceDue({ limit = 100 } = {}) {
+  // deadline：絕對時間（ms epoch）。每處理一筆前檢查，超時就停，
+  // 把已 claim 但還沒處理的剩餘筆數 next_run_at 重設成 now()，讓下個 cron tick 立刻接手
+  // （否則它們要等 10 分鐘的處理租約過期才會被重撈，等於漏拍）。
+  async function advanceDue({ limit = 100, deadline = null } = {}) {
     const client = await pool.connect();
     let claimed = [];
     try {
@@ -635,13 +719,30 @@ function createFlowEngine({ query, pool, linePush, buildLineMessages }) {
       throw e;
     }
     client.release();
-    for (const en of claimed) await processEnrollment(en);
-    return { processed: claimed.length };
+    let processed = 0;
+    let stoppedAt = -1;
+    for (let i = 0; i < claimed.length; i++) {
+      if (deadline && Date.now() >= deadline) { stoppedAt = i; break; }
+      await processEnrollment(claimed[i]);
+      processed++;
+    }
+    // 超時未處理的剩餘 claim → 釋放租約，下個 tick 立即重撈
+    if (stoppedAt >= 0 && stoppedAt < claimed.length) {
+      const leftover = claimed.slice(stoppedAt).map(e => e.id);
+      await query(
+        `UPDATE admin_flow_enrollments SET next_run_at = now(), updated_at = now()
+         WHERE id = ANY($1::bigint[]) AND status = 'active'`,
+        [leftover]
+      ).catch(e => console.error('flow advanceDue release leftover failed:', e.message));
+    }
+    return { processed, claimed: claimed.length, deadlineHit: stoppedAt >= 0 };
   }
 
   // ---------- cron 主入口 ----------
   async function run() {
-    const result = { scheduleEnrolled: 0, eventEnrolled: 0, advanced: 0 };
+    const startedAt = Date.now();
+    const deadline = startedAt + RUN_DEADLINE_MS;
+    const result = { scheduleEnrolled: 0, eventEnrolled: 0, advanced: 0, deadlineHit: false };
     try { result.scheduleEnrolled = await runScheduleTriggers(); } catch (e) { console.error('schedule trig err', e.message); }
     try {
       let ev = 0;
@@ -653,7 +754,11 @@ function createFlowEngine({ query, pool, linePush, buildLineMessages }) {
       ev += await runStreakRiskTriggers();
       result.eventEnrolled = ev;
     } catch (e) { console.error('event trig err', e.message); }
-    try { const a = await advanceDue({ limit: 100 }); result.advanced = a.processed; } catch (e) { console.error('advance err', e.message); }
+    try {
+      const a = await advanceDue({ limit: 100, deadline });
+      result.advanced = a.processed;
+      result.deadlineHit = !!a.deadlineHit;
+    } catch (e) { console.error('advance err', e.message); }
     return result;
   }
 

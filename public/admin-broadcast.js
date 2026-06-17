@@ -35,6 +35,52 @@
   };
 
   // ------------------------------------------------------------------
+  // 0b. 個人化變數提示：在標題 / 副標題欄位旁加「插入 {暱稱}」鈕
+  //     送出時系統會自動把 {暱稱} 換成每位收件人的 LINE 名稱（沒名稱時用「饕客」）。
+  // ------------------------------------------------------------------
+  function insertTokenAtCursor(input, token) {
+    if (!input) return;
+    var start = input.selectionStart;
+    var end = input.selectionEnd;
+    if (typeof start === 'number' && typeof end === 'number') {
+      input.value = input.value.slice(0, start) + token + input.value.slice(end);
+      var pos = start + token.length;
+      input.setSelectionRange(pos, pos);
+    } else {
+      input.value = input.value + token;
+    }
+    input.focus();
+    // 觸發既有的 input 監聽（草稿儲存 + 即時預覽）
+    input.dispatchEvent(new Event('input', { bubbles: true }));
+  }
+
+  function addPersonalizationHint(inputId, withButton) {
+    var input = $(inputId);
+    if (!input || input.dataset.personalizeHinted === '1') return;
+    input.dataset.personalizeHinted = '1';
+    var hint = document.createElement('div');
+    hint.style.cssText = 'display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-top:6px;font-size:12px;color:#6B6B70;';
+    if (withButton) {
+      var btn = document.createElement('button');
+      btn.type = 'button';
+      btn.textContent = '插入 {暱稱}';
+      btn.style.cssText = 'padding:3px 10px;border:1px solid #FCC726;background:#FFFBEB;color:#1f2937;border-radius:6px;font-size:12px;cursor:pointer;font-family:inherit;';
+      btn.addEventListener('click', function () { insertTokenAtCursor(input, '{暱稱}'); });
+      hint.appendChild(btn);
+    }
+    var txt = document.createElement('span');
+    txt.textContent = '可用 {暱稱}，送出時自動換成每個人的名稱（沒名稱用「饕客」），預覽顯示「饕客」。';
+    hint.appendChild(txt);
+    if (input.parentNode) input.parentNode.insertBefore(hint, input.nextSibling);
+  }
+
+  // 標題、副標題加按鈕；其他文字欄只加文字提示（避免畫面太擠）
+  addPersonalizationHint('tpl-title', true);
+  addPersonalizationHint('tpl-subtitle', true);
+  addPersonalizationHint('b-tpl-title', true);
+  addPersonalizationHint('b-tpl-subtitle', true);
+
+  // ------------------------------------------------------------------
   // 1. tabs
   // ------------------------------------------------------------------
   // 模式切換：details 展開 = flex_json mode；折疊 = template mode

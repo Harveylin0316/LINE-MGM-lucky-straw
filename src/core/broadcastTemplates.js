@@ -58,6 +58,51 @@ function clip(s, max) {
   return String(s == null ? '' : s).slice(0, max);
 }
 
+/**
+ * 個人化變數（系統共用 token）。
+ * 目前支援：{暱稱} 與 {name} → 替換成收件人的 LINE 顯示名稱。
+ * 收件人沒有名稱（空白）時 fallback 成「饕客」。
+ *
+ * 設計約定：
+ * - token 只在「逐人送出」時替換（buildLineMessages 收到 recipientName 才動作）。
+ * - 預覽 / 儲存階段不傳 recipientName，token 原樣保留（預覽端自行顯示「饕客」）。
+ * - 向後相容：沒傳 recipientName 時，applyPersonalization 完全不改字串。
+ */
+const PERSONALIZATION_FALLBACK_NAME = '饕客';
+// 同時吃半形大括號 {暱稱}/{name} 與全形括號 ｛暱稱｝（小白可能打到全形）
+const PERSONALIZATION_TOKEN_RE = /[{｛]\s*(?:暱稱|name)\s*[}｝]/gi;
+
+function resolveRecipientName(recipientName) {
+  const trimmed = String(recipientName == null ? '' : recipientName).trim();
+  return trimmed || PERSONALIZATION_FALLBACK_NAME;
+}
+
+function applyPersonalization(text, recipientName) {
+  if (recipientName == null) return text;            // 沒傳 → 完全不動（向後相容）
+  if (typeof text !== 'string' || text.indexOf('{') < 0 && text.indexOf('｛') < 0) return text;
+  const name = resolveRecipientName(recipientName);
+  return text.replace(PERSONALIZATION_TOKEN_RE, name);
+}
+
+/**
+ * 深walk Flex tree，對所有 text 元件的 text 欄做個人化替換。
+ * altText 也一併替換（push 通知列／聊天列表會顯示 altText）。
+ */
+function personalizeFlexTree(node, recipientName) {
+  if (!node || typeof node !== 'object') return;
+  if (Array.isArray(node)) {
+    node.forEach(function (n) { personalizeFlexTree(n, recipientName); });
+    return;
+  }
+  if (node.type === 'text' && typeof node.text === 'string') {
+    node.text = applyPersonalization(node.text, recipientName);
+  }
+  Object.keys(node).forEach(function (k) {
+    const v = node[k];
+    if (v && typeof v === 'object') personalizeFlexTree(v, recipientName);
+  });
+}
+
 function normalizeTemplateInput(raw) {
   const safe = raw && typeof raw === 'object' ? raw : {};
   const title = clip(String(safe.title || '').trim(), FIELD_LIMITS.title);
@@ -360,7 +405,7 @@ function stripEmptyTexts(node) {
   });
 }
 
-function buildLineMessages(messageConfig, { heroImageBaseUrl, broadcastId, variant, recipientId } = {}) {
+function buildLineMessages(messageConfig, { heroImageBaseUrl, broadcastId, variant, recipientId, recipientName } = {}) {
   const variantSuffix = variant === 'a' || variant === 'b' ? `?v=${variant}` : '';
   // recipient id segment：有提供就嵌入 URL，後續 track endpoint 可寫入 line_user_id 對應
   const rSeg = (recipientId != null && Number.isFinite(Number(recipientId))) ? `/${Number(recipientId)}` : '';
@@ -396,6 +441,14 @@ function buildLineMessages(messageConfig, { heroImageBaseUrl, broadcastId, varia
     // Clone 後移除 placeholder image + 空 text + bullet normalize + clipboard auto-sync
     const cloned = JSON.parse(JSON.stringify(flex));
     stripPlaceholderImages(cloned.contents);
+    // 個人化要在 stripEmptyTexts 之前做：替換後仍可能有空字串（理論上不會），
+    // 也要在 contents 與 altText 兩處替換
+    if (recipientName != null) {
+      personalizeFlexTree(cloned.contents, recipientName);
+      if (typeof cloned.altText === 'string') {
+        cloned.altText = applyPersonalization(cloned.altText, recipientName);
+      }
+    }
     stripEmptyTexts(cloned.contents);
     postProcessFlexTree(cloned.contents);
     return { ok: true, messages: [cloned] };
@@ -404,6 +457,16 @@ function buildLineMessages(messageConfig, { heroImageBaseUrl, broadcastId, varia
   const t = normalizeTemplateInput(messageConfig.template || {});
   const v = validateTemplateInput(t);
   if (!v.ok) return { ok: false, error: v.error };
+
+  // 個人化：替換 title / subtitle / disclaimer / ctaLabel / altText 內的 {暱稱}/{name}
+  // （couponCode 是優惠碼、ctaUrl 是連結，不替換）。recipientName 沒傳就完全不動。
+  if (recipientName != null) {
+    v.value.title = applyPersonalization(v.value.title, recipientName);
+    v.value.subtitle = applyPersonalization(v.value.subtitle, recipientName);
+    v.value.disclaimer = applyPersonalization(v.value.disclaimer, recipientName);
+    v.value.ctaLabel = applyPersonalization(v.value.ctaLabel, recipientName);
+    v.value.altText = applyPersonalization(v.value.altText, recipientName);
+  }
 
   // Hero 圖選擇邏輯：
   //   user 上傳 → 用 user 的
@@ -448,9 +511,12 @@ module.exports = {
   COLORS,
   DEFAULT_BRAND_BAR_MEDIA_ID,
   DEFAULT_BRAND_BAR_ASPECT_RATIO,
+  PERSONALIZATION_FALLBACK_NAME,
   isValidHttpUrl,
   normalizeTemplateInput,
   validateTemplateInput,
   buildYellowFlexFromTemplate,
+  applyPersonalization,
+  resolveRecipientName,
   buildLineMessages
 };

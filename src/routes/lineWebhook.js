@@ -75,6 +75,8 @@ function createLineWebhookHandler({
        ORDER BY priority ASC, id ASC`
     );
     for (const rule of rs.rows) {
+      // 兜底規則（fallback）不在這裡比對：它是「所有關鍵字都沒命中」時的 catch-all，由 matchFallbackRule 處理
+      if (rule.match_type === 'fallback') continue;
       const kws = String(rule.keywords || '')
         .split(',')
         .map(s => s.trim().toLowerCase())
@@ -86,6 +88,19 @@ function createLineWebhookHandler({
       if (hit) return rule;
     }
     return null;
+  }
+
+  // 兜底回覆：所有關鍵字都沒命中時，找一條 match_type='fallback' 的 active 規則當 catch-all。
+  // 最多一條生效（priority 最小、其次 id 最小），keywords 內容忽略。
+  async function matchFallbackRule() {
+    const rs = await pool.query(
+      `SELECT id, keywords, match_type, message_template_id
+       FROM admin_keyword_replies
+       WHERE is_active = true AND match_type = 'fallback' AND message_template_id IS NOT NULL
+       ORDER BY priority ASC, id ASC
+       LIMIT 1`
+    );
+    return rs.rows[0] || null;
   }
 
   // 公開網域（給訊息庫模板 hero 圖組 https 網址；同 flowEngine.getOrigin 的來源）
@@ -145,11 +160,15 @@ function createLineWebhookHandler({
           let krResult = 'keyword_no_match';
           let krDetail = null;
           try {
-            const rule = await matchKeywordRule(event?.message?.text);
+            // 先比對一般關鍵字規則；都沒命中再退到兜底（fallback）規則
+            const rule = await matchKeywordRule(event?.message?.text) || await matchFallbackRule();
             if (rule) {
               const sent = await replyKeywordTemplate(rule, event.replyToken, event?.source?.userId || null);
-              krResult = sent ? 'keyword_replied' : 'keyword_reply_failed';
-              krDetail = ('rule#' + rule.id + ' keywords=' + String(rule.keywords || '')).slice(0, 300);
+              const isFallback = rule.match_type === 'fallback';
+              krResult = sent
+                ? (isFallback ? 'keyword_fallback_replied' : 'keyword_replied')
+                : (isFallback ? 'keyword_fallback_reply_failed' : 'keyword_reply_failed');
+              krDetail = ((isFallback ? 'fallback rule#' : 'rule#') + rule.id + ' keywords=' + String(rule.keywords || '')).slice(0, 300);
               if (sent) {
                 // 命中次數 +1：fire-and-forget，失敗不影響回覆
                 pool

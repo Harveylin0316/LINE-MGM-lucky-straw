@@ -4,6 +4,14 @@
     isAdmin: isAdmin,
     bodyClass: bodyClass,
     body: `
+    <section class="card db-alert" id="db-alert" hidden>
+      <div class="db-alert-head">
+        <span class="db-alert-dot"></span>
+        <h2 class="db-alert-title">需要你注意</h2>
+      </div>
+      <div class="db-alert-items" id="db-alert-items"></div>
+    </section>
+
     <section class="card">
       <h1 style="margin-bottom:4px;">歡迎回來</h1>
       <p class="muted" style="line-height:1.7;">這裡是 OpenRice LINE CRM 後台。想發訊息給會員，照下面三步驟走就對了。</p>
@@ -81,6 +89,17 @@
     </section>
 
     <style>
+      .db-alert{border:1px solid #fca5a5;background:#fef2f2;}
+      .db-alert[hidden]{display:none !important;}
+      .db-alert-head{display:flex;align-items:center;gap:8px;margin-bottom:10px;}
+      .db-alert-dot{width:10px;height:10px;border-radius:50%;background:#E11D27;flex-shrink:0;}
+      .db-alert-title{margin:0;font-size:16px;color:#991b1b;}
+      .db-alert-items{display:flex;flex-direction:column;gap:8px;}
+      .db-alert-item{display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap;padding:10px 12px;border:1px solid #fecaca;border-radius:8px;background:#fff;}
+      .db-alert-item .t{font-size:14px;color:#1f2937;}
+      .db-alert-item .t b{color:#E11D27;font-variant-numeric:tabular-nums;}
+      .db-alert-item a{font-size:13px;font-weight:600;color:#1f2937;background:#FFFBEB;border:1px solid #FCC726;border-radius:999px;padding:5px 12px;text-decoration:none;white-space:nowrap;}
+      .db-alert-item a:hover{background:#fff7d6;text-decoration:none;}
       .db-stats{display:grid;grid-template-columns:repeat(auto-fit,minmax(140px,1fr));gap:10px;margin-top:16px;}
       .db-stat{border:1px solid #ECECEE;border-radius:10px;padding:14px;background:#FAFAFA;}
       .db-stat .v{font-size:26px;font-weight:700;color:#1f2937;font-variant-numeric:tabular-nums;letter-spacing:-0.02em;}
@@ -122,7 +141,28 @@
           }else{
             $('st-last').textContent='還沒發過訊息';
           }
+          renderAlerts(d.alerts||{});
         }).catch(function(){});
+
+        function renderAlerts(al){
+          var items=[];
+          if((al.push_failed_24h||0)>0){
+            items.push({n:al.push_failed_24h,label:'則推播在過去 24 小時內發送失敗',href:'/admin/reports',cta:'看推播紀錄'});
+          }
+          if((al.broadcasts_failed||0)>0){
+            items.push({n:al.broadcasts_failed,label:'個群發批次發送失敗',href:'/admin/broadcast/history',cta:'看發送紀錄'});
+          }
+          if((al.referral_unrewarded||0)>0){
+            items.push({n:al.referral_unrewarded,label:'位成功邀請的好友尚未發出獎勵',href:'/admin/referrals',cta:'看邀請成效'});
+          }
+          var box=$('db-alert'); var list=$('db-alert-items');
+          if(!items.length){ box.hidden=true; return; }
+          list.innerHTML=items.map(function(it){
+            return '<div class="db-alert-item"><span class="t"><b>'+num(it.n)+'</b> '+it.label+'</span>'+
+              '<a href="'+it.href+'">'+it.cta+'</a></div>';
+          }).join('');
+          box.hidden=false;
+        }
       })();
     </script>
     `

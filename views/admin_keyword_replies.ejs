@@ -45,7 +45,7 @@
           <button type="button" class="kr-modal-close" id="rule-modal-close">×</button>
         </div>
         <div class="kr-grid">
-          <label class="kr-field">
+          <label class="kr-field" id="kr-keywords-field">
             <span>關鍵字（逗號分隔多個，命中任一即回覆）*</span>
             <input type="text" id="kr-keywords" placeholder="優惠, 折扣, coupon" maxlength="500" />
           </label>
@@ -54,7 +54,9 @@
             <select id="kr-match-type">
               <option value="contains">包含（訊息文字含有任一關鍵字）</option>
               <option value="exact">完全相同（訊息文字等於任一關鍵字）</option>
+              <option value="fallback">兜底（沒命中任何關鍵字時回覆）</option>
             </select>
+            <div class="muted" id="kr-fallback-hint" style="font-size:12px;display:none;">兜底規則不需要關鍵字。只有在所有關鍵字規則都沒命中時才回覆，最多一條生效（優先序最小者）。</div>
           </label>
           <label class="kr-field">
             <span>回覆訊息（從訊息庫選擇）*</span>
@@ -92,6 +94,7 @@
       }
 
       function matchTypeLabel(t) {
+        if (t === 'fallback') return '兜底';
         return t === 'exact' ? '完全相同' : '包含';
       }
 
@@ -135,8 +138,11 @@
           var tplName = r.template_name
             ? esc(r.template_name)
             : '<span style="color:#E11D27;">（訊息已刪除，此規則不會回覆）</span>';
+          var kwCell = r.match_type === 'fallback'
+            ? '<span style="color:#6B6B70;">（兜底：沒命中任何關鍵字時回覆）</span>'
+            : esc(r.keywords);
           return '<tr data-id="' + r.id + '">' +
-            '<td><div class="kr-keywords">' + esc(r.keywords) + '</div>' +
+            '<td><div class="kr-keywords">' + kwCell + '</div>' +
               '<div class="muted" style="font-size:11px;">優先序 ' + (r.priority == null ? 100 : r.priority) + '</div></td>' +
             '<td>' + matchTypeLabel(r.match_type) + '</td>' +
             '<td>' + tplName + '</td>' +
@@ -204,31 +210,46 @@
 
       // ---- modal ----
       var modal = $('rule-modal');
+      // 依比對方式切換：兜底不需要關鍵字 → 隱藏關鍵字欄、顯示說明
+      function syncFallbackUi() {
+        var isFallback = $('kr-match-type').value === 'fallback';
+        $('kr-keywords-field').style.display = isFallback ? 'none' : '';
+        $('kr-fallback-hint').style.display = isFallback ? '' : 'none';
+      }
       function openModal(rule) {
         editingId = rule ? rule.id : null;
         $('rule-modal-title').textContent = rule ? '編輯規則' : '新增規則';
         $('kr-keywords').value = rule ? (rule.keywords || '') : '';
-        $('kr-match-type').value = rule && rule.match_type === 'exact' ? 'exact' : 'contains';
+        $('kr-match-type').value = rule && (rule.match_type === 'exact' || rule.match_type === 'fallback')
+          ? rule.match_type
+          : 'contains';
         $('kr-template').value = rule && rule.message_template_id ? String(rule.message_template_id) : '';
         $('kr-priority').value = rule && rule.priority != null ? rule.priority : 100;
         $('kr-active').checked = rule ? !!rule.is_active : true;
         $('kr-status').textContent = '';
+        syncFallbackUi();
         modal.hidden = false;
-        setTimeout(function () { $('kr-keywords').focus(); }, 50);
+        setTimeout(function () {
+          if ($('kr-match-type').value === 'fallback') { $('kr-template').focus(); }
+          else { $('kr-keywords').focus(); }
+        }, 50);
       }
+      $('kr-match-type').addEventListener('change', syncFallbackUi);
       function closeModal() { modal.hidden = true; editingId = null; }
       $('btn-new-rule').addEventListener('click', function () { openModal(null); });
       $('rule-modal-close').addEventListener('click', closeModal);
       $('kr-cancel').addEventListener('click', closeModal);
 
       $('kr-save').addEventListener('click', function () {
+        var matchType = $('kr-match-type').value;
+        var isFallback = matchType === 'fallback';
         var keywords = $('kr-keywords').value.trim();
         var templateId = $('kr-template').value;
-        if (!keywords) { $('kr-status').textContent = '請填寫關鍵字'; return; }
+        if (!isFallback && !keywords) { $('kr-status').textContent = '請填寫關鍵字'; return; }
         if (!templateId) { $('kr-status').textContent = '請選擇回覆訊息'; return; }
         var payload = {
-          keywords: keywords,
-          match_type: $('kr-match-type').value,
+          keywords: isFallback ? '' : keywords,
+          match_type: matchType,
           message_template_id: Number(templateId),
           priority: Number($('kr-priority').value),
           is_active: $('kr-active').checked

@@ -285,6 +285,79 @@ function registerAdminFlowsRoutes(app, deps) {
     }
   });
 
+  // ---------- 健康狀態（讓 GM 看得到「漏人」） ----------
+  // 卡住定義：active 但 next_run_at 已過期很久（預設超過 30 分鐘 = cron 跑 6 次都沒推進）。
+  const STUCK_OVERDUE_MINUTES = 30;
+  // node.type → 人話（讓 GM 看得懂卡在哪一步，不用懂 node_key）
+  function nodeTypeLabel(type) {
+    return ({ send: '發訊息', wait: '等待', branch: '條件分支', add_to_list: '加入名單', end: '結束' })[type] || (type || '未知步驟');
+  }
+  app.get('/admin/flows/api/health', requireAdmin, async (_req, res) => {
+    try {
+      // 各流程：失敗數 + 卡住數（active 且過期超過門檻）
+      const summary = await query(
+        `SELECT f.id, f.name,
+                COUNT(*) FILTER (WHERE e.status = 'failed')::int AS failed_count,
+                COUNT(*) FILTER (
+                  WHERE e.status = 'active'
+                    AND e.next_run_at < now() - make_interval(mins => $1)
+                )::int AS stuck_count
+         FROM admin_flows f
+         LEFT JOIN admin_flow_enrollments e ON e.flow_id = f.id
+         GROUP BY f.id, f.name
+         ORDER BY f.id DESC`,
+        [STUCK_OVERDUE_MINUTES]
+      );
+      // 近期 failed 清單（最多 50 筆）：流程名、用戶（暱稱優先）、卡在哪步、錯誤、重試次數
+      const recent = await query(
+        `SELECT e.id, e.flow_id, f.name AS flow_name, e.line_user_id,
+                COALESCE(NULLIF(BTRIM(u.line_display_name), ''), NULLIF(BTRIM(u.username), '')) AS display_name,
+                e.current_node_key, n.type AS node_type,
+                e.retry_count, e.last_error, e.updated_at
+         FROM admin_flow_enrollments e
+         JOIN admin_flows f ON f.id = e.flow_id
+         LEFT JOIN users u ON u.line_user_id = e.line_user_id
+         LEFT JOIN admin_flow_nodes n ON n.flow_id = e.flow_id AND n.node_key = e.current_node_key
+         WHERE e.status = 'failed'
+         ORDER BY e.updated_at DESC NULLS LAST, e.id DESC
+         LIMIT 50`
+      );
+      const recentRows = recent.rows.map(r => ({
+        id: r.id,
+        flow_id: r.flow_id,
+        flow_name: r.flow_name,
+        user: r.display_name || r.line_user_id || '（未知用戶）',
+        step_label: nodeTypeLabel(r.node_type),
+        retry_count: Number(r.retry_count) || 0,
+        last_error: r.last_error || '',
+        updated_at: r.updated_at
+      }));
+      return res.json({ ok: true, flows: summary.rows, recentFailed: recentRows, stuckOverdueMinutes: STUCK_OVERDUE_MINUTES });
+    } catch (err) {
+      return jsonErr(res, 500, 'health_failed', { detail: err && err.message });
+    }
+  });
+
+  // ---------- 重試這個流程的所有 failed ----------
+  // 把 failed 的 enrollment 設回 active、next_run_at = now()、retry_count 歸 0、清 last_error。
+  // 下個 cron tick（或按「手動推進一次」）就會重新嘗試發送。
+  app.post('/admin/flows/api/:id/retry-failed', requireAdmin, async (req, res) => {
+    const idStr = String(req.params.id || '').trim();
+    if (!isPosInt(idStr)) return jsonErr(res, 400, 'invalid_id');
+    try {
+      const rs = await query(
+        `UPDATE admin_flow_enrollments
+         SET status = 'active', next_run_at = now(), retry_count = 0, last_error = NULL, updated_at = now()
+         WHERE flow_id = $1 AND status = 'failed'
+         RETURNING id`,
+        [Number(idStr)]
+      );
+      return res.json({ ok: true, retried: rs.rowCount });
+    } catch (err) {
+      return jsonErr(res, 500, 'retry_failed_failed', { detail: err && err.message });
+    }
+  });
+
   // ---------- 單一 ----------
   app.get('/admin/flows/api/:id', requireAdmin, async (req, res) => {
     const idStr = String(req.params.id || '').trim();

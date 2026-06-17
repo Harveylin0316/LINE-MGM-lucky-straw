@@ -20,9 +20,9 @@
 [functions."scheduled-monthly-leaderboard"]
   schedule = "30 3 1 * *"
 
-# 每 5 分鐘推進自動化流程引擎
+# 每 5 分鐘推進自動化流程引擎（與全好友推播 sweep 錯開 2 分鐘，避免同分鐘搶 DB 連線池）
 [functions."scheduled-flow-runner"]
-  schedule = "*/5 * * * *"
+  schedule = "2-59/5 * * * *"
 
 [[redirects]]
   from = "/style.css"

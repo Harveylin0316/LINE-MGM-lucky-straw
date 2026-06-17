@@ -20,6 +20,28 @@
       .navgrp-menu a:hover { background: #F9FAFB; }
       .navgrp-menu a.active { background: #FFFBEB; color: #1f2937; font-weight: 700; }
       .navgrp-btn.has-active { color: #FCC726; }
+
+      /* 手機漢堡按鈕：桌機隱藏，窄螢幕才出現 */
+      .nav-toggle { display: none; }
+      .nav-toggle-btn { width: 40px; height: 36px; border: 0; background: none; cursor: pointer; padding: 8px; }
+      .nav-toggle-btn .bar { display: block; width: 100%; height: 2px; background: #d1d5db; border-radius: 2px; transition: transform .2s, opacity .2s; }
+      .nav-toggle-btn .bar + .bar { margin-top: 5px; }
+      .nav-toggle-btn[aria-expanded="true"] .bar:nth-child(1) { transform: translateY(7px) rotate(45deg); }
+      .nav-toggle-btn[aria-expanded="true"] .bar:nth-child(2) { opacity: 0; }
+      .nav-toggle-btn[aria-expanded="true"] .bar:nth-child(3) { transform: translateY(-7px) rotate(-45deg); }
+
+      @media (max-width: 640px) {
+        .nav-toggle { display: inline-flex; align-items: center; }
+        /* 窄螢幕：nav 預設收起，點漢堡才展開（直向堆疊） */
+        .topbar-nav { display: none; width: 100%; flex-direction: column; align-items: stretch; gap: 4px; margin-top: 10px; }
+        .topbar-nav.nav-open { display: flex; }
+        .topbar-inner { flex-wrap: wrap; }
+        .navgrp { display: block; }
+        .navgrp-btn { width: 100%; justify-content: space-between; padding: 12px 4px; }
+        /* 手機展開時下拉選單改為內嵌、不浮動，避免超出畫面 */
+        .navgrp.open .navgrp-menu { position: static; margin-top: 0; box-shadow: none; border: 0; padding: 4px 0 4px 12px; min-width: 0; }
+        .navgrp-menu::before { display: none; }
+      }
     </style>
   </head>
   <body class="<%= typeof bodyClass === 'string' && bodyClass.trim() ? bodyClass.trim() : '' %>">
@@ -32,7 +54,14 @@
           <span class="brand-text">OpenRice LINE CRM</span>
           <% } %>
         </div>
-        <nav class="topbar-nav" aria-label="主選單">
+        <% if (user) { %>
+        <div class="nav-toggle">
+          <button type="button" class="nav-toggle-btn" id="nav-toggle-btn" aria-label="開關選單" aria-expanded="false" aria-controls="topbar-nav">
+            <span class="bar"></span><span class="bar"></span><span class="bar"></span>
+          </button>
+        </div>
+        <% } %>
+        <nav class="topbar-nav" id="topbar-nav" aria-label="主選單">
           <% if (user) { %>
           <span class="welcome">嗨，<%= user %></span>
           <% if (isAdmin) { %>
@@ -41,6 +70,7 @@
             <div class="navgrp-menu">
               <a href="/admin/broadcast">群發訊息</a>
               <a href="/admin/broadcast/history">發送紀錄</a>
+              <a href="/admin/reports">成效報表</a>
               <a href="/admin/messages">訊息庫</a>
               <a href="/admin/flows">自動化流程</a>
               <a href="/admin/keyword-replies">關鍵字回覆</a>
@@ -113,6 +143,19 @@
         });
         document.addEventListener('click', function () { closeAll(null); });
         document.addEventListener('keydown', function (e) { if (e.key === 'Escape') closeAll(null); });
+
+        // 手機漢堡：點按鈕開關整個 nav（桌機 CSS 不顯示此按鈕，行為不受影響）
+        var navToggle = document.getElementById('nav-toggle-btn');
+        var topbarNav = document.getElementById('topbar-nav');
+        if (navToggle && topbarNav) {
+          navToggle.addEventListener('click', function (e) {
+            e.stopPropagation();
+            var willOpen = !topbarNav.classList.contains('nav-open');
+            topbarNav.classList.toggle('nav-open', willOpen);
+            navToggle.setAttribute('aria-expanded', willOpen ? 'true' : 'false');
+            if (!willOpen) closeAll(null);
+          });
+        }
       })();
     </script>
   </body>

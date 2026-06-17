@@ -61,7 +61,12 @@
         只有「模板模式」會追蹤；進階 Flex JSON 由你自行用 utm 追蹤。
       </p>
 
-      ${abStat && abStat.length > 0 ? `
+      ${abStat && abStat.length > 0 ? (() => {
+        const clicksA = (abStat.find(x => x.variant === 'a') || {}).clicks || 0;
+        const clicksB = (abStat.find(x => x.variant === 'b') || {}).clicks || 0;
+        const winner = clicksB > clicksA ? 'B' : 'A';
+        const isTie = clicksA === clicksB;
+        return `
         <h2 style="margin-top:24px;">A/B Test 對比</h2>
         <p class="muted" style="font-size:13px;margin-bottom:10px;">收件人隨機切兩半，A/B 各收一版訊息，比較開信率與點擊率找出更好的版本。</p>
         <div class="ab-grid">
@@ -69,8 +74,9 @@
             const sent = v.sent_ok || 0;
             const openRate = sent > 0 ? Math.round((v.views / sent) * 100) : 0;
             const clickRate = sent > 0 ? Math.round((v.clicks / sent) * 100) : 0;
-            return `<div class="ab-cell">
-              <div class="ab-cell-head">版本 ${String(v.variant || '?').toUpperCase()}</div>
+            const isWin = String(v.variant || '').toUpperCase() === winner;
+            return `<div class="ab-cell${isWin ? ' ab-cell--winner' : ''}">
+              <div class="ab-cell-head">版本 ${String(v.variant || '?').toUpperCase()}${isWin ? ' <span class="ab-win-tag">點擊較高</span>' : ''}</div>
               <div class="ab-cell-row"><span class="ab-cell-label">收件人</span><span class="ab-cell-val">${v.sent_total}</span></div>
               <div class="ab-cell-row"><span class="ab-cell-label">送達成功</span><span class="ab-cell-val">${v.sent_ok}</span></div>
               <div class="ab-cell-row"><span class="ab-cell-label">送達失敗</span><span class="ab-cell-val">${v.sent_fail}</span></div>
@@ -79,7 +85,18 @@
             </div>`;
           }).join('')}
         </div>
-      ` : ''}
+        <div class="ab-winner-block">
+          <div>
+            <div style="font-weight:600;color:#1f2937;">勝出版：版本 ${winner}${isTie ? '（兩版點擊一樣多，預設用 A）' : '（CTA 點擊較多）'}</div>
+            <div class="muted" style="font-size:12px;margin-top:4px;">用這版重發給「已送達但沒點」的人。系統會建立一個新批次，幾分鐘內自動送出。</div>
+          </div>
+          <div style="display:flex;flex-direction:column;align-items:flex-end;gap:6px;">
+            <button type="button" class="btn btn-resend-winner" id="btn-resend-winner">以勝出版（版本 ${winner}）重發給未點擊者</button>
+            <span id="resend-winner-status" class="muted" style="font-size:12px;"></span>
+          </div>
+        </div>
+      `;
+      })() : ''}
 
       ${broadcast.recipient_fail > 0 && broadcast.status !== 'running' ? `
         <div class="resend-block">
@@ -220,6 +237,19 @@
       .ab-cell-row--highlight { background: #FFFBEB; padding: 6px 8px; border-radius: 6px; margin: 2px 0; }
       .ab-cell-label { color: #6b7280; }
       .ab-cell-val { font-weight: 600; color: #1f2937; }
+      .ab-cell--winner { border-color: #FCC726; background: #FFFBEB; box-shadow: 0 0 0 1px #FCC726 inset; }
+      .ab-win-tag {
+        display: inline-block; margin-left: 6px; padding: 1px 8px; border-radius: 999px;
+        background: #FCC726; color: #1f2937; font-size: 11px; font-weight: 700; vertical-align: middle;
+      }
+      .ab-winner-block {
+        display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 12px;
+        margin-top: 14px; padding: 14px 16px; background: #FFFBEB;
+        border: 1px solid #FCC726; border-radius: 10px;
+      }
+      .btn-resend-winner { background: #FCC726; color: #1f2937; font-weight: 600; border: none; cursor: pointer; }
+      .btn-resend-winner:hover { background: #f5b800; }
+      .btn-resend-winner:disabled { opacity: 0.6; cursor: default; }
     </style>
 
     <!-- 匯出收件人到名單庫 modal -->
@@ -336,6 +366,37 @@
             .catch(function (e) {
               saveBtn.disabled = false;
               statusEl.textContent = '錯誤：' + e.message;
+            });
+        });
+      })();
+    </script>
+
+    <script>
+      // A/B：以勝出版重發給未點擊者
+      (function () {
+        var btn = document.getElementById('btn-resend-winner');
+        if (!btn) return;
+        var statusEl = document.getElementById('resend-winner-status');
+        btn.addEventListener('click', function () {
+          if (!confirm('將以勝出版重發給「已送達但沒點 CTA」的人，系統會建立一個新批次並在幾分鐘內自動送出。確認？')) return;
+          btn.disabled = true;
+          statusEl.textContent = '建立中…';
+          fetch('/admin/broadcast/${broadcast.id}/resend-winner-to-nonclickers', { method: 'POST' })
+            .then(function (r) { return r.json(); })
+            .then(function (data) {
+              if (data.ok) {
+                statusEl.innerHTML =
+                  '已建立重發批次 #' + data.newBroadcastId + '（' + data.total + ' 人）。系統會在幾分鐘內自動送出。 ' +
+                  '<a href="/admin/broadcast/' + data.newBroadcastId + '" style="color:#2563eb;font-weight:600;">查看新批次</a>';
+              } else {
+                var msg = data.detail || data.error || '未知錯誤';
+                statusEl.textContent = '失敗：' + msg;
+                btn.disabled = false;
+              }
+            })
+            .catch(function (e) {
+              statusEl.textContent = '網路錯誤：' + e.message;
+              btn.disabled = false;
             });
         });
       })();

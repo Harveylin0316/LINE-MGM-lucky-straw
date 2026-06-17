@@ -26,6 +26,16 @@
       <div id="rfm-stats" style="margin-top:14px;"><p class="muted">載入中…</p></div>
     </section>
 
+    <section class="card">
+      <h2 style="margin:0;">建立分群名單</h2>
+      <p class="muted" style="margin-top:6px;line-height:1.7;">
+        選一個分群，系統會挑出「對得到本 OA、現在就發得出去的人」建成一份名單，之後在群發訊息直接選用。<br>
+        <strong>每個分群下方的「實際可發」是真正能收到 LINE 的人數，通常遠小於 RFM 總筆數（多數名單還沒連到 LINE 好友）。</strong>
+      </p>
+      <div id="rfm-seg-list" style="margin-top:14px;display:grid;gap:12px;"></div>
+      <p id="rfm-seg-msg" class="muted" style="margin-top:12px;font-size:13px;"></p>
+    </section>
+
     <style>
       .rfm-stat-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:10px;}
       .rfm-stat{border:1px solid #ECECEE;border-radius:10px;padding:14px;background:#FAFAFA;}
@@ -36,6 +46,14 @@
       .rl-primary-btn{padding:9px 16px;background:#FCC726;color:#1f2937;font-weight:600;border:none;border-radius:7px;cursor:pointer;font-size:14px;}
       .rl-primary-btn:disabled{opacity:.5;cursor:not-allowed;}
       .rl-secondary-btn{padding:6px 12px;background:#fff;border:1px solid #ECECEE;border-radius:6px;font-size:12px;cursor:pointer;color:#374151;}
+      .rfm-seg{border:1px solid #ECECEE;border-radius:10px;padding:16px;display:flex;align-items:center;justify-content:space-between;gap:16px;flex-wrap:wrap;}
+      .rfm-seg .seg-name{font-size:15px;font-weight:700;color:#1f2937;}
+      .rfm-seg .seg-rule{font-size:12px;color:#6B6B70;margin-top:3px;}
+      .rfm-seg .seg-count{font-size:13px;color:#374151;margin-top:8px;}
+      .rfm-seg .seg-count b{font-size:22px;color:#1f2937;font-variant-numeric:tabular-nums;}
+      .rfm-seg .seg-zero b{color:#E11D27;}
+      .rfm-seg-actions{display:flex;align-items:center;gap:10px;flex-wrap:wrap;}
+      .rl-link{color:#1f2937;font-weight:600;text-decoration:underline;font-size:13px;}
     </style>
 
     <script>
@@ -110,6 +128,73 @@
         }
         $('rfm-refresh').addEventListener('click',loadStats);
         loadStats();
+
+        // ---- 分群一鍵生成名單 ----
+        var SEGMENTS=[
+          {preset:'high_value',name:'高價值客',rule:'90 天內來過、累積消費 3 次以上'},
+          {preset:'recent_active',name:'近期活躍客',rule:'30 天內來過'},
+          {preset:'dormant',name:'沉睡客',rule:'超過 1 年沒來'}
+        ];
+        function esc(s){return String(s==null?'':s).replace(/[&<>"]/g,function(c){return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c];});}
+        function renderSegs(){
+          var box=$('rfm-seg-list');
+          if(!box)return;
+          var h='';
+          for(var i=0;i<SEGMENTS.length;i++){
+            var s=SEGMENTS[i];
+            h+='<div class="rfm-seg" data-preset="'+esc(s.preset)+'">'+
+                 '<div>'+
+                   '<div class="seg-name">'+esc(s.name)+'</div>'+
+                   '<div class="seg-rule">'+esc(s.rule)+'</div>'+
+                   '<div class="seg-count" data-role="count">實際可發：<span class="muted">計算中…</span></div>'+
+                 '</div>'+
+                 '<div class="rfm-seg-actions">'+
+                   '<button type="button" class="rl-primary-btn" data-role="create" disabled>建成名單</button>'+
+                 '</div>'+
+               '</div>';
+          }
+          box.innerHTML=h;
+          var cards=box.querySelectorAll('.rfm-seg');
+          for(var j=0;j<cards.length;j++){ bindSeg(cards[j]); }
+        }
+        function bindSeg(card){
+          var preset=card.getAttribute('data-preset');
+          var countEl=card.querySelector('[data-role="count"]');
+          var createBtn=card.querySelector('[data-role="create"]');
+          // 先 preview 拿可發人數
+          fetch('/admin/rfm/api/segment-preview?preset='+encodeURIComponent(preset))
+            .then(function(r){return r.json();}).then(function(d){
+              if(!d.ok){countEl.innerHTML='實際可發：<span class="muted">無法計算</span>';return;}
+              var n=Number(d.sendable||0);
+              if(n>0){
+                countEl.classList.remove('seg-zero');
+                countEl.innerHTML='實際可發：<b>'+n.toLocaleString()+'</b> 人';
+                createBtn.disabled=false;
+              }else{
+                countEl.classList.add('seg-zero');
+                countEl.innerHTML='實際可發：<b>0</b> 人（目前沒人連到 LINE，建不出名單）';
+                createBtn.disabled=true;
+              }
+            }).catch(function(){countEl.innerHTML='實際可發：<span class="muted">無法計算</span>';});
+          // 建成名單
+          createBtn.addEventListener('click',function(){
+            createBtn.disabled=true;
+            var msg=$('rfm-seg-msg'); msg.textContent='建立中…';
+            fetch('/admin/rfm/api/segment-to-list',{
+              method:'POST',headers:{'Content-Type':'application/json'},
+              body:JSON.stringify({preset:preset})
+            }).then(function(r){return r.json();}).then(function(d){
+              if(!d.ok){
+                msg.textContent='建立失敗：'+(d.detail||d.error||'');
+                createBtn.disabled=false;return;
+              }
+              msg.innerHTML='已建立名單「'+esc(d.list_name)+'」（'+Number(d.inserted||0).toLocaleString()+' 人），可到群發訊息選用。 '+
+                '<a class="rl-link" href="/admin/broadcast">前往群發訊息</a>';
+              createBtn.disabled=false;
+            }).catch(function(e){msg.textContent='錯誤：'+e.message;createBtn.disabled=false;});
+          });
+        }
+        renderSegs();
       })();
     </script>
     `

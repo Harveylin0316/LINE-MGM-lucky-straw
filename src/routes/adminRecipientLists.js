@@ -56,6 +56,50 @@ function registerAdminRecipientListsRoutes(app, deps) {
     }
   });
 
+  // ----- 所有名單的「實際可發」拆解（列表頁用，一次撈齊）-----
+  //   口徑與單一名單 detail 的 breakdown 完全一致（對齊 broadcastAudience LINE_FILTER）。
+  //   回傳 { ok, breakdowns: { [listId]: { line_sendable, email_only, unknown } } }
+  app.get('/admin/recipient-lists/api/breakdowns', requireAdmin, async (req, res) => {
+    try {
+      const rs = await query(
+        `SELECT m.list_id,
+           COUNT(*) FILTER (
+             WHERE m.line_user_id IS NOT NULL AND BTRIM(m.line_user_id) <> ''
+               AND (u.blocked_at IS NULL OR u.id IS NULL)
+           )::int AS line_sendable,
+           COUNT(*) FILTER (
+             WHERE NOT (
+               m.line_user_id IS NOT NULL AND BTRIM(m.line_user_id) <> ''
+               AND (u.blocked_at IS NULL OR u.id IS NULL)
+             )
+             AND m.email IS NOT NULL AND BTRIM(m.email) <> ''
+           )::int AS email_only,
+           COUNT(*) FILTER (
+             WHERE NOT (
+               m.line_user_id IS NOT NULL AND BTRIM(m.line_user_id) <> ''
+               AND (u.blocked_at IS NULL OR u.id IS NULL)
+             )
+             AND (m.email IS NULL OR BTRIM(m.email) = '')
+           )::int AS unknown
+         FROM admin_recipient_list_members m
+         LEFT JOIN users u ON u.line_user_id = m.line_user_id
+         GROUP BY m.list_id`
+      );
+      const breakdowns = {};
+      for (const row of rs.rows) {
+        breakdowns[row.list_id] = {
+          line_sendable: Number(row.line_sendable || 0),
+          email_only: Number(row.email_only || 0),
+          unknown: Number(row.unknown || 0)
+        };
+      }
+      res.json({ ok: true, breakdowns });
+    } catch (err) {
+      console.error('list breakdowns error:', err && err.message);
+      return safeJson(res, 500, 'breakdowns_failed', { detail: err && err.message });
+    }
+  });
+
   // ----- 完整成員列表（分頁）-----
   app.get('/admin/recipient-lists/api/:id(\\d+)/members', requireAdmin, async (req, res) => {
     try {

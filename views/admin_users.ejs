@@ -58,6 +58,16 @@
       .us-tl-item .k{font-weight:600;color:#1f2937;}
       .us-tl-item .l{color:#6b7280;}
       .us-tl-item .t{color:#9ca3af;font-size:11px;}
+      .us-actions{border:1px solid #e5e7eb;border-radius:10px;padding:12px;background:#fafafa;margin-bottom:6px;}
+      .us-act-row{display:flex;gap:8px;flex-wrap:wrap;align-items:center;}
+      .us-act-select{flex:1 1 200px;min-width:160px;padding:8px 10px;border:1px solid #e5e7eb;border-radius:8px;font-size:13px;font-family:inherit;background:#fff;}
+      .us-act-btn{padding:8px 16px;background:#FCC726;color:#1F2937;font-weight:600;border:none;border-radius:8px;cursor:pointer;font-size:13px;font-family:inherit;}
+      .us-act-btn:hover:not(:disabled){background:#f5b800;}
+      .us-act-btn:disabled{opacity:0.6;cursor:not-allowed;}
+      .us-act-note{font-size:12px;color:#9ca3af;margin-top:6px;}
+      .us-act-status{font-size:12px;color:#6b7280;min-height:16px;margin-top:6px;}
+      .us-act-status.ok{color:#1F2937;}
+      .us-act-status.err{color:#E11D27;}
     </style>
 
     <script>
@@ -144,6 +154,19 @@
               '<div class="meta">'+esc(shortUid(p.line_user_id))+'</div>'+
               '<div class="meta">加入：'+(fmt(p.created_at)||'未知')+(p.blocked_at?(' · 封鎖：'+fmt(p.blocked_at)):'')+'</div>'+
               '</div></div>';
+
+            // 快速動作：把這個用戶加進某個名單（不用跳頁）
+            var canList = !!(p.line_user_id);
+            h+='<div class="us-actions">'+
+              '<div class="us-act-row">'+
+                '<select id="us-list-select" class="us-act-select"'+(canList?'':' disabled')+'>'+
+                  '<option value="">載入名單中…</option>'+
+                '</select>'+
+                '<button type="button" id="us-add-to-list" class="us-act-btn"'+(canList?'':' disabled')+'>加入名單</button>'+
+              '</div>'+
+              (canList?'':'<div class="us-act-note">此用戶沒有 LINE 編號，無法加入名單。</div>')+
+              '<div id="us-act-status" class="us-act-status"></div>'+
+            '</div>';
             h+='<div class="us-stats">'+
               stat(c.game_plays,'玩遊戲次數')+stat(c.prizes_won,'中獎次數')+stat(c.invites_rewarded,'成功邀請')+
               stat(c.broadcast_clicks,'點推播')+stat(c.restaurant_clicks,'點餐廳')+stat(c.inbound_messages,'傳訊息')+
@@ -184,9 +207,54 @@
               return '<div class="us-tl-item"><span class="k">'+esc(KIND[t.kind]||t.kind)+'</span> <span class="l">'+esc((t.label||'').slice(0,60))+'</span><div class="t">'+fmt(t.at)+'</div></div>';
             }).join('')+'</div>';}
             box.innerHTML=h;
+            if(p.line_user_id){bindProfileActions(p.line_user_id);}
           }).catch(function(e){var box=$('us-profile');if(box)box.innerHTML='<p class="muted">載入失敗：'+((e&&e.message)||e)+'</p>';});
         }
         function stat(v,k){return '<div class="us-stat"><div class="v">'+(v||0)+'</div><div class="k">'+k+'</div></div>';}
+
+        // ---- 快速動作：加入名單 ----
+        function bindProfileActions(uid){
+          var sel=$('us-list-select');
+          var btn=$('us-add-to-list');
+          var status=$('us-act-status');
+          if(!sel||!btn)return;
+          // 載入名單清單（重用群發的名單 API）
+          fetch('/admin/broadcast/recipient-lists').then(function(r){return r.json();}).then(function(d){
+            if(!d.ok||!d.lists||!d.lists.length){
+              sel.innerHTML='<option value="">尚無名單，請先到名單庫建立</option>';
+              sel.disabled=true;btn.disabled=true;
+              return;
+            }
+            sel.innerHTML='<option value="">選擇要加入的名單…</option>'+d.lists.map(function(l){
+              return '<option value="'+l.id+'">'+esc(l.name)+'（'+(l.total||0)+' 人）</option>';
+            }).join('');
+          }).catch(function(){
+            sel.innerHTML='<option value="">名單載入失敗</option>';
+            sel.disabled=true;btn.disabled=true;
+          });
+          btn.addEventListener('click',function(){
+            var listId=sel.value;
+            if(!listId){status.textContent='請先選擇名單';status.className='us-act-status err';return;}
+            btn.disabled=true;sel.disabled=true;
+            status.textContent='加入中…';status.className='us-act-status';
+            fetch('/admin/recipient-lists/api/'+listId+'/members',{
+              method:'POST',
+              headers:{'Content-Type':'application/json'},
+              body:JSON.stringify({lineUserIds:[uid]})
+            }).then(function(r){return r.json();}).then(function(d){
+              btn.disabled=false;sel.disabled=false;
+              if(!d.ok){status.textContent='加入失敗：'+(d.detail||d.error||'未知');status.className='us-act-status err';return;}
+              var added=Number(d.inserted_uids||0);
+              var existed=Number(d.already_existed_uids||0);
+              if(added>0){status.textContent='已加入名單';status.className='us-act-status ok';}
+              else if(existed>0){status.textContent='這個用戶本來就在名單裡了';status.className='us-act-status';}
+              else{status.textContent='沒有變更';status.className='us-act-status';}
+            }).catch(function(e){
+              btn.disabled=false;sel.disabled=false;
+              status.textContent='錯誤：'+((e&&e.message)||e);status.className='us-act-status err';
+            });
+          });
+        }
 
         $('us-search').addEventListener('input',function(){clearTimeout(timer);timer=setTimeout(function(){loadList(true);},250);});
         var moreBtn=$('us-more-btn');

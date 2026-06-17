@@ -26,7 +26,7 @@
           <thead>
             <tr>
               <th>名稱</th>
-              <th style="text-align:right;">成員數</th>
+              <th style="text-align:right;">成員數 / LINE 可發</th>
               <th>建立者</th>
               <th>建立時間</th>
               <th>更新時間</th>
@@ -75,6 +75,37 @@
     (function () {
       var $ = function (id) { return document.getElementById(id); };
       var allLists = [];
+      var breakdowns = {}; // { [listId]: { line_sendable, email_only, unknown } }
+
+      // 名單列表頁的「實際可發」拆解：以非同步補上，未到時顯示計算中
+      function renderSendable(listId) {
+        var bd = breakdowns[listId];
+        if (!bd) {
+          return '<div class="rl-sendable rl-sendable-loading">計算中…</div>';
+        }
+        var s = '<div class="rl-sendable">LINE 可發 <b>' + bd.line_sendable + '</b> 人';
+        if (bd.email_only > 0) { s += '<span class="muted"> · 僅 Email ' + bd.email_only + '</span>'; }
+        s += '</div>';
+        return s;
+      }
+      function loadBreakdowns() {
+        fetch('/admin/recipient-lists/api/breakdowns')
+          .then(function (r) { return r.json(); })
+          .then(function (resp) {
+            if (!resp.ok) return;
+            breakdowns = resp.breakdowns || {};
+            // 重繪目前顯示的清單（沿用搜尋過濾結果）
+            var q = $('rl-search').value.trim().toLowerCase();
+            if (q) {
+              render(allLists.filter(function (l) {
+                return (l.name || '').toLowerCase().indexOf(q) >= 0 || (l.description || '').toLowerCase().indexOf(q) >= 0;
+              }));
+            } else {
+              render(allLists);
+            }
+          })
+          .catch(function () {});
+      }
 
       function esc(s) {
         return String(s == null ? '' : s)
@@ -103,6 +134,7 @@
             }
             allLists = resp.lists || [];
             render(allLists);
+            loadBreakdowns();
           })
           .catch(function () {
             $('rl-tbody').innerHTML = '<tr><td colspan="6" class="muted">載入失敗</td></tr>';
@@ -121,8 +153,9 @@
               '<div class="rl-name">' + esc(l.name) + '</div>' +
               (l.description ? '<div class="rl-desc">' + esc(l.description) + '</div>' : '') +
             '</td>' +
-            '<td style="text-align:right;font-weight:600;font-variant-numeric:tabular-nums;">' +
-              (l.total || 0) + ' <span class="muted" style="font-size:11px;">人</span>' +
+            '<td style="text-align:right;font-variant-numeric:tabular-nums;">' +
+              '<div style="font-weight:600;">' + (l.total || 0) + ' <span class="muted" style="font-size:11px;">人</span></div>' +
+              renderSendable(l.id) +
             '</td>' +
             '<td><span class="muted">' + esc(l.created_by || '') + '</span></td>' +
             '<td style="font-size:12px;color:#6B6B70;">' + fmtTime(l.created_at) + '</td>' +
@@ -232,6 +265,10 @@
       .rl-table { width: 100%; border-collapse: collapse; font-size: 13px; }
       .rl-table th, .rl-table td { padding: 10px 12px; border-bottom: 1px solid #F3F4F6; vertical-align: middle; }
       .rl-table th { background: #FAFAFA; text-align: left; font-size: 11px; color: #6B6B70; font-weight: 600; text-transform: uppercase; letter-spacing: 0.04em; }
+      .rl-sendable { font-size: 11px; color: #16a34a; font-weight: 600; margin-top: 2px; }
+      .rl-sendable b { font-variant-numeric: tabular-nums; }
+      .rl-sendable .muted { font-weight: 400; }
+      .rl-sendable-loading { color: #9CA3AF; font-weight: 400; }
       .rl-name { font-weight: 600; color: #1f2937; font-size: 14px; }
       .rl-desc { font-size: 11px; color: #6B6B70; margin-top: 2px; }
       .rl-link-btn { display: inline-block; padding: 4px 10px; background: #fff; border: 1px solid #e5e7eb; border-radius: 6px; font-size: 12px; cursor: pointer; color: #374151; margin-right: 4px; text-decoration: none; }

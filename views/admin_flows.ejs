@@ -107,7 +107,15 @@
       .fl-table .ops{display:flex;gap:6px;flex-wrap:wrap;}
       .fl-table .ops button{padding:5px 10px;border:1px solid #e5e7eb;background:#fff;border-radius:6px;cursor:pointer;font-size:12px;color:#374151;}
       .fl-table .ops button.del{color:#b91c1c;}
+      .fl-table .ops button.fl-retry{color:#b91c1c;border-color:#fca5a5;font-weight:600;}
       .fl-table .ops button:hover{border-color:#1f2937;}
+      .fl-health-banner{background:#fff;border:1px solid #fca5a5;border-left:4px solid #E11D27;color:#b91c1c;font-size:13px;font-weight:600;padding:10px 14px;border-radius:8px;margin-bottom:14px;line-height:1.6;}
+      .fl-health-ok{color:#6b7280;font-size:13px;margin-bottom:14px;}
+      .fl-health-bad{color:#b91c1c;font-weight:600;font-size:13px;}
+      .fl-health-good{color:#6b7280;font-size:13px;}
+      .fl-failed-panel{margin-top:18px;padding-top:14px;border-top:1px solid #e5e7eb;}
+      .fl-failed-title{font-size:14px;font-weight:700;color:#b91c1c;margin-bottom:10px;}
+      .fl-failed-panel .fl-err{color:#6b7280;font-size:12px;word-break:break-all;max-width:320px;}
       .fl-edit-head{display:flex;align-items:center;justify-content:space-between;margin-bottom:18px;}
       .fl-field{display:flex;flex-direction:column;gap:5px;margin-bottom:14px;font-size:13px;color:#374151;max-width:520px;}
       .fl-field span{font-weight:600;}
@@ -168,31 +176,90 @@
           }).catch(function(){if(cb)cb();}); // 失敗也別卡死，下拉資料可稍後重抓
         }
 
-        // ---------- 列表 ----------
+        // ---------- 列表（含健康狀態） ----------
+        // 健康：每個流程的 failed（沒發出去）與卡住（過期太久還沒推進）人數。
+        // 有問題時整列紅字提示，並提供「重試漏掉的人」按鈕。
         function loadList(){
-          fetch('/admin/flows/api/list').then(function(r){return r.json();}).then(function(d){
-            var box=$('fl-list');
+          var box=$('fl-list');
+          Promise.all([
+            fetch('/admin/flows/api/list').then(function(r){return r.json();}),
+            fetch('/admin/flows/api/health').then(function(r){return r.json();}).catch(function(){return {ok:false};})
+          ]).then(function(arr){
+            var d=arr[0]; var hd=arr[1]||{ok:false};
             if(!d.ok){box.innerHTML='<p class="muted">載入失敗</p>';return;}
             if(!d.flows.length){box.innerHTML='<p class="muted">還沒有流程。點右上「新增流程」建立第一個。</p>';return;}
+            // 把健康資料整理成 by flowId
+            var healthBy={}; var totalFailed=0; var totalStuck=0;
+            if(hd.ok&&Array.isArray(hd.flows)){
+              hd.flows.forEach(function(h){
+                healthBy[h.id]={failed:Number(h.failed_count)||0,stuck:Number(h.stuck_count)||0};
+                totalFailed+=Number(h.failed_count)||0; totalStuck+=Number(h.stuck_count)||0;
+              });
+            }
+            // 頂部總覽提示
+            var banner='';
+            if(totalFailed>0||totalStuck>0){
+              banner='<div class="fl-health-banner">注意：目前有 '+totalFailed+' 人沒收到訊息（發送失敗）'+
+                (totalStuck>0?('、'+totalStuck+' 人卡住未推進'):'')+
+                '。請看下方流程列表紅字，或下方「漏掉的人」清單，必要時按「重試漏掉的人」。</div>';
+            }else if(hd.ok){
+              banner='<div class="fl-health-ok">目前所有流程都正常，沒有漏掉的人。</div>';
+            }
             var rows=d.flows.map(function(f){
+              var h=healthBy[f.id]||{failed:0,stuck:0};
+              var healthCell;
+              if(h.failed>0||h.stuck>0){
+                healthCell='<span class="fl-health-bad">'+
+                  (h.failed>0?(h.failed+' 人沒收到'):'')+
+                  (h.failed>0&&h.stuck>0?'、':'')+
+                  (h.stuck>0?(h.stuck+' 人卡住'):'')+
+                '</span>';
+              }else{
+                healthCell='<span class="fl-health-good">正常</span>';
+              }
+              var retryBtn=h.failed>0?'<button class="fl-retry" data-retry="'+f.id+'">重試漏掉的人</button>':'';
               return '<tr><td><strong>'+esc(f.name)+'</strong></td>'+
                 '<td>'+esc(TRIGGER_LABEL[f.trigger_type]||f.trigger_type)+'</td>'+
                 '<td><span class="fl-badge '+f.status+'">'+(f.status==='active'?'啟用中':f.status==='paused'?'已暫停':'草稿')+'</span></td>'+
                 '<td>'+f.active_count+' 進行中 / '+f.total_count+' 累計</td>'+
+                '<td>'+healthCell+'</td>'+
                 '<td><div class="ops">'+
                   '<button data-edit="'+f.id+'">編輯</button>'+
                   (f.status==='active'?'<button data-status="paused" data-id="'+f.id+'">暫停</button>':'<button data-status="active" data-id="'+f.id+'">啟用</button>')+
+                  retryBtn+
                   '<button class="del" data-del="'+f.id+'">刪除</button>'+
                 '</div></td></tr>';
             }).join('');
-            box.innerHTML='<table class="fl-table"><thead><tr><th>名稱</th><th>觸發</th><th>狀態</th><th>進行中</th><th></th></tr></thead><tbody>'+rows+'</tbody></table>';
+            box.innerHTML=banner+'<table class="fl-table"><thead><tr><th>名稱</th><th>觸發</th><th>狀態</th><th>進行中</th><th>健康</th><th></th></tr></thead><tbody>'+rows+'</tbody></table>'+recentFailedHtml(hd);
             box.querySelectorAll('[data-edit]').forEach(function(b){b.addEventListener('click',function(){openEditor(b.getAttribute('data-edit'));});});
             box.querySelectorAll('[data-del]').forEach(function(b){b.addEventListener('click',function(){delFlow(b.getAttribute('data-del'));});});
             box.querySelectorAll('[data-status]').forEach(function(b){b.addEventListener('click',function(){setStatus(b.getAttribute('data-id'),b.getAttribute('data-status'));});});
+            box.querySelectorAll('[data-retry]').forEach(function(b){b.addEventListener('click',function(){retryFailed(b.getAttribute('data-retry'));});});
           }).catch(function(e){
-            var box=$('fl-list');
             if(box)box.innerHTML='<p class="muted">載入失敗（'+((e&&e.message)||e)+'）。請重新整理頁面；若仍失敗，可能是登入逾時，請重新登入。</p>';
           });
+        }
+        // 近期漏掉的人清單（哪個流程、誰、卡在哪步、原因、已重試幾次）
+        function recentFailedHtml(hd){
+          if(!hd||!hd.ok||!Array.isArray(hd.recentFailed)||!hd.recentFailed.length)return '';
+          var rows=hd.recentFailed.map(function(r){
+            return '<tr><td>'+esc(r.flow_name)+'</td>'+
+              '<td>'+esc(r.user)+'</td>'+
+              '<td>'+esc(r.step_label)+'</td>'+
+              '<td class="fl-err">'+esc(r.last_error||'（未記錄原因）')+'</td>'+
+              '<td>'+(Number(r.retry_count)||0)+' 次</td>'+
+              '<td>'+esc(fmt(r.updated_at))+'</td></tr>';
+          }).join('');
+          return '<div class="fl-failed-panel"><div class="fl-failed-title">最近漏掉的人（發送失敗，最多 50 筆）</div>'+
+            '<table class="fl-table"><thead><tr><th>流程</th><th>用戶</th><th>卡在哪步</th><th>失敗原因</th><th>已重試</th><th>時間</th></tr></thead><tbody>'+rows+'</tbody></table></div>';
+        }
+        function retryFailed(id){
+          if(!window.confirm('要把這個流程「發送失敗」的人重新排入嗎？他們會在下一輪（最多 5 分鐘內，或你按「手動推進一次」）重新嘗試發送。'))return;
+          fetch('/admin/flows/api/'+id+'/retry-failed',{method:'POST',headers:{'Content-Type':'application/json'}})
+            .then(function(r){return r.json();}).then(function(d){
+              if(d.ok){alert('已重新排入 '+(d.retried||0)+' 人，將於下一輪重試。');loadList();}
+              else alert('失敗：'+errMsg(d.error));
+            }).catch(function(e){alert('錯誤：'+((e&&e.message)||e));});
         }
         function setStatus(id,status){
           if(status==='active'&&!window.confirm(ACTIVATE_WARN))return;

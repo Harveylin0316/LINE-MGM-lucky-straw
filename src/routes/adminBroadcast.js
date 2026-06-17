@@ -163,16 +163,31 @@ function registerAdminBroadcastRoutes(app, deps) {
     // line channel
     const target = String(recipient.line_user_id || '').trim();
     if (!target) return { result: 'skipped', error: 'missing_line_user_id' };
+    // 一次查到「是否封鎖」與「顯示名稱」（顯示名稱給個人化 {暱稱} 用）。
+    // recipient.display_name 若已由上游帶入（名單成員自填）優先，否則用 users.line_display_name。
+    const urow = await query(
+      `SELECT line_display_name, blocked_at FROM users WHERE line_user_id = $1 LIMIT 1`,
+      [target]
+    );
+    // 封鎖兜底：名單物化後才封鎖的人也要擋（audience 已先排除，這裡保險）
+    if (urow.rowCount > 0 && urow.rows[0].blocked_at != null) {
+      return { result: 'skipped', error: 'blocked' };
+    }
+    // 一律傳字串（即使空字串）→ buildLineMessages 會把空名稱 fallback 成「饕客」，
+    // 不會把 {暱稱} 原樣送出。
+    const recipientName = String(
+      (recipient.display_name && String(recipient.display_name).trim()) ||
+      (urow.rowCount > 0 && urow.rows[0].line_display_name) ||
+      ''
+    );
     const built = buildLineMessages(cfg, {
       heroImageBaseUrl: origin,
       broadcastId: broadcast.id,
       variant: isAbTest ? useVariant : undefined,
-      recipientId: recipient.id
+      recipientId: recipient.id,
+      recipientName
     });
     if (!built.ok) return { result: 'failed', error: 'build_failed' };
-    // 封鎖兜底：名單物化後才封鎖的人也要擋（audience 已先排除，這裡保險）
-    const blk = await query(`SELECT 1 FROM users WHERE line_user_id = $1 AND blocked_at IS NOT NULL LIMIT 1`, [target]);
-    if (blk.rowCount > 0) return { result: 'skipped', error: 'blocked' };
     const pushed = await linePush.pushLineMessages(target, built.messages, {
       userId: recipient.user_id,
       pushType: 'admin_broadcast',
@@ -866,7 +881,9 @@ function registerAdminBroadcastRoutes(app, deps) {
         return res.json({ ok: true, channel: 'email', subject: built.subject, html: built.html, text: built.text });
       }
 
-      const built = buildLineMessages(messageConfig, { heroImageBaseUrl: origin });
+      // 預覽：把個人化 token {暱稱}/{name} 顯示成 fallback「饕客」（不改 message_config，
+      // 真正逐人送出時才會換成每位收件人的名稱）。傳空字串 → buildLineMessages fallback。
+      const built = buildLineMessages(messageConfig, { heroImageBaseUrl: origin, recipientName: '' });
       if (!built.ok) {
         return res.json({ ok: false, error: built.error });
       }
@@ -1618,6 +1635,131 @@ function registerAdminBroadcastRoutes(app, deps) {
     } catch (err) {
       console.error('resend-failed error:', err);
       return safeJsonError(res, 500, 'resend_failed', { detail: err && err.message });
+    }
+  });
+
+  // ---------- 6e. A/B：以勝出版重發給「未點擊」的人 ----------
+  // 受眾鎖定該批已送達但沒點 CTA 的人；訊息用點擊數較高那版（平手用 A）。
+  // 直接建立一個新的 running broadcast（非 A/B），複用既有 chunk loop 送出。
+  app.post('/admin/broadcast/:id(\\d+)/resend-winner-to-nonclickers', requireAdmin, async (req, res) => {
+    if (!lineChannelAccessToken) {
+      return safeJsonError(res, 400, 'no_line_channel_access_token');
+    }
+    const sourceId = Number(req.params.id);
+    try {
+      const b = await loadBroadcast(sourceId);
+      if (!b) return safeJsonError(res, 404, 'broadcast_not_found');
+      if (!b.is_ab_test) return safeJsonError(res, 400, 'not_ab_test');
+      // 個人化／勝出版重發目前只支援 LINE 通道（email A/B 重發另議）
+      if (b.channel === 'email') return safeJsonError(res, 400, 'email_ab_resend_not_supported');
+
+      // 1. 用兩版的「點擊數」判定勝出版（平手用 A）
+      const clickByVariant = await query(
+        `SELECT variant, COUNT(*)::int AS n FROM admin_broadcast_clicks
+         WHERE broadcast_id = $1 GROUP BY variant`,
+        [sourceId]
+      );
+      const clicks = { a: 0, b: 0 };
+      clickByVariant.rows.forEach(r => {
+        const v = r.variant === 'b' ? 'b' : (r.variant === 'a' ? 'a' : null);
+        if (v) clicks[v] = r.n;
+      });
+      const winner = clicks.b > clicks.a ? 'b' : 'a';
+      const winnerConfig = winner === 'b' ? b.variant_b_message_config : b.message_config;
+      if (!winnerConfig || typeof winnerConfig !== 'object') {
+        return safeJsonError(res, 400, 'winner_config_missing');
+      }
+
+      // 2. 受眾：該批已送達(sent) 但「沒點 CTA」的人（distinct line_user_id），排除目前已封鎖者
+      const audRs = await query(
+        `SELECT DISTINCT r.line_user_id, r.user_id
+         FROM admin_broadcast_recipients r
+         LEFT JOIN users u ON u.line_user_id = r.line_user_id
+         WHERE r.broadcast_id = $1 AND r.status = 'sent'
+           AND r.line_user_id IS NOT NULL AND BTRIM(r.line_user_id) <> ''
+           AND (u.blocked_at IS NULL OR u.id IS NULL)
+           AND NOT EXISTS (
+             SELECT 1 FROM admin_broadcast_clicks c
+             WHERE c.broadcast_id = $1 AND c.line_user_id = r.line_user_id
+           )`,
+        [sourceId]
+      );
+      const recipients = audRs.rows;
+      if (recipients.length === 0) {
+        return safeJsonError(res, 400, 'no_nonclickers', {
+          detail: '找不到「已送達但沒點擊」的人。注意：點擊追蹤只記錄在新版（含 per-recipient tracking）批次之後。'
+        });
+      }
+      if (recipients.length > 5000) {
+        return safeJsonError(res, 400, 'too_many_recipients', {
+          detail: '單一批次上限 5000 人（找到 ' + recipients.length + '）'
+        });
+      }
+
+      // 3. 驗證勝出版訊息能 build（不帶 recipientId）
+      const origin = publicOriginOrEmpty(req);
+      const built = buildLineMessages(winnerConfig, { heroImageBaseUrl: origin });
+      if (!built.ok) return safeJsonError(res, 400, 'winner_message_invalid:' + built.error);
+
+      const adminUsername =
+        (req.authUser && (req.authUser.un || req.authUser.username)) || 'admin';
+
+      // 4. 建立新的 running broadcast（非 A/B）+ 物化收件人
+      const client = await pool.connect();
+      let newBroadcastId = null;
+      try {
+        await client.query('BEGIN');
+        const insRs = await client.query(
+          `INSERT INTO admin_broadcasts
+            (status, started_at, admin_username, audience_config, message_config,
+             variant_b_message_config, is_ab_test, recipient_total, channel)
+           VALUES ('running', NOW(), $1, $2::jsonb, $3::jsonb, NULL, false, $4, 'line')
+           RETURNING id`,
+          [
+            adminUsername,
+            JSON.stringify({ resendOf: sourceId, winnerVariant: winner, audience: 'nonclickers' }),
+            JSON.stringify(winnerConfig),
+            recipients.length
+          ]
+        );
+        newBroadcastId = insRs.rows[0].id;
+
+        const BATCH = 500;
+        for (let i = 0; i < recipients.length; i += BATCH) {
+          const slice = recipients.slice(i, i + BATCH);
+          const values = [];
+          const params = [];
+          slice.forEach((r, idx) => {
+            const base = idx * 4;
+            values.push(`($${base + 1}, $${base + 2}, $${base + 3}, $${base + 4})`);
+            params.push(newBroadcastId, r.user_id || null, r.line_user_id, 'a');
+          });
+          await client.query(
+            `INSERT INTO admin_broadcast_recipients (broadcast_id, user_id, line_user_id, variant)
+             VALUES ${values.join(', ')}`,
+            params
+          );
+        }
+        await client.query('COMMIT');
+      } catch (e) {
+        try { await client.query('ROLLBACK'); } catch (_rb) {}
+        client.release();
+        console.error('resend-winner tx error:', e.message);
+        return safeJsonError(res, 500, 'resend_winner_failed', { detail: e.message });
+      }
+      client.release();
+
+      return res.json({
+        ok: true,
+        sourceBroadcastId: sourceId,
+        newBroadcastId,
+        winnerVariant: winner,
+        clicks,
+        total: recipients.length
+      });
+    } catch (err) {
+      console.error('resend-winner error:', err && err.message);
+      return safeJsonError(res, 500, 'resend_winner_failed', { detail: err && err.message });
     }
   });
 

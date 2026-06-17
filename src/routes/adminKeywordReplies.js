@@ -65,9 +65,13 @@ function registerAdminKeywordRepliesRoutes(app, deps) {
   });
 
   async function validateInput(body) {
+    // 比對方式：fallback（兜底，沒命中任何關鍵字時回覆）/ exact（完全相同）/ contains（包含，預設）
+    const matchType = body.match_type === 'fallback'
+      ? 'fallback'
+      : (body.match_type === 'exact' ? 'exact' : 'contains');
+    // 兜底規則不靠關鍵字，keywords 可留空（存空字串）；其餘比對方式必填關鍵字
     const keywords = normalizeKeywords(body.keywords);
-    if (!keywords) return { ok: false, error: 'keywords_required' };
-    const matchType = body.match_type === 'exact' ? 'exact' : 'contains';
+    if (matchType !== 'fallback' && !keywords) return { ok: false, error: 'keywords_required' };
     const templateId = Number(body.message_template_id);
     if (!Number.isInteger(templateId) || templateId <= 0) return { ok: false, error: 'message_template_required' };
     const t = await query(`SELECT id FROM admin_message_templates WHERE id = $1`, [templateId]);
