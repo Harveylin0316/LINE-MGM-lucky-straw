@@ -39,21 +39,19 @@ function registerAdminDashboardRoutes(app, deps) {
         WHERE status IN ('done','sending','running','scheduled','failed')
         ORDER BY id DESC LIMIT 1
       `);
-      // 「需要你注意」紅旗：近 24h 推播失敗筆數、失敗的群發批次數、邀請成功但漏發獎
+      // 「需要你注意」紅旗：近 24h 推播失敗筆數、失敗的群發批次數
+      // （刻意不含「邀請漏發獎」：那是春日 line_invites 的歷史殘留、活動已結束且已人工處理，
+      //   會永遠卡在固定數字一直誤報；新版 MGM 走 activity_referrals + 即時通知，不需此提醒）
       const alertRs = await query(`
         SELECT
           (SELECT COUNT(*)::int FROM line_push_logs
             WHERE status = 'failed' AND created_at >= NOW() - interval '24 hours') AS push_failed_24h,
-          (SELECT COUNT(*)::int FROM admin_broadcasts WHERE status = 'failed') AS broadcasts_failed,
-          (SELECT COUNT(*)::int FROM line_invites li
-            WHERE EXISTS (SELECT 1 FROM users uu WHERE LOWER(TRIM(uu.line_user_id)) = LOWER(TRIM(li.invitee_line_user_id)))
-              AND li.rewarded_at IS NULL) AS referral_unrewarded
+          (SELECT COUNT(*)::int FROM admin_broadcasts WHERE status = 'failed') AS broadcasts_failed
       `);
       const a = alertRs.rows[0] || {};
       const alerts = {
         push_failed_24h: Number(a.push_failed_24h || 0),
-        broadcasts_failed: Number(a.broadcasts_failed || 0),
-        referral_unrewarded: Number(a.referral_unrewarded || 0)
+        broadcasts_failed: Number(a.broadcasts_failed || 0)
       };
       return res.json({ ok: true, stats: rs.rows[0], lastBroadcast: lastRs.rows[0] || null, alerts });
     } catch (err) {

@@ -152,9 +152,6 @@
           if((al.broadcasts_failed||0)>0){
             items.push({n:al.broadcasts_failed,label:'個群發批次發送失敗',href:'/admin/broadcast/history',cta:'看發送紀錄'});
           }
-          if((al.referral_unrewarded||0)>0){
-            items.push({n:al.referral_unrewarded,label:'位成功邀請的好友尚未發出獎勵',href:'/admin/referrals',cta:'看邀請成效'});
-          }
           var box=$('db-alert'); var list=$('db-alert-items');
           if(!items.length){ box.hidden=true; return; }
           list.innerHTML=items.map(function(it){
