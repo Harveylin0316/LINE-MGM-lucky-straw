@@ -124,6 +124,16 @@
     .scratch-prize.grand .scratch-glyph { background: rgba(255,255,255,0.2); color: #fff; }
     .scratch-name { font-size: 22px; font-weight: 700; letter-spacing: -0.025em; line-height: 1.2; margin-bottom: 4px; }
     .scratch-desc { font-size: 12px; opacity: 0.8; line-height: 1.5; max-width: 80%; }
+    /* 卡內優惠序號（刮開後隨獎品一起露出，沿用獎品區文字色） */
+    .scratch-prize .coupon-block { margin-top: 8px; text-align: center; }
+    .scratch-prize .coupon-label { font-size: 9.5px; font-weight: 600; letter-spacing: 0.1em; text-transform: uppercase; opacity: 0.7; margin-bottom: 3px; }
+    .scratch-prize .coupon-code { font-size: 18px; font-weight: 800; letter-spacing: 0.04em; line-height: 1.2; word-break: break-all; font-variant-numeric: tabular-nums; -webkit-user-select: all; user-select: all; }
+    /* 卡外：核銷提示 + 我的優惠券連結 */
+    .coupon-redeem { margin-top: 14px; text-align: center; }
+    .coupon-redeem .coupon-hint { font-size: 12.5px; color: var(--ink-2); line-height: 1.5; }
+    .coupon-redeem .wallet-link { display: inline-block; margin-top: 10px; font-size: 13px; font-weight: 600; color: var(--ink-2); text-decoration: none; }
+    .coupon-redeem .wallet-link:active { opacity: 0.6; }
+    .coupon-oos { margin-top: 14px; background: var(--bg); border: 1px solid var(--border); border-radius: 12px; padding: 13px 14px; text-align: center; font-size: 12.5px; color: var(--ink-2); line-height: 1.5; }
     /* 揭曉節奏：獎品區 scale pop；銘謝惠顧再加溫和浮動 */
     @keyframes prize-pop { 0% { transform: scale(0.82); } 55% { transform: scale(1.07); } 100% { transform: scale(1); } }
     .scratch-prize.pop { animation: prize-pop 0.55s cubic-bezier(0.34, 1.56, 0.64, 1); }
@@ -310,6 +320,10 @@
             <div class="scratch-glyph" id="prize-glyph">★</div>
             <div class="scratch-name" id="prize-name">—</div>
             <div class="scratch-desc" id="prize-desc"></div>
+            <div class="coupon-block" id="coupon-block" hidden>
+              <div class="coupon-label">優惠序號</div>
+              <div class="coupon-code" id="coupon-code">—</div>
+            </div>
           </div>
           <canvas id="scratch-canvas"></canvas>
           <!-- 灰膜光澤層：純裝飾、pointer-events:none，不影響 canvas 刮除 -->
@@ -329,6 +343,12 @@
         <button type="button" class="primary-btn" id="reveal-btn" hidden>直 接 揭 曉</button>
         <button type="button" class="secondary-btn" id="new-card-btn" hidden>再 來 一 張</button>
       </div>
+
+      <div class="coupon-redeem" id="coupon-redeem" hidden>
+        <div class="coupon-hint">請到店出示此畫面或序號給店員核銷</div>
+        <a class="wallet-link" id="wallet-link" href="#">我的優惠券</a>
+      </div>
+      <div class="coupon-oos" id="coupon-oos" hidden>此獎品序號暫時發完，請洽客服</div>
 
       <div class="status-row" id="status-row"><span id="status">準備中</span></div>
     </section>
@@ -749,6 +769,10 @@
         newCardBtn.hidden = true;
         revealBtn.hidden = false;
         statusEl.textContent = '刮一下試試';
+        // 重置上一張的優惠序號顯示（避免新卡尚未刮開就露出舊序號／提示）
+        var cb = document.getElementById('coupon-block'); if (cb) cb.hidden = true;
+        var cr = document.getElementById('coupon-redeem'); if (cr) cr.hidden = true;
+        var co = document.getElementById('coupon-oos'); if (co) co.hidden = true;
         stageHint.textContent = '進行中';
 
         try {
@@ -771,7 +795,7 @@
             return;
           }
           currentPrize = resp.prize;
-          renderPrize(currentPrize);
+          renderPrize(currentPrize, resp);
           // 重設 canvas（蓋上灰膜）+ 清掉上一輪的演出狀態
           card.classList.remove('scratched', 'exhausted', 'revealed');
           prizeEl.classList.remove('pop', 'soft');
@@ -790,7 +814,7 @@
         }
       }
 
-      function renderPrize(prize) {
+      function renderPrize(prize, resp) {
         var rank = prize.is_grand_prize ? '頭 獎' : '獎 品';
         document.getElementById('prize-rank').textContent = rank;
         document.getElementById('prize-name').textContent = prize.name || '—';
@@ -805,6 +829,38 @@
         document.getElementById('prize-desc').textContent = descParts.join(' · ');
         if (prize.is_grand_prize) prizeEl.classList.add('grand');
         else prizeEl.classList.remove('grand');
+        renderCoupon(prize, resp);
+      }
+
+      // 優惠序號顯示：coupon_code 可能在 prize 物件上或 /play 回應頂層
+      // 卡內序號隨刮開露出；卡外核銷提示 + 我的優惠券連結
+      function renderCoupon(prize, resp) {
+        var block = document.getElementById('coupon-block');
+        var redeem = document.getElementById('coupon-redeem');
+        var oos = document.getElementById('coupon-oos');
+        if (!block || !redeem || !oos) return;
+        var code = (prize && prize.coupon_code) || (resp && resp.coupon_code) || '';
+        var outOfStock = !!(resp && resp.coupon_out_of_stock) || !!(prize && prize.coupon_out_of_stock);
+        if (code) {
+          document.getElementById('coupon-code').textContent = code;
+          block.hidden = false;
+          redeem.hidden = false;
+          oos.hidden = true;
+        } else if (outOfStock) {
+          block.hidden = true;
+          redeem.hidden = true;
+          oos.hidden = false;
+        } else {
+          block.hidden = true;
+          redeem.hidden = true;
+          oos.hidden = true;
+        }
+      }
+
+      // 「我的優惠券」連結，導向錢包頁（LIFF 永久連結 /wallet）
+      var walletLink = document.getElementById('wallet-link');
+      if (walletLink) {
+        walletLink.href = liffId ? ('https://liff.line.me/' + liffId + '/wallet') : '/games/wallet';
       }
 
       var inviteBtn = document.getElementById('invite-btn');

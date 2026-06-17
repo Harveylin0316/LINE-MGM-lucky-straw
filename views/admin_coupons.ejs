@@ -1,0 +1,216 @@
+<%-
+  include('layout', {
+    user: user,
+    isAdmin: isAdmin,
+    bodyClass: bodyClass,
+    body: `
+    <section class="card">
+      <h1>優惠券</h1>
+      <p class="muted" style="margin-top:6px;line-height:1.7;">
+        把一批優惠序號（例如折價券、兌換碼）灌進指定活動的指定獎品。<br>
+        用戶在活動中抽到「優惠券」類型的獎品時，系統會自動發一組序號給他；到店出示序號，由店員在核銷頁核銷。
+      </p>
+    </section>
+
+    <section class="card">
+      <h2 style="margin:0;">上傳優惠序號</h2>
+      <p class="muted" style="margin-top:6px;line-height:1.7;">
+        先選活動、再選該活動的優惠券獎品，把序號一行一個貼進下方框（或選檔案匯入），按上傳。<br>
+        重複的序號會自動略過，不會重覆計算。
+      </p>
+      <div style="margin-top:16px;display:grid;gap:14px;max-width:560px;">
+        <label class="cp-field">
+          <span class="cp-label">活動</span>
+          <select id="cp-activity"><option value="">載入中…</option></select>
+        </label>
+        <label class="cp-field">
+          <span class="cp-label">優惠券獎品</span>
+          <select id="cp-prize" disabled><option value="">請先選活動</option></select>
+        </label>
+        <label class="cp-field">
+          <span class="cp-label">序號（每行一個，或選檔案匯入）</span>
+          <textarea id="cp-codes" rows="8" placeholder="ABC-123456&#10;ABC-123457&#10;ABC-123458"></textarea>
+        </label>
+        <div style="display:flex;align-items:center;gap:12px;flex-wrap:wrap;">
+          <input type="file" id="cp-file" accept=".txt,.csv,text/plain,text/csv" />
+          <button type="button" class="cp-primary-btn" id="cp-upload" disabled>開始上傳</button>
+          <span id="cp-progress" class="muted" style="font-size:13px;"></span>
+        </div>
+      </div>
+    </section>
+
+    <section class="card">
+      <div style="display:flex;align-items:center;justify-content:space-between;gap:12px;">
+        <h2 style="margin:0;">碼池狀態</h2>
+        <button type="button" class="cp-secondary-btn" id="cp-refresh">重新整理</button>
+      </div>
+      <p class="muted" style="margin-top:6px;line-height:1.7;">
+        可發＝還沒發給用戶的序號；已發＝已經抽中發給用戶、等到店核銷；已核銷＝店員已核銷完成。
+      </p>
+      <div id="cp-stats" style="margin-top:14px;"><p class="muted">載入中…</p></div>
+    </section>
+
+    <style>
+      .cp-field{display:flex;flex-direction:column;gap:6px;}
+      .cp-label{font-size:13px;font-weight:600;color:#1f2937;}
+      .cp-field select,.cp-field textarea{font-family:inherit;font-size:14px;padding:9px 11px;border:1px solid #ECECEE;border-radius:8px;color:#1f2937;background:#fff;}
+      .cp-field textarea{resize:vertical;line-height:1.6;}
+      .cp-field select:disabled{background:#FAFAFA;color:#9CA3AF;}
+      .cp-primary-btn{padding:9px 16px;background:#FCC726;color:#1f2937;font-weight:600;border:none;border-radius:7px;cursor:pointer;font-size:14px;}
+      .cp-primary-btn:disabled{opacity:.5;cursor:not-allowed;}
+      .cp-secondary-btn{padding:6px 12px;background:#fff;border:1px solid #ECECEE;border-radius:6px;font-size:12px;cursor:pointer;color:#374151;}
+      .cp-pool{border:1px solid #ECECEE;border-radius:10px;padding:16px;margin-bottom:12px;}
+      .cp-pool-head{font-size:15px;font-weight:700;color:#1f2937;}
+      .cp-pool-sub{font-size:12px;color:#6B6B70;margin-top:3px;}
+      .cp-pool-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(110px,1fr));gap:10px;margin-top:12px;}
+      .cp-stat{border:1px solid #ECECEE;border-radius:9px;padding:12px;background:#FAFAFA;text-align:center;}
+      .cp-stat .v{font-size:22px;font-weight:700;color:#1f2937;font-variant-numeric:tabular-nums;}
+      .cp-stat .k{font-size:12px;color:#6B6B70;margin-top:3px;}
+      .cp-stat.av{background:#FFFBEB;border-color:#FCC726;}
+      .cp-empty{border:1px dashed #ECECEE;border-radius:10px;padding:28px 16px;text-align:center;color:#6B6B70;}
+      .cp-empty .cp-empty-title{font-size:15px;font-weight:600;color:#1f2937;margin-bottom:6px;}
+    </style>
+
+    <script>
+      (function(){
+        var $=function(id){return document.getElementById(id);};
+        var actSel=$('cp-activity'), prizeSel=$('cp-prize');
+        var fileInput=$('cp-file'), textArea=$('cp-codes');
+        var uploadBtn=$('cp-upload'), prog=$('cp-progress');
+        var activities=[];
+
+        function esc(s){return String(s==null?'':s).replace(/[&<>"]/g,function(c){return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c];});}
+
+        function syncUploadable(){
+          var hasPrize=!!prizeSel.value;
+          var hasCodes=parseCodes().length>0;
+          uploadBtn.disabled=!(hasPrize&&hasCodes);
+        }
+        function parseCodes(){
+          var raw=textArea.value||'';
+          var lines=raw.split(/\\r?\\n/);
+          var out=[], seen={};
+          for(var i=0;i<lines.length;i++){
+            var c=(lines[i]||'').trim();
+            if(!c)continue;
+            if(seen[c])continue;
+            seen[c]=1; out.push(c);
+          }
+          return out;
+        }
+
+        function loadActivities(){
+          fetch('/admin/coupons/api/activities').then(function(r){return r.json();}).then(function(d){
+            if(!d.ok){actSel.innerHTML='<option value="">載入失敗</option>';return;}
+            activities=d.activities||[];
+            if(activities.length===0){
+              actSel.innerHTML='<option value="">沒有可用的優惠券活動</option>';
+              actSel.disabled=true;
+              prizeSel.innerHTML='<option value="">請先到活動管理建立「優惠券」獎品</option>';
+              return;
+            }
+            var h='<option value="">請選擇活動</option>';
+            for(var i=0;i<activities.length;i++){
+              h+='<option value="'+esc(activities[i].activity_id)+'">'+esc(activities[i].activity_name)+'</option>';
+            }
+            actSel.innerHTML=h;
+          }).catch(function(){actSel.innerHTML='<option value="">載入失敗</option>';});
+        }
+
+        actSel.addEventListener('change',function(){
+          var aid=actSel.value;
+          if(!aid){prizeSel.innerHTML='<option value="">請先選活動</option>';prizeSel.disabled=true;syncUploadable();return;}
+          var act=null;
+          for(var i=0;i<activities.length;i++){if(String(activities[i].activity_id)===String(aid)){act=activities[i];break;}}
+          if(!act||!act.prizes||act.prizes.length===0){
+            prizeSel.innerHTML='<option value="">此活動沒有優惠券獎品</option>';prizeSel.disabled=true;syncUploadable();return;
+          }
+          var h='<option value="">請選擇獎品</option>';
+          for(var j=0;j<act.prizes.length;j++){
+            h+='<option value="'+esc(act.prizes[j].prize_id)+'">'+esc(act.prizes[j].prize_name)+'</option>';
+          }
+          prizeSel.innerHTML=h; prizeSel.disabled=false; syncUploadable();
+        });
+        prizeSel.addEventListener('change',syncUploadable);
+        textArea.addEventListener('input',syncUploadable);
+
+        fileInput.addEventListener('change',function(){
+          var f=fileInput.files&&fileInput.files[0];
+          if(!f)return;
+          var reader=new FileReader();
+          reader.onload=function(){
+            var existing=textArea.value.trim();
+            var add=String(reader.result||'').replace(/\\r/g,'');
+            textArea.value=existing?(existing+'\\n'+add):add;
+            syncUploadable();
+            prog.textContent='已從檔案讀入 '+parseCodes().length.toLocaleString()+' 組序號';
+          };
+          reader.onerror=function(){prog.textContent='讀檔失敗';};
+          reader.readAsText(f);
+        });
+
+        uploadBtn.addEventListener('click',function(){
+          var aid=Number(actSel.value), pid=Number(prizeSel.value);
+          if(!aid||!pid){return;}
+          var codes=parseCodes();
+          if(codes.length===0){return;}
+          uploadBtn.disabled=true; actSel.disabled=true; prizeSel.disabled=true;
+          var srcName=(fileInput.files&&fileInput.files[0]&&fileInput.files[0].name)||'貼上';
+          var CHUNK=1000, total=codes.length, done=0, ins=0, skip=0;
+          function sendNext(){
+            if(done>=total){
+              prog.textContent='完成！新增 '+ins.toLocaleString()+' 組，略過重複 '+skip.toLocaleString()+' 組（共 '+total.toLocaleString()+'）';
+              actSel.disabled=false; prizeSel.disabled=false; uploadBtn.disabled=false; loadStats();
+              return;
+            }
+            var slice=codes.slice(done,done+CHUNK);
+            fetch('/admin/coupons/api/upload-chunk',{
+              method:'POST',headers:{'Content-Type':'application/json'},
+              body:JSON.stringify({activity_id:aid,prize_id:pid,codes:slice,source:srcName})
+            }).then(function(r){return r.json();}).then(function(d){
+              if(!d.ok){prog.textContent='上傳失敗：'+(d.detail||d.error||'');actSel.disabled=false;prizeSel.disabled=false;uploadBtn.disabled=false;return;}
+              ins+=(d.inserted||0); skip+=(d.skipped||0); done+=slice.length;
+              prog.textContent='上傳中… '+done.toLocaleString()+' / '+total.toLocaleString();
+              setTimeout(sendNext,30);
+            }).catch(function(e){prog.textContent='錯誤：'+e.message;actSel.disabled=false;prizeSel.disabled=false;uploadBtn.disabled=false;});
+          }
+          sendNext();
+        });
+
+        function statBox(v,k,cls){return '<div class="cp-stat'+(cls?(' '+cls):'')+'"><div class="v">'+(Number(v||0)).toLocaleString()+'</div><div class="k">'+k+'</div></div>';}
+        function loadStats(){
+          fetch('/admin/coupons/api/stats').then(function(r){return r.json();}).then(function(d){
+            var box=$('cp-stats');
+            if(!d.ok){box.innerHTML='<p class="muted">載入失敗</p>';return;}
+            var pools=d.pools||[];
+            if(pools.length===0){
+              box.innerHTML='<div class="cp-empty"><div class="cp-empty-title">還沒有任何碼池</div><div>選一個活動與優惠券獎品，上傳第一批序號，這裡就會出現碼池狀態。</div></div>';
+              return;
+            }
+            var h='';
+            for(var i=0;i<pools.length;i++){
+              var p=pools[i];
+              h+='<div class="cp-pool">'+
+                   '<div class="cp-pool-head">'+esc(p.prize_name||'優惠券')+'</div>'+
+                   '<div class="cp-pool-sub">'+esc(p.activity_name||'')+'</div>'+
+                   '<div class="cp-pool-grid">'+
+                     statBox(p.total,'總數')+
+                     statBox(p.available,'可發',(Number(p.available||0)>0?'av':''))+
+                     statBox(p.claimed,'已發')+
+                     statBox(p.redeemed,'已核銷')+
+                     (Number(p.voided||0)>0?statBox(p.voided,'已作廢'):'')+
+                   '</div>'+
+                 '</div>';
+            }
+            box.innerHTML=h;
+          }).catch(function(){var box=$('cp-stats');if(box)box.innerHTML='<p class="muted">載入失敗，請重新整理</p>';});
+        }
+        $('cp-refresh').addEventListener('click',loadStats);
+
+        loadActivities();
+        loadStats();
+      })();
+    </script>
+    `
+  })
+%>

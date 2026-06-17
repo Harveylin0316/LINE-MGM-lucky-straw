@@ -1,0 +1,436 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, viewport-fit=cover" />
+  <meta name="theme-color" content="#FFFBEB" />
+  <title><%= title %></title>
+  <script src="https://static.line-scdn.net/liff/edge/2/sdk.js"></script>
+  <style>
+    :root {
+      --bg:         #FAFAFA;
+      --surface:    #FFFFFF;
+      --or-yellow:  #FCC726;
+      --or-yellow-d: #E8B400;
+      --or-soft:    #FFFBEB;
+      --or-red:     #E11D27;
+      --ink:        #0F0F10;
+      --ink-2:      #6B6B70;
+      --ink-3:      #A0A0A6;
+      --border:     #ECECEE;
+      --border-2:   #E0E0E4;
+    }
+    * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+    html, body { margin: 0; padding: 0; }
+    body {
+      background:
+        radial-gradient(640px 360px at 88% -80px, rgba(252, 199, 38, 0.20), transparent 70%),
+        linear-gradient(180deg, #FFFBEB 0%, var(--bg) 360px);
+      color: var(--ink);
+      min-height: 100vh;
+      font-family: -apple-system, BlinkMacSystemFont, "SF Pro Display", "SF Pro Text",
+        "Inter", "PingFang TC", "Microsoft JhengHei", sans-serif;
+      letter-spacing: -0.011em;
+      -webkit-font-smoothing: antialiased;
+    }
+
+    .page {
+      max-width: 480px;
+      margin: 0 auto;
+      padding: 16px 16px 56px;
+    }
+
+    @keyframes rise {
+      from { opacity: 0; transform: translateY(14px); }
+      to   { opacity: 1; transform: translateY(0); }
+    }
+    .brand-bar, .hero, .wallet-card, .empty, .state {
+      animation: rise 0.38s cubic-bezier(0.22, 0.9, 0.3, 1) both;
+    }
+
+    /* ========== Brand bar ========== */
+    .brand-bar {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 6px 0 16px;
+    }
+    .brand-bar .logo {
+      display: inline-flex;
+      align-items: center;
+      gap: 7px;
+      font-size: 13px;
+      font-weight: 700;
+      color: var(--ink);
+    }
+    .brand-bar .logo .dot {
+      width: 18px; height: 18px; border-radius: 6px;
+      background: var(--or-yellow);
+      display: inline-block;
+      position: relative;
+      flex-shrink: 0;
+    }
+    .brand-bar .logo .dot::after {
+      content: '';
+      position: absolute;
+      inset: 4px;
+      border-radius: 50%;
+      background: var(--ink);
+    }
+    .brand-bar .chip {
+      font-size: 11px;
+      font-weight: 500;
+      color: var(--ink-2);
+      background: var(--surface);
+      border: 1px solid var(--border);
+      padding: 5px 10px;
+      border-radius: 999px;
+    }
+
+    /* ========== Hero ========== */
+    .hero {
+      margin-bottom: 16px;
+      padding: 4px 4px 0;
+    }
+    .hero h1 {
+      margin: 0 0 6px;
+      font-size: 26px;
+      font-weight: 700;
+      letter-spacing: -0.028em;
+      line-height: 1.2;
+    }
+    .hero p {
+      margin: 0;
+      font-size: 14px;
+      line-height: 1.55;
+      color: var(--ink-2);
+    }
+
+    /* ========== Wallet card ========== */
+    .wallet-list { display: flex; flex-direction: column; gap: 12px; }
+    .wallet-card {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 18px;
+      padding: 18px 18px 18px;
+      position: relative;
+      overflow: hidden;
+      box-shadow: 0 10px 28px -18px rgba(15, 15, 16, 0.12);
+    }
+    .wallet-card::before {
+      content: '';
+      position: absolute;
+      top: 0; left: 0; bottom: 0;
+      width: 4px;
+      background: var(--or-yellow);
+    }
+    .wallet-card.used {
+      background: var(--bg);
+      box-shadow: none;
+    }
+    .wallet-card.used::before { background: var(--border-2); }
+    .wallet-card.used .wc-code,
+    .wallet-card.used .wc-activity,
+    .wallet-card.used .wc-prize { color: var(--ink-3); }
+
+    .wc-top {
+      display: flex;
+      align-items: flex-start;
+      justify-content: space-between;
+      gap: 10px;
+      margin-bottom: 12px;
+    }
+    .wc-meta { min-width: 0; }
+    .wc-activity {
+      font-size: 12px;
+      font-weight: 500;
+      color: var(--ink-2);
+      margin-bottom: 3px;
+    }
+    .wc-prize {
+      font-size: 17px;
+      font-weight: 700;
+      letter-spacing: -0.015em;
+      line-height: 1.3;
+      color: var(--ink);
+    }
+    .wc-status {
+      flex-shrink: 0;
+      font-size: 10.5px;
+      font-weight: 700;
+      letter-spacing: 0.04em;
+      padding: 4px 10px;
+      border-radius: 999px;
+      white-space: nowrap;
+    }
+    .wc-status.unused {
+      background: var(--or-soft);
+      color: var(--or-yellow-d);
+      border: 1px solid var(--or-yellow);
+    }
+    .wc-status.used {
+      background: #F0F0F2;
+      color: var(--ink-3);
+      border: 1px solid var(--border-2);
+    }
+
+    .wc-code-wrap {
+      background: var(--or-soft);
+      border: 1px solid var(--or-yellow);
+      border-radius: 14px;
+      padding: 14px 16px;
+      text-align: center;
+    }
+    .wallet-card.used .wc-code-wrap {
+      background: var(--surface);
+      border-color: var(--border);
+    }
+    .wc-code-label {
+      font-size: 10.5px;
+      font-weight: 600;
+      letter-spacing: 0.1em;
+      color: var(--ink-2);
+      text-transform: uppercase;
+      margin-bottom: 7px;
+    }
+    .wc-code {
+      font-size: 24px;
+      font-weight: 800;
+      letter-spacing: 0.04em;
+      color: var(--ink);
+      line-height: 1.2;
+      word-break: break-all;
+      font-variant-numeric: tabular-nums;
+      -webkit-user-select: all;
+      user-select: all;
+    }
+    .wc-foot {
+      margin-top: 12px;
+      font-size: 11.5px;
+      color: var(--ink-3);
+      line-height: 1.5;
+    }
+    .wc-hint {
+      margin-top: 10px;
+      font-size: 12px;
+      color: var(--ink-2);
+      line-height: 1.5;
+      text-align: center;
+    }
+    .wallet-card.used .wc-hint { display: none; }
+
+    /* ========== Empty / state ========== */
+    .empty, .state {
+      text-align: center;
+      padding: 56px 24px;
+      color: var(--ink-2);
+    }
+    .empty .glyph, .state .glyph {
+      width: 56px; height: 56px;
+      margin: 0 auto 16px;
+      border-radius: 16px;
+      background: var(--surface);
+      border: 1px solid var(--border);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 24px;
+      font-weight: 700;
+      color: var(--ink-3);
+    }
+    .empty .t, .state .t {
+      font-size: 15px;
+      font-weight: 600;
+      color: var(--ink);
+      margin-bottom: 6px;
+    }
+    .empty .s, .state .s {
+      font-size: 13px;
+      line-height: 1.55;
+    }
+    .empty .play-btn {
+      display: inline-block;
+      margin-top: 18px;
+      background: var(--ink);
+      color: #fff;
+      text-decoration: none;
+      border-radius: 999px;
+      padding: 12px 24px;
+      font-size: 14px;
+      font-weight: 700;
+      letter-spacing: -0.005em;
+    }
+    .empty .play-btn:active { transform: scale(0.97); }
+
+    .spinner {
+      width: 26px; height: 26px;
+      margin: 0 auto 16px;
+      border: 3px solid var(--border);
+      border-top-color: var(--or-yellow);
+      border-radius: 50%;
+      animation: spin 0.8s linear infinite;
+    }
+    @keyframes spin { to { transform: rotate(360deg); } }
+
+    @media (prefers-reduced-motion: reduce) {
+      .brand-bar, .hero, .wallet-card, .empty, .state { animation: none; }
+      .spinner { animation-duration: 1.6s; }
+    }
+  </style>
+</head>
+<body>
+  <div class="page">
+
+    <header class="brand-bar">
+      <div class="logo">
+        <span class="dot"></span>
+        OpenRice
+      </div>
+      <div class="chip">優惠券</div>
+    </header>
+
+    <section class="hero">
+      <h1>我的優惠券</h1>
+      <p>到店出示序號給店員核銷</p>
+    </section>
+
+    <div id="content">
+      <div class="state">
+        <div class="spinner"></div>
+        <div class="s">載入中⋯</div>
+      </div>
+    </div>
+
+  </div>
+
+  <script>
+    (function () {
+      var liffId = <%- JSON.stringify(liffId || '') %>;
+      var contentEl = document.getElementById('content');
+
+      var profile = null;
+      var idToken = null;
+
+      function esc(s) {
+        return String(s == null ? '' : s)
+          .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
+          .replace(/"/g, '&quot;').replace(/'/g, '&#39;');
+      }
+
+      // 取得時間：YYYY/MM/DD（容錯，解析失敗就原樣回傳）
+      function fmtDate(iso) {
+        if (!iso) return '';
+        try {
+          var d = new Date(iso);
+          if (isNaN(d.getTime())) return String(iso);
+          var y = d.getFullYear();
+          var m = String(d.getMonth() + 1).padStart(2, '0');
+          var day = String(d.getDate()).padStart(2, '0');
+          return y + '/' + m + '/' + day;
+        } catch (e) { return String(iso); }
+      }
+
+      function renderState(html) { contentEl.innerHTML = html; }
+
+      function renderEmpty() {
+        renderState(
+          '<div class="empty">' +
+            '<div class="glyph">券</div>' +
+            '<div class="t">你還沒有優惠券</div>' +
+            '<div class="s">快去玩遊戲抽獎</div>' +
+          '</div>'
+        );
+      }
+
+      function renderError(msg) {
+        renderState(
+          '<div class="state">' +
+            '<div class="glyph">!</div>' +
+            '<div class="t">無法載入</div>' +
+            '<div class="s">' + esc(msg || '請稍後再試') + '</div>' +
+          '</div>'
+        );
+      }
+
+      function renderCoupons(coupons) {
+        if (!coupons || coupons.length === 0) { renderEmpty(); return; }
+        var cards = coupons.map(function (c) {
+          var used = !!c.redeemed;
+          var statusCls = used ? 'used' : 'unused';
+          var statusTxt = used ? '已使用' : '未使用';
+          var foot = '';
+          if (used) {
+            foot = '核銷時間 ' + esc(fmtDate(c.redeemed_at));
+          } else {
+            foot = '取得時間 ' + esc(fmtDate(c.won_at));
+          }
+          return (
+            '<div class="wallet-card ' + statusCls + '">' +
+              '<div class="wc-top">' +
+                '<div class="wc-meta">' +
+                  '<div class="wc-activity">' + esc(c.activity_name) + '</div>' +
+                  '<div class="wc-prize">' + esc(c.prize_name) + '</div>' +
+                '</div>' +
+                '<span class="wc-status ' + statusCls + '">' + statusTxt + '</span>' +
+              '</div>' +
+              '<div class="wc-code-wrap">' +
+                '<div class="wc-code-label">優惠序號</div>' +
+                '<div class="wc-code">' + esc(c.code) + '</div>' +
+              '</div>' +
+              '<div class="wc-foot">' + foot + '</div>' +
+              (used ? '' : '<div class="wc-hint">請到店出示此畫面或序號給店員核銷</div>') +
+            '</div>'
+          );
+        }).join('');
+        renderState('<div class="wallet-list">' + cards + '</div>');
+      }
+
+      // ----- LIFF init（比照各 game view 骨架）-----
+      async function initLiff() {
+        var qs = new URLSearchParams(location.search);
+        var devUid = qs.get('uid');
+        if (devUid) {
+          profile = { userId: devUid, displayName: qs.get('name') || 'DEV' };
+          return;
+        }
+        if (qs.get('preview') === '1') {
+          profile = { userId: 'PREVIEW', displayName: '預覽' };
+          return;
+        }
+        if (!liffId) throw new Error('LIFF ID 未設定');
+        try { await liff.init({ liffId: liffId }); }
+        catch (e) { throw new Error('LIFF 初始化失敗'); }
+        if (!liff.isInClient()) throw new Error('請在 LINE App 內打開');
+        if (!liff.isLoggedIn()) {
+          liff.login();
+          return new Promise(function () {});
+        }
+        profile = await liff.getProfile();
+        try { idToken = liff.getIDToken(); } catch (e) {}
+      }
+
+      async function loadWallet() {
+        if (!profile || !profile.userId) { renderError('身分驗證失敗'); return; }
+        try {
+          var resp = await fetch('/api/games/wallet?line_user_id=' +
+            encodeURIComponent(profile.userId) + '&id_token=' + encodeURIComponent(idToken || ''))
+            .then(function (r) { return r.json(); });
+          if (!resp || !resp.ok) { renderError((resp && (resp.detail || resp.error)) || '載入失敗'); return; }
+          renderCoupons(resp.coupons || []);
+        } catch (e) {
+          renderError('連線錯誤');
+        }
+      }
+
+      (async function () {
+        try {
+          await initLiff();
+          await loadWallet();
+        } catch (e) {
+          renderError(e && e.message);
+        }
+      })();
+    })();
+  </script>
+</body>
+</html>

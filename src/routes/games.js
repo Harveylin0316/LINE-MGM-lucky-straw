@@ -6,7 +6,7 @@
  *
  * 新增遊戲類型只要加一行 registerGameType 就好。
  */
-const { registerGameType } = require('./gamesGeneric');
+const { registerGameType, registerWalletApi } = require('./gamesGeneric');
 
 function registerGamesRoutes(app, deps) {
   const { query, pool } = deps;
@@ -114,8 +114,17 @@ function registerGamesRoutes(app, deps) {
   app.get('/games', gamesLanding);
   app.get('/games/', gamesLanding);
 
-  // ----- 註冊所有遊戲類型 -----
+  // ----- 我的優惠券 錢包頁（LIFF 永久連結 /wallet → /games/wallet）-----
+  app.get('/games/wallet', (req, res) => {
+    res.render('game_wallet', {
+      title: '我的優惠券 — OpenRice LINE',
+      liffId: defaultLiffId
+    });
+  });
+
+  // ----- 註冊所有遊戲類型 + 錢包 API -----
   const sharedOpts = { defaultLiffId };
+  registerWalletApi(app, Object.assign({}, deps, { defaultLiffId }));
   registerGameType(app, deps, Object.assign({ gameType: 'wheel',   viewName: 'game_wheel'   }, sharedOpts));
   registerGameType(app, deps, Object.assign({ gameType: 'fortune', viewName: 'game_fortune' }, sharedOpts));
   registerGameType(app, deps, Object.assign({ gameType: 'scratch', viewName: 'game_scratch' }, sharedOpts));

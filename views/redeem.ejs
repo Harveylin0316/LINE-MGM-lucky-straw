@@ -1,0 +1,190 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1" />
+  <meta name="robots" content="noindex,nofollow" />
+  <title>優惠券核銷</title>
+  <style>
+    *{box-sizing:border-box;}
+    body{margin:0;font-family:-apple-system,BlinkMacSystemFont,"Segoe UI","PingFang TC","Microsoft JhengHei",sans-serif;background:#F3F4F6;color:#1F2937;-webkit-text-size-adjust:100%;}
+    .wrap{max-width:480px;margin:0 auto;padding:20px 16px 48px;}
+    .head{text-align:center;padding:18px 0 8px;}
+    .head .bar{display:inline-block;background:#FCC726;color:#1F2937;font-weight:700;font-size:13px;padding:4px 12px;border-radius:999px;letter-spacing:.04em;}
+    .head h1{font-size:22px;margin:14px 0 4px;}
+    .head .sub{color:#6B7280;font-size:14px;}
+    .card{background:#fff;border-radius:16px;padding:20px 18px;box-shadow:0 1px 3px rgba(0,0,0,.06);margin-top:16px;}
+    label{display:block;font-size:14px;font-weight:600;margin:0 0 8px;}
+    input[type=password],input[type=text]{width:100%;font-size:18px;padding:14px 14px;border:1.5px solid #E5E7EB;border-radius:12px;font-family:inherit;color:#1F2937;background:#fff;}
+    input:focus{outline:none;border-color:#FCC726;}
+    .field+.field{margin-top:16px;}
+    .btn{display:block;width:100%;border:none;border-radius:12px;font-family:inherit;font-weight:700;cursor:pointer;}
+    .btn-primary{background:#FCC726;color:#1F2937;font-size:18px;padding:16px;margin-top:18px;}
+    .btn-primary:disabled{opacity:.5;cursor:not-allowed;}
+    .btn-confirm{background:#16A34A;color:#fff;font-size:19px;padding:18px;margin-top:18px;}
+    .btn-confirm:disabled{opacity:.5;cursor:not-allowed;}
+    .btn-ghost{background:#fff;color:#374151;border:1.5px solid #E5E7EB;font-size:15px;padding:13px;margin-top:12px;}
+    .msg{margin-top:14px;font-size:15px;line-height:1.6;padding:13px 14px;border-radius:12px;}
+    .msg-err{background:#FEF2F2;color:#B91C1C;border:1px solid #FECACA;}
+    .msg-warn{background:#FFFBEB;color:#92400E;border:1px solid #FDE68A;}
+    .msg-info{background:#F3F4F6;color:#374151;border:1px solid #E5E7EB;}
+    .result-card{margin-top:16px;}
+    .result-row{display:flex;justify-content:space-between;gap:12px;padding:11px 0;border-bottom:1px solid #F3F4F6;font-size:15px;}
+    .result-row:last-child{border-bottom:none;}
+    .result-row .k{color:#6B7280;}
+    .result-row .v{font-weight:600;text-align:right;}
+    .status-pill{display:inline-block;font-size:13px;font-weight:700;padding:4px 12px;border-radius:999px;}
+    .status-ok{background:#DCFCE7;color:#15803D;}
+    .status-no{background:#FEE2E2;color:#B91C1C;}
+    .status-wait{background:#FFFBEB;color:#92400E;}
+    .success{text-align:center;padding:8px 0 4px;}
+    .success .big{font-size:26px;font-weight:800;color:#16A34A;line-height:1.4;margin:8px 0;}
+    .success .name{font-size:20px;font-weight:700;color:#1F2937;}
+    .success .sub{color:#6B7280;font-size:14px;margin-top:8px;}
+    .hidden{display:none;}
+    .notice{background:#FEF2F2;border:1px solid #FECACA;color:#B91C1C;border-radius:14px;padding:18px;font-size:15px;line-height:1.7;}
+  </style>
+</head>
+<body>
+  <div class="wrap">
+    <div class="head">
+      <span class="bar">店員核銷</span>
+      <h1>優惠券核銷</h1>
+      <div class="sub">輸入核銷密碼與顧客的優惠序號</div>
+    </div>
+
+    <% if (!configured) { %>
+      <div class="notice">
+        尚未設定核銷密碼，請管理員設定 REDEEM_PASSWORD 後才能使用本頁。
+      </div>
+    <% } else { %>
+
+    <!-- 查詢卡 -->
+    <div class="card" id="lookup-card">
+      <div class="field">
+        <label for="rp-password">核銷密碼</label>
+        <input type="password" id="rp-password" inputmode="text" autocomplete="off" placeholder="請輸入核銷密碼" />
+      </div>
+      <div class="field">
+        <label for="rp-code">優惠序號</label>
+        <input type="text" id="rp-code" autocomplete="off" autocapitalize="characters" placeholder="請輸入或請顧客出示序號" />
+      </div>
+      <button type="button" class="btn btn-primary" id="rp-lookup">查詢</button>
+      <div id="rp-lookup-msg"></div>
+    </div>
+
+    <!-- 查詢結果卡 -->
+    <div class="card result-card hidden" id="result-card">
+      <div class="result-row"><span class="k">獎品</span><span class="v" id="rp-prize">-</span></div>
+      <div class="result-row"><span class="k">活動</span><span class="v" id="rp-activity">-</span></div>
+      <div class="result-row"><span class="k">狀態</span><span class="v" id="rp-status">-</span></div>
+      <button type="button" class="btn btn-confirm" id="rp-redeem">確認核銷</button>
+      <div id="rp-redeem-msg"></div>
+      <button type="button" class="btn btn-ghost" id="rp-back">查詢別張</button>
+    </div>
+
+    <!-- 核銷成功卡 -->
+    <div class="card success hidden" id="success-card">
+      <div class="status-pill status-ok">核銷成功</div>
+      <div class="big" id="rp-success-text">核銷成功</div>
+      <div class="sub">請告知顧客已完成核銷</div>
+      <button type="button" class="btn btn-primary" id="rp-next">核銷下一張</button>
+    </div>
+
+    <script>
+      (function(){
+        var $=function(id){return document.getElementById(id);};
+        var pwInput=$('rp-password'), codeInput=$('rp-code');
+        var lookupBtn=$('rp-lookup'), lookupMsg=$('rp-lookup-msg');
+        var lookupCard=$('lookup-card'), resultCard=$('result-card'), successCard=$('success-card');
+        var prizeEl=$('rp-prize'), activityEl=$('rp-activity'), statusEl=$('rp-status');
+        var redeemBtn=$('rp-redeem'), redeemMsg=$('rp-redeem-msg'), backBtn=$('rp-back');
+        var successText=$('rp-success-text'), nextBtn=$('rp-next');
+        var current=null;
+
+        function esc(s){return String(s==null?'':s).replace(/[&<>"]/g,function(c){return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c];});}
+        function setMsg(el,text,kind){
+          if(!text){el.innerHTML='';return;}
+          el.innerHTML='<div class="msg msg-'+(kind||'info')+'">'+esc(text)+'</div>';
+        }
+        function show(el){el.classList.remove('hidden');}
+        function hide(el){el.classList.add('hidden');}
+
+        function doLookup(){
+          var pw=pwInput.value, code=(codeInput.value||'').trim();
+          setMsg(lookupMsg,'','info');
+          if(!pw){setMsg(lookupMsg,'請輸入核銷密碼。','err');return;}
+          if(!code){setMsg(lookupMsg,'請輸入優惠序號。','err');return;}
+          lookupBtn.disabled=true; lookupBtn.textContent='查詢中…';
+          fetch('/redeem/api/lookup',{
+            method:'POST',headers:{'Content-Type':'application/json'},
+            body:JSON.stringify({password:pw,code:code})
+          }).then(function(r){return r.json();}).then(function(d){
+            lookupBtn.disabled=false; lookupBtn.textContent='查詢';
+            if(!d.ok){setMsg(lookupMsg,(d.message||'查詢失敗，請稍後再試。'),'err');return;}
+            if(!d.found){setMsg(lookupMsg,(d.message||'找不到此序號。'),'err');return;}
+            current=d;
+            prizeEl.textContent=d.prize_name||'優惠券';
+            activityEl.textContent=d.activity_name||'-';
+            if(d.redeemable){
+              statusEl.innerHTML='<span class="status-pill status-wait">可核銷</span>';
+              redeemBtn.classList.remove('hidden'); redeemBtn.disabled=false;
+              setMsg(redeemMsg,'','info');
+            }else{
+              statusEl.innerHTML='<span class="status-pill status-no">無法核銷</span>';
+              redeemBtn.classList.add('hidden');
+              setMsg(redeemMsg,(d.message||'此序號目前無法核銷。'),'warn');
+            }
+            hide(lookupCard); show(resultCard);
+          }).catch(function(e){
+            lookupBtn.disabled=false; lookupBtn.textContent='查詢';
+            setMsg(lookupMsg,'連線發生問題，請稍後再試。','err');
+          });
+        }
+
+        function doRedeem(){
+          if(!current){return;}
+          redeemBtn.disabled=true; redeemBtn.textContent='核銷中…';
+          setMsg(redeemMsg,'','info');
+          fetch('/redeem/api/redeem',{
+            method:'POST',headers:{'Content-Type':'application/json'},
+            body:JSON.stringify({password:pwInput.value,code:current.code})
+          }).then(function(r){return r.json();}).then(function(d){
+            redeemBtn.disabled=false; redeemBtn.textContent='確認核銷';
+            if(!d.ok){setMsg(redeemMsg,(d.message||'核銷失敗，請稍後再試。'),'err');return;}
+            if(d.redeemed){
+              successText.textContent='核銷成功：'+(d.prize_name||'優惠券');
+              hide(resultCard); show(successCard);
+              return;
+            }
+            // 狀態機防呆：已被核銷 / 尚未發出 / 找不到
+            statusEl.innerHTML='<span class="status-pill status-no">無法核銷</span>';
+            redeemBtn.classList.add('hidden');
+            setMsg(redeemMsg,(d.message||'此序號目前無法核銷。'),'warn');
+          }).catch(function(e){
+            redeemBtn.disabled=false; redeemBtn.textContent='確認核銷';
+            setMsg(redeemMsg,'連線發生問題，請稍後再試。','err');
+          });
+        }
+
+        function backToLookup(keepPw){
+          current=null;
+          hide(resultCard); hide(successCard); show(lookupCard);
+          codeInput.value=''; setMsg(lookupMsg,'','info'); setMsg(redeemMsg,'','info');
+          if(!keepPw){pwInput.value='';}
+          redeemBtn.classList.remove('hidden');
+          codeInput.focus();
+        }
+
+        lookupBtn.addEventListener('click',doLookup);
+        codeInput.addEventListener('keydown',function(e){if(e.key==='Enter')doLookup();});
+        redeemBtn.addEventListener('click',doRedeem);
+        backBtn.addEventListener('click',function(){backToLookup(true);});
+        nextBtn.addEventListener('click',function(){backToLookup(true);});
+      })();
+    </script>
+
+    <% } %>
+  </div>
+</body>
+</html>

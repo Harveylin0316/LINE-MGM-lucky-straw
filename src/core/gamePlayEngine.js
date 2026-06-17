@@ -191,11 +191,46 @@ async function selectPrizeAndRecord(opts) {
       ]
     );
 
+    const playId = playRow[0].id;
+
+    // 8) 優惠券碼領取（僅 prize_type='coupon_code'）
+    //    在同一交易內、INSERT play 拿到 play_id 之後、COMMIT 之前，
+    //    從該 (activity_id, prize_id) 的碼池原子領一張 available 碼。
+    //    領不到（碼用完）→ coupon_code 留 NULL、play 照常 COMMIT，
+    //    絕不可因缺碼 rollback 或讓整個 /play 失敗。
+    let couponCode = null;
+    let couponOutOfStock = false;
+    if (pick.prize_type === 'coupon_code') {
+      const { rows: codeRows } = await client.query(
+        `UPDATE coupon_codes
+            SET status='claimed', claimed_play_id=$1, claimed_line_user_id=$2, claimed_at=now()
+          WHERE id = (
+            SELECT id FROM coupon_codes
+             WHERE activity_id=$3 AND prize_id=$4 AND status='available'
+             ORDER BY id LIMIT 1
+             FOR UPDATE SKIP LOCKED
+          )
+          RETURNING code`,
+        [playId, lineUserId, a.id, pick.id]
+      );
+      if (codeRows.length > 0) {
+        couponCode = codeRows[0].code;
+        await client.query(
+          'UPDATE activity_plays SET coupon_code = $1 WHERE id = $2',
+          [couponCode, playId]
+        );
+      } else {
+        couponOutOfStock = true;
+      }
+    }
+
     await client.query('COMMIT');
 
     return {
       ok: true,
-      play_id: playRow[0].id,
+      play_id: playId,
+      coupon_code: couponCode,
+      coupon_out_of_stock: couponOutOfStock,
       prize: {
         id: pick.id,
         name: pick.name,
@@ -204,7 +239,8 @@ async function selectPrizeAndRecord(opts) {
         position: pick.position,
         is_grand_prize: pick.is_grand_prize,
         prize_type: pick.prize_type,
-        prize_value: pick.prize_value || {}
+        prize_value: pick.prize_value || {},
+        coupon_code: couponCode
       }
     };
   } catch (err) {

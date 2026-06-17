@@ -158,6 +158,7 @@ function registerGameType(app, deps, opts) {
         detail: result.error.detail, quota: result.error.quota
       });
     }
+    // coupon_code / coupon_out_of_stock 已含在 result（engine 回傳頂層 + prize 物件內），直接透傳
     res.json(result);
   };
   // 給每個 game 一個 alias path（wheel 為了向後相容也保留 /spin）
@@ -183,4 +184,67 @@ function registerGameType(app, deps, opts) {
   });
 }
 
-module.exports = { registerGameType };
+// ----- 錢包 API（全 game type 共用，僅註冊一次） -----
+// GET /games/wallet/api?line_user_id=&id_token=
+//   回該用戶所有 coupon_code 非空的 activity_plays，JOIN activities 取活動名、
+//   prize_snapshot->>'name' 取獎品名。形狀照共用 API：
+//   { ok:true, coupons:[{ activity_name, prize_name, code, won_at, redeemed:bool, redeemed_at }] }
+//   驗證比照 /meta：非強制（只記探針，不擋），讓頁面能載入。
+function registerWalletApi(app, deps) {
+  const { query } = deps;
+  app.get('/api/games/wallet', async (req, res) => {
+    try {
+      const lineUserId = String(req.query.line_user_id || '').trim();
+      const idToken = String(req.query.id_token || '').trim();
+      if (!lineUserId) {
+        return res.status(400).json({ ok: false, error: 'missing_line_user_id', detail: '缺少使用者識別，請從 LINE 重新開啟此頁。' });
+      }
+      // 唯讀：只記探針，不擋（比照 /meta）。verifyLiffIdToken 用活動的 channel，
+      // 錢包跨活動無單一 channel，故僅以 defaultLiffId 試驗證、失敗不影響回應。
+      let verified = false;
+      let vSub = null;
+      if (idToken) {
+        const channelId = channelIdFromLiffId(deps.defaultLiffId || process.env.GAMES_LIFF_ID || process.env.LIFF_ID || '');
+        try {
+          const v = await verifyLiffIdToken(idToken, channelId);
+          verified = !!(v && v.ok);
+          vSub = (v && v.sub) || null;
+        } catch (e) { /* 唯讀不擋 */ }
+        query(
+          `INSERT INTO liff_token_probe (endpoint, game_type, slug, body_line_user_id, token_present, verified, verified_sub, sub_matches, channel_id, detail)
+           VALUES ('wallet', null, null, $1, true, $2, $3, $4, $5, 'wallet readonly')`,
+          [lineUserId, verified, vSub, !!(verified && vSub && vSub === lineUserId), channelId || null]
+        ).catch(e => console.error('wallet probe insert failed:', e && e.message));
+      }
+      const { rows } = await query(
+        `SELECT a.name AS activity_name,
+                COALESCE(p.prize_snapshot->>'name', '獎品') AS prize_name,
+                p.coupon_code AS code,
+                p.played_at AS won_at,
+                COALESCE(p.is_redeemed, false) AS redeemed,
+                p.redeemed_at AS redeemed_at
+           FROM activity_plays p
+           JOIN activities a ON a.id = p.activity_id
+          WHERE p.line_user_id = $1
+            AND p.coupon_code IS NOT NULL
+          ORDER BY p.played_at DESC
+          LIMIT 100`,
+        [lineUserId]
+      );
+      const coupons = rows.map(r => ({
+        activity_name: r.activity_name,
+        prize_name: r.prize_name,
+        code: r.code,
+        won_at: r.won_at,
+        redeemed: !!r.redeemed,
+        redeemed_at: r.redeemed_at
+      }));
+      res.json({ ok: true, coupons });
+    } catch (err) {
+      console.error('wallet api error:', err && err.message);
+      res.status(500).json({ ok: false, error: 'wallet_failed', detail: String(err.message || '').slice(0, 300) });
+    }
+  });
+}
+
+module.exports = { registerGameType, registerWalletApi };

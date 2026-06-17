@@ -244,6 +244,15 @@
     .modal-btn { display: block; width: 100%; padding: 15px; background: var(--ink); color: #fff; border: none; border-radius: 14px; font-size: 15px; font-weight: 600; font-family: inherit; cursor: pointer; transition: transform 0.15s cubic-bezier(0.34, 1.56, 0.64, 1); }
     .modal-btn:active { transform: scale(0.98); }
 
+    /* ========== 優惠序號區塊 ========== */
+    .coupon-block { background: #FFFBEB; border: 1px solid var(--or-yellow); border-radius: 16px; padding: 16px 18px 18px; margin-bottom: 16px; text-align: center; }
+    .coupon-label { font-size: 11px; font-weight: 600; letter-spacing: 0.1em; color: var(--ink-2); text-transform: uppercase; margin-bottom: 8px; }
+    .coupon-code { font-size: 26px; font-weight: 800; letter-spacing: 0.04em; color: var(--ink); line-height: 1.2; word-break: break-all; font-variant-numeric: tabular-nums; -webkit-user-select: all; user-select: all; }
+    .coupon-hint { font-size: 12.5px; color: var(--ink-2); line-height: 1.5; margin-top: 10px; }
+    .coupon-oos { background: var(--bg); border: 1px solid var(--border); border-radius: 14px; padding: 14px 16px; margin-bottom: 16px; text-align: center; font-size: 13px; color: var(--ink-2); line-height: 1.5; }
+    .wallet-link { display: block; text-align: center; margin-top: 14px; font-size: 13px; font-weight: 600; color: var(--ink-2); text-decoration: none; }
+    .wallet-link:active { opacity: 0.6; }
+
     /* ========== 體驗升級：動效層 ========== */
     /* 進場：卡片柔和 fade + up，依序錯開 */
     @keyframes enterUp { from { opacity: 0; transform: translateY(16px); } to { opacity: 1; transform: translateY(0); } }
@@ -422,7 +431,14 @@
       <div class="modal-img-wrap"><span class="glyph" id="modal-glyph">★</span></div>
       <div class="modal-prize" id="modal-prize">—</div>
       <div class="modal-desc" id="modal-desc"></div>
+      <div class="coupon-block" id="coupon-block" hidden>
+        <div class="coupon-label">優惠序號</div>
+        <div class="coupon-code" id="coupon-code">—</div>
+        <div class="coupon-hint">請到店出示此畫面或序號給店員核銷</div>
+      </div>
+      <div class="coupon-oos" id="coupon-oos" hidden>此獎品序號暫時發完，請洽客服</div>
       <button type="button" class="modal-btn" id="modal-close">完成</button>
+      <a class="wallet-link" id="wallet-link" href="#">我的優惠券</a>
     </div>
   </div>
 
@@ -832,7 +848,7 @@
             coinBurst();
           }
           await wait(650);
-          showResult(resp.prize);
+          showResult(resp.prize, resp);
           setTimeout(refreshQuota, 800);
         } catch (e) {
           stopSpinVisuals();
@@ -843,8 +859,29 @@
         }
       }
 
-      function showResult(prize) {
+      // 優惠序號顯示：coupon_code 可能在 prize 物件上或 /play 回應頂層
+      function renderCoupon(prize, resp) {
+        var block = document.getElementById('coupon-block');
+        var oos = document.getElementById('coupon-oos');
+        if (!block || !oos) return;
+        var code = (prize && prize.coupon_code) || (resp && resp.coupon_code) || '';
+        var outOfStock = !!(resp && resp.coupon_out_of_stock) || !!(prize && prize.coupon_out_of_stock);
+        if (code) {
+          document.getElementById('coupon-code').textContent = code;
+          block.hidden = false;
+          oos.hidden = true;
+        } else if (outOfStock) {
+          block.hidden = true;
+          oos.hidden = false;
+        } else {
+          block.hidden = true;
+          oos.hidden = true;
+        }
+      }
+
+      function showResult(prize, resp) {
         statusEl.textContent = '';
+        renderCoupon(prize, resp);
         var consolation = isConsolation(prize);
         var eyebrow = document.getElementById('modal-eyebrow');
         if (eyebrow) eyebrow.textContent = consolation ? '再接再厲' : (prize.is_grand_prize ? '頭 獎' : '中 獎');
@@ -861,6 +898,12 @@
         document.getElementById('modal-desc').textContent = descParts.join(' · ');
         if (prize.is_grand_prize) modal.classList.add('grand'); else modal.classList.remove('grand');
         requestAnimationFrame(function () { modal.classList.add('open'); });
+      }
+
+      // 「我的優惠券」連結，導向錢包頁（LIFF 永久連結 /wallet）
+      var walletLink = document.getElementById('wallet-link');
+      if (walletLink) {
+        walletLink.href = liffId ? ('https://liff.line.me/' + liffId + '/wallet') : '/games/wallet';
       }
 
       document.getElementById('modal-close').addEventListener('click', function () {

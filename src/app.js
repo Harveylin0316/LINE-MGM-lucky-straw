@@ -30,6 +30,7 @@ const { registerAdminDashboardRoutes } = require('./routes/adminDashboard');
 const { registerAdminLiffAnalyticsRoutes } = require('./routes/adminLiffAnalytics');
 const { registerAdminAttributionRoutes } = require('./routes/adminAttribution');
 const { registerAdminActivitiesRoutes } = require('./routes/adminActivities');
+const { registerAdminCouponsRoutes } = require('./routes/adminCoupons');
 const { registerGamesRoutes } = require('./routes/games');
 const { registerAdminRecipientListsRoutes } = require('./routes/adminRecipientLists');
 const { buildLiffPermanentUrl } = require('./core/liffPermalink');
@@ -530,6 +531,8 @@ registerAdminLiffAnalyticsRoutes(app, { query, authCore });
 registerAdminAttributionRoutes(app, { query, authCore });
 
 registerAdminActivitiesRoutes(app, { query, pool, authCore });
+
+registerAdminCouponsRoutes(app, { query, pool, authCore });
 
 registerGamesRoutes(app, { query, pool });
 
