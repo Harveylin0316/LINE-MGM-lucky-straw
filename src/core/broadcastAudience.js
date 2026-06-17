@@ -17,11 +17,62 @@
 const MAX_RECIPIENTS_PER_BROADCAST = 5000;
 const PREVIEW_SAMPLE_LIMIT = 10;
 
+// 生命週期階段門檻（天）— 與 flowEngine.runInactivityTriggers 的 last_activity 口徑一致。
+const LIFECYCLE_NEW_DAYS = 14;       // 新客：加入 <= 14 天（優先判定）
+const LIFECYCLE_ACTIVE_DAYS = 30;    // 活躍：last_activity <= 30 天（且非新客）
+const LIFECYCLE_LOST_DAYS = 90;      // 流失：last_activity > 90 天；沉睡 = 30~90 天
+const LIFECYCLE_STAGES = ['new', 'active', 'sleeping', 'lost'];
+
+// 可重用的 last_activity SQL 片段（子查詢，以 u 為 alias）。
+// 口徑：GREATEST(加好友時間, 各互動表最後時間) — 與 flowEngine 完全相同。
+const LAST_ACTIVITY_SQL = `GREATEST(
+  u.created_at,
+  (SELECT MAX(w.event_timestamp) FROM line_webhook_events w WHERE w.line_user_id = u.line_user_id),
+  (SELECT MAX(p.played_at) FROM activity_plays p WHERE p.line_user_id = u.line_user_id),
+  (SELECT MAX(b.clicked_at) FROM admin_broadcast_clicks b WHERE b.line_user_id = u.line_user_id),
+  (SELECT MAX(rc.clicked_at) FROM user_restaurant_clicks rc WHERE rc.line_user_id = u.line_user_id),
+  (SELECT MAX(ue.created_at) FROM user_events ue WHERE ue.line_id = u.line_user_id)
+)`;
+
+// 階段判定 SQL（回傳 'new' | 'active' | 'sleeping' | 'lost'），給 profile 查詢與篩選共用。
+// 以 u 為 alias、需可取得 u.created_at。
+const LIFECYCLE_STAGE_SQL = `CASE
+  WHEN u.created_at >= now() - (${LIFECYCLE_NEW_DAYS} * interval '1 day') THEN 'new'
+  WHEN ${LAST_ACTIVITY_SQL} >= now() - (${LIFECYCLE_ACTIVE_DAYS} * interval '1 day') THEN 'active'
+  WHEN ${LAST_ACTIVITY_SQL} >= now() - (${LIFECYCLE_LOST_DAYS} * interval '1 day') THEN 'sleeping'
+  ELSE 'lost'
+END`;
+
+// 產生「某用戶屬於指定階段集合」的 WHERE 片段（不含參數，門檻是常數）。
+// stages：已驗證過的階段字串陣列（new/active/sleeping/lost）。
+function lifecycleWhereSql(stages) {
+  const clauses = [];
+  if (stages.includes('new')) {
+    clauses.push(`u.created_at >= now() - (${LIFECYCLE_NEW_DAYS} * interval '1 day')`);
+  }
+  if (stages.includes('active')) {
+    clauses.push(`(u.created_at < now() - (${LIFECYCLE_NEW_DAYS} * interval '1 day')
+      AND ${LAST_ACTIVITY_SQL} >= now() - (${LIFECYCLE_ACTIVE_DAYS} * interval '1 day'))`);
+  }
+  if (stages.includes('sleeping')) {
+    clauses.push(`(u.created_at < now() - (${LIFECYCLE_NEW_DAYS} * interval '1 day')
+      AND ${LAST_ACTIVITY_SQL} < now() - (${LIFECYCLE_ACTIVE_DAYS} * interval '1 day')
+      AND ${LAST_ACTIVITY_SQL} >= now() - (${LIFECYCLE_LOST_DAYS} * interval '1 day'))`);
+  }
+  if (stages.includes('lost')) {
+    clauses.push(`(u.created_at < now() - (${LIFECYCLE_NEW_DAYS} * interval '1 day')
+      AND ${LAST_ACTIVITY_SQL} < now() - (${LIFECYCLE_LOST_DAYS} * interval '1 day'))`);
+  }
+  if (clauses.length === 0) return null;
+  return '(' + clauses.join(' OR ') + ')';
+}
+
 function normalizeConditions(raw) {
   const safe = raw && typeof raw === 'object' ? raw : {};
   const out = {
     allMembers: false,
     joinedWithinDays: null,
+    lifecycleStages: null,
     prizeFilter: null,
     inviteCompletedMin: null,
     drewInCampaign: null,
@@ -30,6 +81,20 @@ function normalizeConditions(raw) {
 
   if (safe.allMembers === true || safe.allMembers === 'true') {
     out.allMembers = true;
+  }
+
+  // 生命週期階段（多選）：接受陣列或單一字串，過濾成合法集合
+  if (safe.lifecycleStages != null) {
+    const rawStages = Array.isArray(safe.lifecycleStages)
+      ? safe.lifecycleStages
+      : [safe.lifecycleStages];
+    const stages = [...new Set(
+      rawStages.map(s => String(s || '').trim().toLowerCase()).filter(s => LIFECYCLE_STAGES.includes(s))
+    )];
+    // 全選 4 個 = 等同不限，不套用條件
+    if (stages.length > 0 && stages.length < LIFECYCLE_STAGES.length) {
+      out.lifecycleStages = stages;
+    }
   }
 
   const jwd = Number(safe.joinedWithinDays);
@@ -68,6 +133,7 @@ function hasAnyCondition(conds) {
   return Boolean(
     conds.allMembers ||
     conds.joinedWithinDays !== null ||
+    conds.lifecycleStages ||
     conds.savedListId ||
     conds.prizeFilter ||
     conds.inviteCompletedMin !== null ||
@@ -89,9 +155,14 @@ function buildWhere(conds) {
     params.push(conds.joinedWithinDays);
     where.push(`u.created_at >= now() - ($${params.length}::int * interval '1 day')`);
   }
-  // allMembers 為 true 時，跳過後面的行為條件（prize/invite/drew）
+  // allMembers 為 true 時，跳過後面的行為條件（生命週期/prize/invite/drew）
   if (conds.allMembers) {
     return { whereSql: where.join(' AND '), params };
+  }
+
+  if (conds.lifecycleStages) {
+    const lcSql = lifecycleWhereSql(conds.lifecycleStages);
+    if (lcSql) where.push(lcSql);
   }
 
   if (conds.prizeFilter) {
@@ -261,6 +332,13 @@ async function fetchAudienceRecipients(query, rawConditions, { limit = MAX_RECIP
 module.exports = {
   MAX_RECIPIENTS_PER_BROADCAST,
   PREVIEW_SAMPLE_LIMIT,
+  LIFECYCLE_STAGES,
+  LIFECYCLE_NEW_DAYS,
+  LIFECYCLE_ACTIVE_DAYS,
+  LIFECYCLE_LOST_DAYS,
+  LAST_ACTIVITY_SQL,
+  LIFECYCLE_STAGE_SQL,
+  lifecycleWhereSql,
   normalizeConditions,
   hasAnyCondition,
   previewAudience,

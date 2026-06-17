@@ -738,6 +738,112 @@ function createFlowEngine({ query, pool, linePush, buildLineMessages }) {
     return { processed, claimed: claimed.length, deadlineHit: stoppedAt >= 0 };
   }
 
+  // ---------- 乾跑測試（啟用前用自己的 LINE 試走一遍） ----------
+  // 純試走 + 真的發訊息給「測試者本人」，全程不建 enrollment、不寫 cursor、不改任何狀態。
+  // - send：實際發給測試者本人（recipientName 帶測試者名或「饕客」）。
+  // - wait：不真的等，只在報告寫「正式運行會在此等待 N 天/時/分」。
+  // - add_to_list：不真的寫名單，只在報告寫「正式運行會加入名單」。
+  // - branch：條件無法對測試者真評估 → 預設走「符合」分支並註明，遞迴展開。
+  // 步數上限 20 防爆（流程設計理論上不該無限循環，但保險）。
+  const DRY_RUN_MAX_STEPS = 20;
+  async function dryRunFlow({ flowId, testLineUserId }) {
+    const luid = String(testLineUserId || '').trim();
+    if (!luid) throw new FlowConfigError('dryrun_missing_test_user');
+    const fr = await query(`SELECT id, name FROM admin_flows WHERE id = $1`, [flowId]);
+    if (fr.rowCount === 0) throw new FlowConfigError('flow_not_found');
+    const entry = await getEntryNode(flowId);
+    if (!entry) throw new FlowConfigError('flow_has_no_steps');
+
+    // 測試者顯示名（與正式發送一致的查名邏輯；查不到由 buildLineMessages 套「饕客」）
+    const testUser = await query(`SELECT id, line_display_name FROM users WHERE line_user_id = $1 LIMIT 1`, [luid]);
+    const testUserId = testUser.rows[0] && testUser.rows[0].id;
+    const testRecipientName = (testUser.rows[0] && String(testUser.rows[0].line_display_name || '').trim()) || null;
+
+    const report = [];
+    function push(nodeType, action, detail) {
+      report.push({ node_type: nodeType, node_type_label: nodeTypeLabel(nodeType), action, detail: detail || '' });
+    }
+
+    // 名單名快取（避免重複查同一名單）
+    const listNameCache = {};
+    async function listName(listId) {
+      if (!listId) return '';
+      if (listNameCache[listId] !== undefined) return listNameCache[listId];
+      try {
+        const r = await query(`SELECT name FROM admin_recipient_lists WHERE id = $1 LIMIT 1`, [Number(listId)]);
+        listNameCache[listId] = (r.rows[0] && String(r.rows[0].name || '').trim()) || ('名單 #' + listId);
+      } catch (_) { listNameCache[listId] = '名單 #' + listId; }
+      return listNameCache[listId];
+    }
+
+    // 實際把訊息發給測試者本人（不帶 enrollmentId → 不做點擊中轉、不寫 admin_flow_clicks）
+    async function sendToTester(messageId) {
+      if (!messageId) { push('send', '此步驟沒有綁訊息，正式運行時會被略過。'); return; }
+      const rs = await query(`SELECT name, message_config FROM admin_message_templates WHERE id = $1`, [Number(messageId)]);
+      if (rs.rowCount === 0) { push('send', '找不到要發的訊息（可能已被刪除），正式運行時這一步會失敗。', '訊息 #' + messageId); return; }
+      const msgName = String(rs.rows[0].name || '').trim() || ('訊息 #' + messageId);
+      const cfg = rs.rows[0].message_config;
+      const built = buildLineMessages(cfg, { recipientName: testRecipientName });
+      if (!built.ok) { push('send', '這則訊息內容組不出來，正式運行時這一步會失敗：' + msgName, built.error || ''); return; }
+      try {
+        const ok = await linePush.pushLineMessages(luid, built.messages, { userId: testUserId || null, pushType: 'flow_dryrun' });
+        if (ok) push('send', '已發送訊息給你本人：' + msgName);
+        else push('send', '嘗試發送訊息給你本人時失敗（LINE 端回傳失敗），請稍後再試：' + msgName);
+      } catch (e) {
+        push('send', '嘗試發送訊息給你本人時發生錯誤：' + msgName, String((e && e.message) || e || '').slice(0, 200));
+      }
+    }
+
+    let nodeKey = entry.node_key;
+    let steps = 0;
+    while (nodeKey && steps < DRY_RUN_MAX_STEPS) {
+      steps++;
+      const node = await getNode(flowId, nodeKey);
+      if (!node || node.type === 'end') {
+        push('end', '流程結束。');
+        break;
+      }
+      if (node.type === 'send') {
+        await sendToTester(node.config && node.config.message_id);
+        nodeKey = node.next_key || null;
+        continue;
+      }
+      if (node.type === 'wait') {
+        const amount = Math.max(0, Number(node.config && node.config.amount) || 0);
+        const unit = (node.config && node.config.unit) || 'days';
+        const unitLabel = unit === 'minutes' ? '分鐘' : unit === 'hours' ? '小時' : '天';
+        push('wait', '（正式運行時會在此等待 ' + amount + ' ' + unitLabel + '；乾跑測試不會真的等，直接往下走。）');
+        nodeKey = node.next_key || null;
+        continue;
+      }
+      if (node.type === 'add_to_list') {
+        const listId = node.config && Number(node.config.list_id);
+        const nm = await listName(listId);
+        push('add_to_list', '（正式運行會把用戶加入名單：' + (nm || '（未指定名單）') + '；乾跑測試不會真的加入。）');
+        nodeKey = node.next_key || null;
+        continue;
+      }
+      if (node.type === 'branch') {
+        // 條件無法對測試者真評估 → 預設走「符合」分支並註明
+        push('branch', '（這是條件分支。乾跑測試無法判斷你是否符合條件，預設走「符合」這條路給你看。正式運行會依用戶實際行為決定走哪邊。）');
+        nodeKey = node.branch_true_key || node.branch_false_key || null;
+        continue;
+      }
+      // 未知型別：略過往下
+      push(node.type, '（這一步乾跑測試略過。）');
+      nodeKey = node.next_key || null;
+    }
+    if (nodeKey && steps >= DRY_RUN_MAX_STEPS) {
+      push('end', '（步驟太多，乾跑測試到此為止，後面的步驟未展開。）');
+    }
+    return { ok: true, flowName: String(fr.rows[0].name || '').trim(), steps: report };
+  }
+
+  // node.type → 人話（給乾跑報告用）
+  function nodeTypeLabel(type) {
+    return ({ send: '發訊息', wait: '等待', branch: '條件分支', add_to_list: '加入名單', end: '結束' })[type] || (type || '未知步驟');
+  }
+
   // ---------- cron 主入口 ----------
   async function run() {
     const startedAt = Date.now();
@@ -774,6 +880,7 @@ function createFlowEngine({ query, pool, linePush, buildLineMessages }) {
     runStreakRiskTriggers,
     runScheduleTriggers,
     advanceDue,
+    dryRunFlow,
     run,
     // 給測試/手動用
     _processEnrollment: processEnrollment

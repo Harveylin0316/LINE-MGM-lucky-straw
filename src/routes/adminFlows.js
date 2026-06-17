@@ -467,6 +467,24 @@ function registerAdminFlowsRoutes(app, deps) {
     }
   });
 
+  // ---------- 乾跑測試（啟用前用自己的 LINE 試走一遍） ----------
+  // body { test_line_user_id }：依該流程節點同步走一遍，實際發訊息「給測試者本人」，
+  // 回傳逐步報告。全程不建 enrollment、不寫 cursor、不改任何狀態。
+  app.post('/admin/flows/api/:id/dry-run', requireAdmin, async (req, res) => {
+    const idStr = String(req.params.id || '').trim();
+    if (!isPosInt(idStr)) return jsonErr(res, 400, 'invalid_id');
+    const testLineUserId = String((req.body && req.body.test_line_user_id) || '').trim();
+    if (!testLineUserId) return jsonErr(res, 400, 'dryrun_needs_test_user');
+    try {
+      const result = await flowEngine.dryRunFlow({ flowId: Number(idStr), testLineUserId });
+      return res.json({ ok: true, ...result });
+    } catch (err) {
+      // 設定類錯誤（流程不存在、沒步驟）→ 回 400 給前端顯示人話
+      if (err && err.permanent) return jsonErr(res, 400, err.message || 'dryrun_failed');
+      return jsonErr(res, 500, 'dryrun_failed', { detail: err && err.message });
+    }
+  });
+
   // ---------- cron 推進 ----------
   app.post('/admin/flows/run', async (req, res) => {
     const expectedSecret = process.env.SCHEDULED_RUNNER_SECRET || '';

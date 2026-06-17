@@ -158,6 +158,27 @@
             </div>
 
             <div class="broadcast-field" id="behavior-conditions">
+              <div class="broadcast-field-label">活躍程度（生命週期階段，可多選）</div>
+              <div class="lifecycle-checkbox-list">
+                <label class="chip-checkbox">
+                  <input type="checkbox" name="lifecycle_stage" value="new" />
+                  <span>新客（14 天內剛加入）</span>
+                </label>
+                <label class="chip-checkbox">
+                  <input type="checkbox" name="lifecycle_stage" value="active" />
+                  <span>活躍（30 天內有互動）</span>
+                </label>
+                <label class="chip-checkbox">
+                  <input type="checkbox" name="lifecycle_stage" value="sleeping" />
+                  <span>沉睡（30 至 90 天沒互動）</span>
+                </label>
+                <label class="chip-checkbox">
+                  <input type="checkbox" name="lifecycle_stage" value="lost" />
+                  <span>流失（超過 90 天沒互動）</span>
+                </label>
+              </div>
+              <div class="muted" style="font-size:12px;margin:0 0 14px;">不勾＝不限。互動包含：加好友、玩遊戲、點推播、點餐廳、傳訊息、用「今天吃什麼」。</div>
+
               <div class="broadcast-field-label">中過獎品（可多選）</div>
               <div class="prize-checkbox-list">
                 ${
@@ -769,7 +790,8 @@
         width: auto !important;
         margin-top: 0 !important;
       }
-      .prize-checkbox-list {
+      .prize-checkbox-list,
+      .lifecycle-checkbox-list {
         display: flex;
         flex-wrap: wrap;
         gap: 6px;

@@ -84,6 +84,18 @@
         <button type="button" class="fl-add-btn" data-add="branch">＋ 條件分支</button>
       </div>
 
+      <div class="fl-section-title">3. 啟用前先試走一遍（乾跑測試）</div>
+      <div class="fl-dryrun">
+        <p class="muted" style="font-size:13px;margin:0 0 10px;line-height:1.6;">先用「你自己的 LINE」把這個流程從頭走一遍，確認每一步發出的訊息長相對不對。<strong>這只會發給你自己一個人，不會影響任何真實用戶</strong>；等待步驟不會真的等、加入名單也不會真的加（只會在報告裡標出來）。請先在上面把流程儲存，再做乾跑測試。</p>
+        <div class="fl-inline" style="margin-bottom:10px;">
+          <span style="font-weight:600;">你的測試 LINE userId</span>
+          <input id="fl-dryrun-uid" placeholder="例：U1234...（你本人的 LINE userId）" style="min-width:300px;flex:1;" />
+          <button type="button" class="fl-secondary-btn" id="fl-dryrun-btn">開始乾跑測試（只發給我自己）</button>
+        </div>
+        <div id="fl-dryrun-status" class="muted" style="font-size:13px;"></div>
+        <div id="fl-dryrun-report"></div>
+      </div>
+
       <div class="fl-actions">
         <button type="button" class="fl-primary-btn" id="fl-save">儲存</button>
         <button type="button" class="fl-secondary-btn" id="fl-save-activate">儲存並啟用</button>
@@ -152,6 +164,15 @@
       .fl-ex-card-desc{font-size:13px;color:#6b7280;line-height:1.6;margin:0 0 12px;flex:1;}
       .fl-ex-btn{align-self:flex-start;padding:8px 14px;background:#1f2937;color:#fff;border:0;border-radius:8px;cursor:pointer;font-size:13px;font-weight:600;}
       .fl-ex-btn:hover{background:#111827;}
+      .fl-dryrun{border:1px solid #e5e7eb;border-radius:10px;padding:14px;background:#f9fafb;margin-bottom:10px;}
+      .fl-dryrun .fl-inline input{flex:1;}
+      .fl-dryrun-list{list-style:none;margin:12px 0 0;padding:0;counter-reset:step;}
+      .fl-dryrun-list li{position:relative;padding:10px 12px 10px 44px;border:1px solid #e5e7eb;border-radius:8px;background:#fff;margin-bottom:8px;font-size:14px;color:#374151;line-height:1.6;}
+      .fl-dryrun-list li:before{counter-increment:step;content:counter(step);position:absolute;left:12px;top:10px;width:22px;height:22px;border-radius:50%;background:#1f2937;color:#fff;font-size:12px;font-weight:700;display:flex;align-items:center;justify-content:center;}
+      .fl-dryrun-list li.sent:before{background:#15803d;}
+      .fl-dryrun-list li.sim:before{background:#9ca3af;}
+      .fl-dryrun-step-tag{display:inline-block;font-size:11px;font-weight:700;color:#fff;background:#6b7280;border-radius:5px;padding:1px 7px;margin-right:8px;}
+      .fl-dryrun-done{font-size:13px;color:#15803d;font-weight:600;margin-top:10px;}
       @media (max-width:720px){.fl-ex-grid{grid-template-columns:1fr;}}
     </style>
 
@@ -280,6 +301,7 @@
         function openEditor(id){
           editingId=id||null;
           $('fl-save-status').textContent='';
+          $('fl-dryrun-status').textContent='';$('fl-dryrun-report').innerHTML='';
           if(id){
             fetch('/admin/flows/api/'+id).then(function(r){return r.json();}).then(function(d){
               if(!d.ok){alert('載入失敗');return;}
@@ -570,6 +592,36 @@
         document.querySelectorAll('[data-example]').forEach(function(b){
           b.addEventListener('click',function(){openEditorFromExample(b.getAttribute('data-example'));});
         });
+
+        // ---------- 乾跑測試 ----------
+        function dryRunReportHtml(d){
+          if(!d.steps||!d.steps.length)return '<p class="muted" style="font-size:13px;">這個流程沒有可執行的步驟。</p>';
+          var items=d.steps.map(function(s){
+            var cls='';
+            if(s.node_type==='send'&&/已發送訊息給你本人/.test(s.action))cls='sent';
+            else if(s.node_type==='wait'||s.node_type==='add_to_list'||s.node_type==='branch')cls='sim';
+            var detail=s.detail?('<div class="muted" style="font-size:12px;margin-top:4px;">'+esc(s.detail)+'</div>'):'';
+            return '<li class="'+cls+'"><span class="fl-dryrun-step-tag">'+esc(s.node_type_label||'')+'</span>'+esc(s.action)+detail+'</li>';
+          }).join('');
+          return '<ul class="fl-dryrun-list">'+items+'</ul>'+
+            '<div class="fl-dryrun-done">以上就是這個流程會走的每一步。標「發訊息」的步驟已實際發到你本人的 LINE，請打開 LINE 對照訊息長相；標「等待 / 加入名單 / 條件分支」的只是模擬，不會真的執行。</div>';
+        }
+        function dryRun(){
+          var s=$('fl-dryrun-status');var rep=$('fl-dryrun-report');
+          var uid=($('fl-dryrun-uid').value||'').trim();
+          if(!editingId){s.textContent='請先按「儲存」把流程存起來，才能做乾跑測試。';return;}
+          if(!uid){s.textContent='請先填你自己的測試 LINE userId。';return;}
+          if(isDirty()&&!window.confirm('你有尚未儲存的變更。乾跑測試走的是「已儲存」的版本，不是畫面上未存的內容。\\n\\n要先用已儲存的版本測試嗎？（建議先按「儲存」再測）')){return;}
+          var btn=$('fl-dryrun-btn');btn.disabled=true;s.textContent='試走中…訊息會發到你本人的 LINE，請稍候。';rep.innerHTML='';
+          fetch('/admin/flows/api/'+editingId+'/dry-run',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({test_line_user_id:uid})})
+            .then(function(r){return r.json();}).then(function(d){
+              btn.disabled=false;
+              if(!d.ok){s.textContent='乾跑測試失敗：'+errMsg(d.error)+(d.detail?'（'+d.detail+'）':'');return;}
+              s.textContent='已完成乾跑測試（流程：'+(d.flowName||'')+'）。';
+              rep.innerHTML=dryRunReportHtml(d);
+            }).catch(function(e){btn.disabled=false;s.textContent='錯誤：'+((e&&e.message)||e);});
+        }
+        $('fl-dryrun-btn').addEventListener('click',dryRun);
 
         $('fl-new').addEventListener('click',function(){openEditor(null);});
         $('fl-back').addEventListener('click',backToList);

@@ -200,6 +200,9 @@
     }
 
     // conditions（預設）
+    // 生命週期階段（多選）：全選 4 個或全不選都視為不限（後端會把全選正規化掉）
+    var lifecycleStages = $$('input[name="lifecycle_stage"]:checked').map(function (el) { return el.value; });
+
     var prizeNames = $$('input[name="prize_name"]:checked').map(function (el) { return el.value; });
     var prizeFilter = null;
     if (prizeNames.length > 0) {
@@ -218,7 +221,7 @@
     var drewInCampaign = null;
     if (drewRaw === 'true') drewInCampaign = true;
     else if (drewRaw === 'false') drewInCampaign = false;
-    return { joinedWithinDays: joinedWithinDays, prizeFilter: prizeFilter, inviteCompletedMin: inviteCompletedMin, drewInCampaign: drewInCampaign };
+    return { joinedWithinDays: joinedWithinDays, lifecycleStages: lifecycleStages, prizeFilter: prizeFilter, inviteCompletedMin: inviteCompletedMin, drewInCampaign: drewInCampaign };
   }
 
   // 全部會員 toggle：勾選時把行為條件變灰、重置預覽

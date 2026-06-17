@@ -52,6 +52,7 @@
       .us-sec-title{font-size:13px;font-weight:700;color:#1f2937;margin:18px 0 8px;}
       .us-chip{display:inline-block;background:#f3f4f6;border-radius:20px;padding:4px 11px;font-size:12px;color:#374151;margin:0 6px 6px 0;}
       .us-pref-chip{background:#FFFBEB;border:1px solid #FCC726;color:#1F2937;font-weight:600;}
+      .us-lifecycle-chip{background:#FFFBEB;border:1px solid #FCC726;color:#1F2937;font-weight:600;margin:0;}
       .us-chip-tag{color:#9ca3af;font-size:11px;margin-left:4px;}
       .us-tl{border-left:2px solid #e5e7eb;padding-left:14px;margin-top:8px;}
       .us-tl-item{position:relative;padding:6px 0;font-size:13px;}
@@ -77,6 +78,20 @@
         function fmt(ts){if(!ts)return'';var d=new Date(ts);return isNaN(d.getTime())?'':d.toLocaleString('sv-SE',{timeZone:'Asia/Taipei'}).slice(0,16);}
         function shortUid(u){return u?(u.slice(0,7)+'…'+u.slice(-4)):'';}
         var KIND={follow:'加好友',unfollow:'封鎖了',message:'傳訊息給你',game_play:'玩了遊戲',restaurant_click:'點了餐廳',broadcast_click:'點了推播',liff:'今天吃什麼',invite_rewarded:'邀請成功'};
+        // 生命週期階段 chip 文字（門檻與群發、沉睡喚醒口徑一致）
+        function lifecycleChip(stage,days){
+          var d=(days==null||isNaN(days))?null:Math.max(0,Math.floor(days));
+          var label;
+          if(stage==='new')label='新客';
+          else if(stage==='active')label='活躍客';
+          else if(stage==='sleeping')label='沉睡客';
+          else if(stage==='lost')label='流失客';
+          else return '';
+          var detail;
+          if(stage==='new')detail=(d!=null?('加入 '+d+' 天'):'剛加入');
+          else detail=(d!=null?(d+' 天沒互動'):'近期有互動');
+          return '<span class="us-chip us-lifecycle-chip">'+esc(label)+'（'+esc(detail)+'）</span>';
+        }
         var curUid=null, timer=null;
         var PAGE=80, loaded=0, total=0, loading=false;
 
@@ -149,10 +164,12 @@
             var p=d.profile,c=d.counts;
             var nm=p.line_display_name||p.username||'（未命名）';
             var avatar=p.line_picture_url?'<img src="'+esc(p.line_picture_url)+'">':esc(nm.slice(0,1));
+            var lcChip=lifecycleChip(p.lifecycle_stage,p.days_since_active);
             var h='<div class="us-prof-head"><div class="av">'+avatar+'</div><div>'+
               '<h2>'+esc(nm)+(p.blocked_at?' <span class="us-blocked">已封鎖</span>':'')+'</h2>'+
               '<div class="meta">'+esc(shortUid(p.line_user_id))+'</div>'+
               '<div class="meta">加入：'+(fmt(p.created_at)||'未知')+(p.blocked_at?(' · 封鎖：'+fmt(p.blocked_at)):'')+'</div>'+
+              (lcChip?('<div style="margin-top:6px;">'+lcChip+'</div>'):'')+
               '</div></div>';
 
             // 快速動作：把這個用戶加進某個名單（不用跳頁）

@@ -1,0 +1,321 @@
+<%-
+  include('layout', {
+    user: user,
+    isAdmin: isAdmin,
+    bodyClass: bodyClass,
+    body: `
+    <section class="card attr-hero">
+      <div class="attr-hero-inner">
+        <h1>轉換歸因 — 發訊息帶來什麼</h1>
+        <p class="muted" style="margin-top:6px;">
+          看每一則群發「真的帶動了多少行為」。送出去之後有多少人點開、點完之後有多少人又回來玩活動，一眼比較哪種訊息最有效。
+        </p>
+        <div class="attr-hero-meta">
+          <span class="attr-meta-pill">系統內歸因</span>
+          <span class="attr-meta-pill attr-meta-pill--muted" id="attr-last-updated">載入中…</span>
+          <button type="button" class="attr-refresh-btn" id="btn-attr-refresh">重新整理</button>
+        </div>
+      </div>
+    </section>
+
+    <section class="card">
+      <div class="attr-section-head">
+        <h2>近期群發成效</h2>
+        <div class="attr-range-toggle">
+          <span class="attr-range-label">後續行為觀察期</span>
+          <label><input type="radio" name="attr-days" value="3" /> 3 天</label>
+          <label><input type="radio" name="attr-days" value="7" checked /> 7 天</label>
+          <label><input type="radio" name="attr-days" value="14" /> 14 天</label>
+          <label><input type="radio" name="attr-days" value="30" /> 30 天</label>
+        </div>
+      </div>
+      <div class="muted" style="font-size:12px;margin-bottom:12px;line-height:1.7;">
+        「送達」= 成功送進對方 LINE 的人數。「點擊」= 訊息裡的連結被點開的次數。「可歸因點擊人」= 點開的人之中能對到身分的人數（只有逐人追蹤連結才對得到，舊連結算不到）。
+        「後續再互動」= 這些點過的人，在點開後的觀察期內又回來玩了活動遊戲。再互動率越高，代表這則訊息越能真的把人帶回來。
+      </div>
+      <div class="table-wrap">
+        <table class="attr-table">
+          <thead>
+            <tr>
+              <th>群發訊息</th>
+              <th style="text-align:right;">送達</th>
+              <th style="text-align:right;">點擊次數</th>
+              <th style="text-align:right;">可歸因點擊人</th>
+              <th style="text-align:right;">點擊率</th>
+              <th style="text-align:right;">後續再互動</th>
+              <th style="text-align:right;">再互動率</th>
+            </tr>
+          </thead>
+          <tbody id="attr-tbody">
+            <tr><td colspan="7" class="muted" style="text-align:center;padding:18px 0;">載入中…</td></tr>
+          </tbody>
+        </table>
+      </div>
+      <p class="muted attr-foot-note">
+        點擊率以「可歸因點擊人 ÷ 送達人數」計算。若某則點擊率偏低，可能是當時用的是舊版連結（對不到人），不一定是訊息沒人點。
+      </p>
+    </section>
+
+    <section class="card attr-booking-card">
+      <h2>訂位歸因（建置中）</h2>
+      <div class="attr-booking-body">
+        <p>
+          要算出「哪一則訊息帶來幾筆訂位」，需要先把訂位客導進 LINE，
+          並在領取 Rice Dollar 時把訂位身分和 LINE 帳號綁在一起。
+        </p>
+        <p>
+          目前大多數訂位走 Google Reserve 進來，和 LINE 帳號對不起來，這座橋還沒搭好，
+          所以這裡先不顯示訂位數字，避免給出會誤導判斷的數據。
+        </p>
+        <div class="attr-booking-stat">
+          <div class="attr-booking-stat-label">目前可歸因訂位數</div>
+          <div class="attr-booking-stat-value">0</div>
+        </div>
+        <p class="attr-booking-next">
+          橋接完成後（Rice Dollar 領取時綁定 LINE），這裡會自動顯示每則訊息帶來幾筆訂位，不需要再額外設定。
+        </p>
+      </div>
+    </section>
+
+    <script>
+    (function () {
+      var $ = function (id) { return document.getElementById(id); };
+
+      function fmt(n) {
+        if (n == null) return '—';
+        return Number(n).toLocaleString('zh-Hant-TW');
+      }
+      function fmtPct(p) {
+        if (p == null) return '—';
+        return Number(p).toFixed(2) + '%';
+      }
+      function nowLabel() {
+        var d = new Date();
+        var pad = function (n) { return String(n).padStart(2, '0'); };
+        return d.getFullYear() + '-' + pad(d.getMonth() + 1) + '-' + pad(d.getDate()) +
+          ' ' + pad(d.getHours()) + ':' + pad(d.getMinutes());
+      }
+      function fmtDate(ts) {
+        if (!ts) return '—';
+        var d = new Date(ts);
+        if (isNaN(d.getTime())) return String(ts);
+        var pad = function (n) { return String(n).padStart(2, '0'); };
+        return d.getFullYear() + '-' + pad(d.getMonth() + 1) + '-' + pad(d.getDate());
+      }
+      function escapeHtml(s) {
+        return String(s == null ? '' : s)
+          .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
+          .replace(/"/g, '&quot;').replace(/'/g, '&#039;');
+      }
+
+      function currentDays() {
+        return (document.querySelector('input[name="attr-days"]:checked') || {}).value || 7;
+      }
+
+      function loadSystem(days) {
+        $('attr-tbody').innerHTML =
+          '<tr><td colspan="7" class="muted" style="text-align:center;padding:18px 0;">載入中…</td></tr>';
+        return fetch('/admin/attribution/api/system?days=' + encodeURIComponent(days) + '&limit=20')
+          .then(function (r) { return r.json(); })
+          .then(function (resp) {
+            if (!resp.ok) throw new Error(resp.detail || 'system failed');
+            renderTable(resp.data || []);
+          })
+          .catch(function (e) {
+            console.error('attribution load failed:', e);
+            $('attr-tbody').innerHTML =
+              '<tr><td colspan="7" class="muted" style="text-align:center;padding:18px 0;">載入失敗</td></tr>';
+          });
+      }
+
+      function channelBadge(channel) {
+        if (channel === 'email') {
+          return '<span class="attr-ch attr-ch--email">Email</span>';
+        }
+        return '<span class="attr-ch attr-ch--line">LINE</span>';
+      }
+
+      function renderTable(rows) {
+        var tbody = $('attr-tbody');
+        if (!rows.length) {
+          tbody.innerHTML =
+            '<tr><td colspan="7" class="muted" style="text-align:center;padding:18px 0;">還沒有已送出的群發紀錄</td></tr>';
+          return;
+        }
+        tbody.innerHTML = rows.map(function (b) {
+          var hot = b.reengage_rate_pct >= 20 && b.clickers > 0;
+          return '<tr' + (hot ? ' class="attr-row-hot"' : '') + '>' +
+            '<td class="attr-msg-cell">' +
+              '<div class="attr-msg-label">' + escapeHtml(b.label) + (hot ? ' <span class="attr-hot-tag">帶動行為</span>' : '') + '</div>' +
+              '<div class="attr-msg-meta">' + channelBadge(b.channel) +
+                '<span class="attr-msg-date">' + fmtDate(b.created_at) + '</span>' +
+                '<span class="attr-msg-id">#' + b.id + '</span>' +
+              '</div>' +
+            '</td>' +
+            '<td style="text-align:right;">' + fmt(b.sent) + '</td>' +
+            '<td style="text-align:right;">' + fmt(b.clicks_total) + '</td>' +
+            '<td style="text-align:right;">' + fmt(b.clickers) + '</td>' +
+            '<td style="text-align:right;">' + fmtPct(b.click_rate_pct) + '</td>' +
+            '<td style="text-align:right;font-weight:700;color:#1f2937;">' + fmt(b.reengaged) + '</td>' +
+            '<td style="text-align:right;font-weight:600;' + (hot ? 'color:#b45309;' : '') + '">' + fmtPct(b.reengage_rate_pct) + '</td>' +
+          '</tr>';
+        }).join('');
+      }
+
+      function refreshAll() {
+        $('attr-last-updated').textContent = '載入中…';
+        loadSystem(currentDays()).then(function () {
+          $('attr-last-updated').textContent = '最後更新: ' + nowLabel();
+        });
+      }
+
+      document.querySelectorAll('input[name="attr-days"]').forEach(function (el) {
+        el.addEventListener('change', function () {
+          $('attr-last-updated').textContent = '載入中…';
+          loadSystem(el.value).then(function () {
+            $('attr-last-updated').textContent = '最後更新: ' + nowLabel();
+          });
+        });
+      });
+      $('btn-attr-refresh').addEventListener('click', refreshAll);
+
+      refreshAll();
+    })();
+    </script>
+
+    <style>
+      .attr-hero {
+        background: linear-gradient(135deg, #fffbeb 0%, #ffffff 100%);
+        border: 1px solid #fde68a;
+      }
+      .attr-hero-meta {
+        margin-top: 12px;
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        flex-wrap: wrap;
+      }
+      .attr-meta-pill {
+        display: inline-block;
+        padding: 4px 10px;
+        font-size: 12px;
+        font-weight: 600;
+        border-radius: 9999px;
+        background: #FCC726;
+        color: #1f2937;
+      }
+      .attr-meta-pill--muted { background: #e5e7eb; color: #4b5563; }
+      .attr-refresh-btn {
+        margin-left: auto;
+        padding: 6px 12px;
+        font-size: 12px;
+        border: 1px solid #e5e7eb;
+        background: #fff;
+        border-radius: 6px;
+        cursor: pointer;
+        color: #374151;
+      }
+      .attr-refresh-btn:hover { background: #f9fafb; border-color: #d1d5db; }
+
+      .attr-section-head {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 12px;
+        margin-bottom: 8px;
+        flex-wrap: wrap;
+      }
+      .attr-section-head h2 { margin: 0; }
+      .attr-range-toggle {
+        display: flex;
+        gap: 12px;
+        font-size: 13px;
+        color: #374151;
+        align-items: center;
+      }
+      .attr-range-label { color: #6b7280; font-size: 12px; }
+      .attr-range-toggle label { display: flex; gap: 4px; align-items: center; cursor: pointer; }
+
+      .table-wrap { overflow-x: auto; }
+      .attr-table {
+        width: 100%;
+        border-collapse: collapse;
+        font-size: 13px;
+      }
+      .attr-table th,
+      .attr-table td {
+        padding: 10px 12px;
+        border-bottom: 1px solid #f3f4f6;
+        vertical-align: middle;
+      }
+      .attr-table th {
+        color: #6b7280;
+        font-weight: 600;
+        font-size: 12px;
+        text-align: right;
+        background: #fafafa;
+      }
+      .attr-table th:first-child { text-align: left; }
+      .attr-msg-cell { min-width: 240px; }
+      .attr-msg-label {
+        font-weight: 600;
+        color: #1f2937;
+        line-height: 1.4;
+      }
+      .attr-hot-tag {
+        display: inline-block;
+        font-size: 10px;
+        font-weight: 700;
+        padding: 1px 6px;
+        border-radius: 4px;
+        background: #FCC726;
+        color: #1f2937;
+        margin-left: 4px;
+        vertical-align: middle;
+      }
+      .attr-msg-meta {
+        margin-top: 4px;
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        flex-wrap: wrap;
+      }
+      .attr-ch {
+        font-size: 10px;
+        font-weight: 700;
+        padding: 1px 6px;
+        border-radius: 4px;
+        letter-spacing: 0.02em;
+      }
+      .attr-ch--line { background: #d1fae5; color: #065f46; }
+      .attr-ch--email { background: #dbeafe; color: #1e40af; }
+      .attr-msg-date { font-size: 11px; color: #9ca3af; }
+      .attr-msg-id {
+        font-size: 11px;
+        color: #9ca3af;
+        font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+      }
+      .attr-row-hot { background: #fffdf5; }
+      .attr-foot-note { font-size: 11px; color: #9ca3af; margin-top: 12px; line-height: 1.7; }
+
+      .attr-booking-card {
+        background: #fcfcfd;
+        border: 1px dashed #d1d5db;
+      }
+      .attr-booking-body p { color: #4b5563; font-size: 13px; line-height: 1.8; margin: 0 0 10px; }
+      .attr-booking-stat {
+        display: inline-flex;
+        flex-direction: column;
+        align-items: flex-start;
+        padding: 12px 18px;
+        border-radius: 10px;
+        background: #f3f4f6;
+        margin: 6px 0 12px;
+      }
+      .attr-booking-stat-label { font-size: 12px; color: #6b7280; margin-bottom: 4px; }
+      .attr-booking-stat-value { font-size: 28px; font-weight: 700; color: #9ca3af; line-height: 1; }
+      .attr-booking-next { font-size: 13px; color: #4b5563; }
+    </style>
+    `
+  })
+%>

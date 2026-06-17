@@ -6,6 +6,8 @@
  *   GET  /admin/users/api/profile/:lineUserId  單一用戶：基本資料 + 行為統計 + 餐廳興趣 + 時間軸
  */
 
+const { LIFECYCLE_STAGE_SQL, LAST_ACTIVITY_SQL } = require('../core/broadcastAudience');
+
 function registerAdminUsersRoutes(app, deps) {
   const { query, authCore } = deps;
   const { requireAdmin } = authCore;
@@ -57,9 +59,11 @@ function registerAdminUsersRoutes(app, deps) {
     if (!/^U[0-9a-f]{32}$/i.test(luid)) return jsonErr(res, 400, 'invalid_line_user_id');
     try {
       const uRs = await query(
-        `SELECT id, line_user_id, line_display_name, line_picture_url, username,
-                created_at, blocked_at, invite_code, draws_left, extra_draws
-         FROM users WHERE line_user_id = $1`,
+        `SELECT u.id, u.line_user_id, u.line_display_name, u.line_picture_url, u.username,
+                u.created_at, u.blocked_at, u.invite_code, u.draws_left, u.extra_draws,
+                ${LIFECYCLE_STAGE_SQL} AS lifecycle_stage,
+                FLOOR(EXTRACT(EPOCH FROM (now() - ${LAST_ACTIVITY_SQL})) / 86400)::int AS days_since_active
+         FROM users u WHERE u.line_user_id = $1`,
         [luid]
       );
       const profile = uRs.rows[0] || { line_user_id: luid };
