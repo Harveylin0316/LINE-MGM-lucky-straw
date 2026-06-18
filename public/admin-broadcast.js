@@ -2719,7 +2719,16 @@
     if (!url) { statusEl.textContent = '請填 URL'; return; }
     if (!/^https?:\/\//i.test(url)) { statusEl.textContent = '需 http(s):// 開頭'; return; }
     var textarea = $('flex-json');
-    textarea.value = textarea.value.split(anchor).join(url);
+    // 整段取代：把「含此 placeholder 的整個 JSON 字串值」換成使用者填的完整網址。
+    // 避免模板若是 "https://tw.openrice.com/REPLACE_TARGET" 這種「前綴 + 佔位」時，
+    // 只換掉 token 會變成 https://tw.openrice.com/https://...（雙網址、連結失效）。
+    var escAnchor = anchor.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+    var valRe = new RegExp('"[^"]*' + escAnchor + '[^"]*"', 'g');
+    if (valRe.test(textarea.value)) {
+      textarea.value = textarea.value.replace(valRe, JSON.stringify(url));
+    } else {
+      textarea.value = textarea.value.split(anchor).join(url); // 後備：非字串值情境
+    }
     row.setAttribute('data-id', url);
     row.setAttribute('data-applied', '1');
     var labelEl = row.querySelector('.jur-label');
