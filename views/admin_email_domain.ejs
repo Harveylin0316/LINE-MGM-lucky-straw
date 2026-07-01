@@ -1,0 +1,102 @@
+<%-
+  include('layout', {
+    user: user,
+    isAdmin: isAdmin,
+    bodyClass: bodyClass,
+    body: `
+    <section class="card">
+      <h1>Email 網域驗證（電子豹 SureNotify）</h1>
+      <p class="muted" style="margin-top:6px;line-height:1.7;">
+        讓 <strong>${defaultDomain}</strong> 能用電子豹寄信、且進得了收件匣，需要在這個網域的 DNS 加幾筆記錄。<br>
+        步驟：① 按「取得 DNS 記錄」→ ② 把下面的記錄交給 IT 加到 DNS → ③ 等生效後按「檢查驗證狀態」，全部變綠色「已驗證」就完成。
+      </p>
+      <div style="margin-top:14px;display:flex;align-items:center;gap:10px;flex-wrap:wrap;">
+        <label style="font-size:13px;color:#374151;font-weight:600;">網域</label>
+        <input type="text" id="ed-domain" value="${defaultDomain}" style="padding:9px 11px;border:1px solid #ECECEE;border-radius:7px;font-size:14px;min-width:220px;" />
+      </div>
+      ${hasEnvKey ? '<p class="muted" style="font-size:12px;margin-top:8px;">使用已設定的環境變數 API key（SURENOTIFY_API_KEY）。</p>'
+        : '<div style="margin-top:10px;"><label style="font-size:13px;color:#374151;font-weight:600;display:block;margin-bottom:4px;">API key</label><input type="password" id="ed-apikey" placeholder="貼上電子豹給你的 API key" style="padding:9px 11px;border:1px solid #ECECEE;border-radius:7px;font-size:14px;min-width:320px;" /><p class="muted" style="font-size:11px;margin-top:4px;">只用於這次驗證、不會儲存。建議之後在 Netlify 設 SURENOTIFY_API_KEY 環境變數。</p></div>'}
+      <div style="margin-top:16px;display:flex;gap:10px;flex-wrap:wrap;">
+        <button type="button" class="ed-primary" id="ed-create">取得 DNS 記錄</button>
+        <button type="button" class="ed-secondary" id="ed-verify">檢查驗證狀態</button>
+      </div>
+      <div id="ed-msg" class="muted" style="font-size:13px;margin-top:12px;"></div>
+    </section>
+
+    <section class="card" id="ed-records-card" hidden>
+      <h2 style="margin:0 0 4px;">要加到 DNS 的記錄</h2>
+      <p class="muted" style="font-size:13px;margin-bottom:12px;">把每一列的「類型 / 主機名 / 值」給 IT 加到 <strong id="ed-dom-label"></strong> 的 DNS。加完回來按上方「檢查驗證狀態」。</p>
+      <div id="ed-records"></div>
+    </section>
+
+    <style>
+      .ed-primary{padding:10px 18px;background:#FCC726;color:#1f2937;font-weight:700;border:0;border-radius:8px;cursor:pointer;font-size:14px;}
+      .ed-secondary{padding:10px 18px;background:#fff;color:#374151;border:1px solid #ECECEE;border-radius:8px;cursor:pointer;font-size:14px;}
+      .ed-primary:disabled,.ed-secondary:disabled{opacity:.5;cursor:not-allowed;}
+      .ed-rec{border:1px solid #ECECEE;border-radius:10px;padding:14px;margin-bottom:10px;background:#FAFAFA;}
+      .ed-rec-top{display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap;margin-bottom:8px;}
+      .ed-type{font-size:11px;font-weight:700;color:#1f2937;background:#FFFBEB;border:1px solid #FCC726;border-radius:999px;padding:3px 10px;}
+      .ed-badge{font-size:12px;font-weight:700;border-radius:999px;padding:3px 10px;}
+      .ed-badge.ok{background:#dcfce7;color:#15803d;}
+      .ed-badge.wait{background:#f3f4f6;color:#6b7280;}
+      .ed-field{margin-top:8px;}
+      .ed-field .k{font-size:11px;color:#6b7280;font-weight:600;}
+      .ed-field .v{display:flex;align-items:center;gap:8px;margin-top:3px;}
+      .ed-field .v code{flex:1;font-size:12px;background:#fff;border:1px solid #ECECEE;border-radius:6px;padding:8px 10px;word-break:break-all;font-family:ui-monospace,Menlo,monospace;}
+      .ed-copy{font-size:11px;padding:5px 10px;border:1px solid #ECECEE;background:#fff;border-radius:6px;cursor:pointer;color:#374151;flex-shrink:0;}
+      .ed-copy:hover{border-color:#1f2937;}
+    </style>
+
+    <script>
+      (function(){
+        var $=function(id){return document.getElementById(id);};
+        var createBtn=$('ed-create'), verifyBtn=$('ed-verify'), msg=$('ed-msg');
+        function esc(s){return String(s==null?'':s).replace(/[&<>"]/g,function(c){return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c];});}
+        function typeLabel(t){return Number(t)===1?'CNAME':'TXT';}
+        function isValid(v){return v===true||String(v).toLowerCase()==='true';}
+        function body(){
+          var b={domain:($('ed-domain')&&$('ed-domain').value||'').trim()};
+          var k=$('ed-apikey'); if(k) b.apiKey=k.value.trim();
+          return b;
+        }
+        function renderRecords(domain, records){
+          var card=$('ed-records-card'), box=$('ed-records');
+          $('ed-dom-label').textContent=domain||'';
+          if(!records||!records.length){ box.innerHTML='<p class="muted">沒有回傳任何 DNS 記錄。</p>'; card.hidden=false; return; }
+          var allOk=true;
+          box.innerHTML=records.map(function(r,i){
+            var ok=isValid(r.valid); if(!ok)allOk=false;
+            return '<div class="ed-rec">'+
+              '<div class="ed-rec-top"><span class="ed-type">'+typeLabel(r.record_type)+'</span>'+
+                '<span class="ed-badge '+(ok?'ok':'wait')+'">'+(ok?'已驗證':'待生效')+'</span></div>'+
+              '<div class="ed-field"><div class="k">主機名 / Host（name）</div><div class="v"><code>'+esc(r.name)+'</code>'+
+                '<button type="button" class="ed-copy" data-copy="'+esc(r.name)+'">複製</button></div></div>'+
+              '<div class="ed-field"><div class="k">值 / Value</div><div class="v"><code>'+esc(r.value)+'</code>'+
+                '<button type="button" class="ed-copy" data-copy="'+esc(r.value)+'">複製</button></div></div>'+
+              '</div>';
+          }).join('');
+          card.hidden=false;
+          Array.prototype.forEach.call(box.querySelectorAll('.ed-copy'),function(b){
+            b.addEventListener('click',function(){ try{ navigator.clipboard.writeText(b.getAttribute('data-copy')||''); b.textContent='已複製'; setTimeout(function(){b.textContent='複製';},1200);}catch(e){} });
+          });
+          if(allOk) msg.innerHTML='<span style="color:#15803d;font-weight:600;">全部記錄已驗證，可以開始寄信了。</span>';
+        }
+        function call(url, label){
+          createBtn.disabled=true; verifyBtn.disabled=true; msg.textContent=label+'中…';
+          fetch(url,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(body())})
+            .then(function(r){return r.json();})
+            .then(function(d){
+              createBtn.disabled=false; verifyBtn.disabled=false;
+              if(!d.ok){ msg.innerHTML='<span style="color:#b91c1c;">'+label+'失敗：'+esc(d.detail||d.error||'')+'</span>'; return; }
+              msg.textContent='';
+              renderRecords(d.domain, d.records);
+            })
+            .catch(function(e){ createBtn.disabled=false; verifyBtn.disabled=false; msg.innerHTML='<span style="color:#b91c1c;">錯誤：'+esc(e.message)+'</span>'; });
+        }
+        createBtn.addEventListener('click',function(){ call('/admin/email-domain/api/create','取得 DNS 記錄'); });
+        verifyBtn.addEventListener('click',function(){ call('/admin/email-domain/api/verify','檢查驗證狀態'); });
+      })();
+    </script>
+    `
+  })
+%>
