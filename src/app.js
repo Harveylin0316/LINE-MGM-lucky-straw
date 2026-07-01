@@ -38,6 +38,7 @@ const { buildPushImageBaseCandidates } = require('./core/linePushImageResolve');
 const { createLineWebhookHandler } = require('./routes/lineWebhook');
 const { createLinePushService } = require('./core/linePush');
 const { createEmailProvider } = require('./core/emailProvider');
+const { createSureNotifyProvider } = require('./core/emailProviderSureNotify');
 
 // 多重偵測：Netlify 不會自動設 NODE_ENV，但會設 NETLIFY=true；AWS Lambda 也會設 AWS_LAMBDA_FUNCTION_NAME。
 // 任一條件成立就視為 production，避免單一 env var 沒設導致 ssl/cookie/redirect 等都跑 dev 行為。
@@ -275,7 +276,13 @@ const linePush = createLinePushService({
   lineChannelAccessToken: LINE_CHANNEL_ACCESS_TOKEN
 });
 
-const emailProvider = createEmailProvider({ query });
+// Email provider 選擇：EMAIL_PROVIDER=surenotify|brevo；未設時有 SURENOTIFY_API_KEY 就用電子豹，否則 Brevo。
+const emailProviderName = (process.env.EMAIL_PROVIDER || '').trim().toLowerCase()
+  || (process.env.SURENOTIFY_API_KEY ? 'surenotify' : 'brevo');
+const emailProvider = emailProviderName === 'surenotify'
+  ? createSureNotifyProvider({ query })
+  : createEmailProvider({ query });
+console.log('[email] provider =', emailProviderName, '/ configured =', emailProvider.isConfigured());
 
 const flowEngine = createFlowEngine({
   query,

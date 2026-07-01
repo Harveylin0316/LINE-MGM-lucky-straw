@@ -2131,6 +2131,115 @@ button{width:100%;margin-top:16px;padding:14px;background:#FCC726;color:#1F2937;
     }
     return res.json({ ok: true, processed: processed.length });
   });
+
+  /**
+   * 電子豹 SureNotify webhook：/webhooks/surenotify（設定處：SureNotify POST /v1/webhooks 註冊此 URL）
+   * 事件：delivery / open / click / bounce / complaint。payload.mail.variables 帶回送信時放的
+   * broadcast_id / recipient_id / variant（用來關聯）。簽章 x-surenotify-signature = HmacSHA256(id+eventType, apiKey)。
+   * 驗章為 best-effort（對不上仍處理、只 log；設 SURENOTIFY_WEBHOOK_STRICT=1 才硬擋），因為事件只寫追蹤資料、不做敏感操作。
+   */
+  app.post('/webhooks/surenotify', async (req, res) => {
+    const crypto = require('crypto');
+    const apiKey = process.env.SURENOTIFY_API_KEY || '';
+    const strict = process.env.SURENOTIFY_WEBHOOK_STRICT === '1';
+    const events = Array.isArray(req.body) ? req.body : [req.body];
+    const processed = [];
+    for (const ev of events) {
+      if (!ev || typeof ev !== 'object') continue;
+      try {
+        const evType = String(ev.event || '').toLowerCase();
+        const mail = (ev.mail && typeof ev.mail === 'object') ? ev.mail : {};
+        const messageId = String(mail.id || '').trim();
+        // 從 "名稱 <email>" 或純 email 取出 email
+        const toRaw = String(mail.to || '');
+        const emailMatch = toRaw.match(/<([^>]+)>/);
+        const email = String(emailMatch ? emailMatch[1] : toRaw).trim().toLowerCase();
+
+        // 驗章（best-effort）：HmacSHA256(id + eventType, apiKey)，eventType 可能是字串或代碼，兩者都試
+        if (apiKey) {
+          const sig = String(req.get('x-surenotify-signature') || '');
+          if (sig) {
+            const typeCodeMap = { delivery: '3', open: '4', click: '5', bounce: '6', complaint: '7' };
+            const candidates = [evType, typeCodeMap[evType] || ''].filter(Boolean);
+            const ok = candidates.some(function (t) {
+              try {
+                const h = crypto.createHmac('sha256', apiKey).update(messageId + t).digest('hex');
+                const h2 = crypto.createHmac('sha256', apiKey).update(messageId + t).digest('base64');
+                return sig === h || sig === h2;
+              } catch (_) { return false; }
+            });
+            if (!ok) {
+              console.warn('surenotify webhook signature mismatch', { id: messageId, evType });
+              if (strict) { processed.push({ ok: false, error: 'bad_signature' }); continue; }
+            }
+          } else if (strict) {
+            processed.push({ ok: false, error: 'missing_signature' }); continue;
+          }
+        }
+
+        const vars = (mail.variables && typeof mail.variables === 'object') ? mail.variables : {};
+        const broadcastId = Number.isFinite(Number(vars.broadcast_id)) ? Number(vars.broadcast_id) : null;
+        const recipientId = Number.isFinite(Number(vars.recipient_id)) ? Number(vars.recipient_id) : null;
+        const variant = (vars.variant === 'a' || vars.variant === 'b') ? vars.variant : null;
+
+        if (evType === 'delivery') {
+          if (recipientId) {
+            await query(
+              `UPDATE admin_broadcast_recipients
+               SET status = CASE WHEN status IN ('sent','pending','sending') THEN 'sent' ELSE status END,
+                   provider_message_id = COALESCE(provider_message_id, $2)
+               WHERE id = $1`,
+              [recipientId, messageId || null]
+            );
+          }
+        } else if (evType === 'open') {
+          if (broadcastId && recipientId) {
+            await query(
+              `INSERT INTO admin_broadcast_views (broadcast_id, recipient_id, email, variant, user_agent)
+               VALUES ($1, $2, $3, $4, $5)`,
+              [broadcastId, recipientId, email || null, variant, 'surenotify-webhook']
+            );
+            await query(`UPDATE admin_broadcast_recipients SET opened_at = COALESCE(opened_at, NOW()) WHERE id = $1`, [recipientId]);
+          }
+        } else if (evType === 'click') {
+          const link = String((ev.click && ev.click.link_url) || '').slice(0, 1000);
+          if (broadcastId && recipientId) {
+            await query(
+              `INSERT INTO admin_broadcast_clicks (broadcast_id, recipient_id, email, target_url, variant, user_agent)
+               VALUES ($1, $2, $3, $4, $5, $6)`,
+              [broadcastId, recipientId, email || null, link, variant, 'surenotify-webhook']
+            );
+            await query(`UPDATE admin_broadcast_recipients SET first_clicked_at = COALESCE(first_clicked_at, NOW()) WHERE id = $1`, [recipientId]);
+          }
+        } else if (evType === 'bounce') {
+          if (recipientId) {
+            const reason = (ev.bounce && ev.bounce.reason) || '';
+            await query(
+              `UPDATE admin_broadcast_recipients
+               SET status = 'failed', bounced_at = COALESCE(bounced_at, NOW()), error = LEFT($2, 200)
+               WHERE id = $1`,
+              [recipientId, 'bounce:' + reason]
+            );
+          }
+        } else if (evType === 'complaint') {
+          if (email) {
+            await query(
+              `INSERT INTO admin_email_unsubscribes (email, broadcast_id, reason)
+               VALUES ($1, $2, $3)
+               ON CONFLICT (email) DO UPDATE SET broadcast_id = EXCLUDED.broadcast_id, reason = EXCLUDED.reason`,
+              [email, broadcastId, 'complaint']
+            );
+            await query(`UPDATE admin_broadcast_recipients SET unsubscribed_at = COALESCE(unsubscribed_at, NOW()) WHERE LOWER(email) = $1`, [email]);
+          }
+        }
+        processed.push({ event: evType, recipientId, ok: true });
+      } catch (err) {
+        console.error('surenotify webhook handle err:', err.message);
+        processed.push({ ok: false, error: err.message });
+      }
+    }
+    return res.json({ ok: true, processed: processed.length });
+  });
 }
 
 module.exports = { registerAdminBroadcastRoutes };
